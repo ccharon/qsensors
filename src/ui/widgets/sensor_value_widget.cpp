@@ -5,6 +5,7 @@
 #include "lcd_display_widget.h"
 
 #include <QGroupBox>
+#include <QPalette>
 #include <QProgressBar>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -20,13 +21,18 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     layout->setSpacing(0);
 
     m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
+    const QColor panelBg = palette().color(QPalette::Window);
+    const QString borderColor = panelBg.lightness() > 140
+                                    ? QStringLiteral("palette(mid)")
+                                    : QStringLiteral("rgb(230,230,230)");
     m_groupBox->setStyleSheet(QStringLiteral(
         "QGroupBox {"
-        "  border: 1px solid #b7b7b7;"
+        "  border: 1px solid %1;"
         "  margin-top: 8px;"
-        "  padding-top: 4px;"
+        "  padding-top: 0px;"
         "  padding-bottom: 0px;"
-        "  background: #ececec;"
+        "  background: palette(window);"
+        "  color: palette(window-text);"
         "}"
         "QGroupBox::title {"
         "  subcontrol-origin: margin;"
@@ -34,13 +40,14 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
         "  top: 0px;"
         "  padding: 0 2px;"
         "  font-size: 11px;"
-        "  background: #ececec;"
+        "  background: palette(window);"
+        "  color: palette(window-text);"
         "}"
-    ));
+    ).arg(borderColor));
 
     auto *groupLayout = new QVBoxLayout(m_groupBox);
-    groupLayout->setContentsMargins(4, 2, 4, 0);
-    groupLayout->setSpacing(1);
+    groupLayout->setContentsMargins(4, 0, 4, 0);
+    groupLayout->setSpacing(0);
 
     setReading(reading);
 
@@ -89,10 +96,10 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         m_rangeBar->setStyleSheet(QStringLiteral(
             "QProgressBar {"
             "  border: none;"
-            "  background: #d9d9d9;"
+            "  background: palette(midlight);"
             "}"
             "QProgressBar::chunk {"
-            "  background: #4db8ff;"
+            "  background: palette(highlight);"
             "}"
         ));
     } else {
@@ -103,7 +110,7 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         m_rangeBar->setStyleSheet(QStringLiteral(
             "QProgressBar {"
             "  border: none;"
-            "  background: #d9d9d9;"
+            "  background: palette(midlight);"
             "}"
             "QProgressBar::chunk {"
             "  background: transparent;"

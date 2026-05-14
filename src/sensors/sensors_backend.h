@@ -11,12 +11,12 @@ namespace SensorDomain {
 Q_NAMESPACE
 
 enum class SensorCategory {
-    Temperatures,
-    Voltages,
-    Fans,
-    Currents,
-    Power,
-    Other,
+    Voltages = 0,
+    Temperatures = 1,
+    Fans = 2,
+    Currents = 10,
+    Power = 11,
+    Other = 12,
 };
 Q_ENUM_NS(SensorCategory)
 }

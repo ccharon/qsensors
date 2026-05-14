@@ -7,6 +7,7 @@
 #include "sensors_panel.h"
 
 #include <QCloseEvent>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLabel>
 #include <QResizeEvent>
@@ -77,7 +78,7 @@ void MainWindow::refreshReadings() {
 }
 
 void MainWindow::setupUi() {
-    setWindowTitle(tr("qsensors"));
+    setWindowTitle(QStringLiteral("%1 %2").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion()));
     resize(900, 520);
 
     auto *central = new QWidget(this);

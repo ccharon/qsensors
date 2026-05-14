@@ -4,12 +4,31 @@
 #include "lcd_display_widget.h"
 
 #include <QPainter>
-#include <QPixmap>
+#include <QPalette>
+#include <QImage>
 
 namespace {
 constexpr int kDigitHeight = 30;
 constexpr int kRowOffsetAlert = 30;
 constexpr int kDisplayPaddingX = 0;
+
+QImage loadThemeWithWhiteTransparency() {
+    QImage src(QStringLiteral(":/themes/xsensors-theme.png"));
+    if (src.isNull()) {
+        return {};
+    }
+    QImage img = src.convertToFormat(QImage::Format_ARGB32);
+    for (int y = 0; y < img.height(); ++y) {
+        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+        for (int x = 0; x < img.width(); ++x) {
+            const QColor c = QColor::fromRgb(line[x]);
+            if (c.red() >= 248 && c.green() >= 248 && c.blue() >= 248) {
+                line[x] = qRgba(c.red(), c.green(), c.blue(), 0);
+            }
+        }
+    }
+    return img;
+}
 }
 
 LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent)
@@ -30,7 +49,7 @@ QSize LcdDisplayWidget::sizeHint() const {
 void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     Q_UNUSED(event);
 
-    static const QPixmap theme(QStringLiteral(":/themes/xsensors-theme.png"));
+    static const QImage theme = loadThemeWithWhiteTransparency();
     if (theme.isNull()) {
         return;
     }
@@ -41,7 +60,11 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
     const QRect inner = rect();
-    painter.fillRect(inner, QColor(238, 243, 238));
+    const QColor panelBg = palette().color(QPalette::Window);
+    const QColor lcdBg = panelBg.lightness() > 140
+                             ? QColor(245, 245, 245)  // near-white for light themes
+                             : QColor(230, 230, 230); // 90% brightness
+    painter.fillRect(inner, lcdBg);
     painter.setClipRect(inner);
 
     int xPos = kDisplayPaddingX;
@@ -54,7 +77,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
         }
         const QRect src(g.x, g.y + yOffset, g.w, kDigitHeight);
         const QRect dst(xPos, 0, g.w, kDigitHeight);
-        painter.drawPixmap(dst, theme, src);
+        painter.drawImage(dst, theme, src);
         xPos += g.w;
     }
 
@@ -71,7 +94,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
         if (unitX >= 0) {
             const QRect src(unitGlyph.x, unitGlyph.y + yOffset, unitGlyph.w, kDigitHeight);
             const QRect dst(unitX + kDisplayPaddingX, 0, unitGlyph.w, kDigitHeight);
-            painter.drawPixmap(dst, theme, src);
+            painter.drawImage(dst, theme, src);
         }
     }
 }

@@ -12,6 +12,7 @@ int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
     QCoreApplication::setOrganizationName(QStringLiteral("qsensors"));
     QCoreApplication::setApplicationName(QStringLiteral("qsensors"));
+    QCoreApplication::setApplicationVersion(QStringLiteral(QSENSORS_VERSION));
 
     // Always install English catalog first as baseline fallback.
     QTranslator translatorEn;

@@ -93,10 +93,20 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
     for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
         const QString &chipName = chipIt.key();
         const QMap<SensorCategory, QVector<SensorReading>> &categories = chipIt.value();
+        QList<SensorCategory> orderedCategories = categories.keys();
+        std::sort(orderedCategories.begin(), orderedCategories.end(), [](const SensorCategory a, const SensorCategory b) {
+            return static_cast<int>(a) < static_cast<int>(b);
+        });
 
         auto *chipCard = new QFrame(this);
         chipCard->setObjectName(QStringLiteral("chipCard"));
-        chipCard->setStyleSheet(QStringLiteral("#chipCard { border: 1px solid palette(mid); background: #ececec; }"));
+        chipCard->setStyleSheet(QStringLiteral(
+            "#chipCard {"
+            "  border: 1px solid palette(mid);"
+            "  background: palette(window);"
+            "  color: palette(window-text);"
+            "}"
+        ));
 
         auto *chipLayout = new QVBoxLayout(chipCard);
         chipLayout->setContentsMargins(0, 0, 0, 0);
@@ -115,7 +125,8 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
             "  text-align: left;"
             "  font-weight: bold;"
             "  padding: 6px 8px;"
-            "  background: #dddddd;"
+            "  background: palette(button);"
+            "  color: palette(button-text);"
             "}"
         ));
 
@@ -140,7 +151,7 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
         m_layout->addWidget(chipCard);
         m_chipExpanded.insert(chipName, header->isChecked());
 
-        const int categoryCount = std::max(1, static_cast<int>(categories.size()));
+        const int categoryCount = std::max(1, static_cast<int>(orderedCategories.size()));
         const int perCategoryWidth = std::max(
             kCardWidth,
             (stableViewportWidth - kChipContentHorizontalMargins - ((categoryCount - 1) * kCategorySpacing)) / categoryCount
@@ -151,9 +162,8 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
             kMaxColumnsPerCategory
         );
 
-        for (auto catIt = categories.cbegin(); catIt != categories.cend(); ++catIt) {
-            const SensorCategory categoryName = catIt.key();
-            const QVector<SensorReading> &categoryReadings = catIt.value();
+        for (const SensorCategory categoryName : orderedCategories) {
+            const QVector<SensorReading> &categoryReadings = categories.value(categoryName);
 
             auto *categoryContainer = new QWidget(chipContent);
             categoryContainer->setMinimumWidth(perCategoryWidth);

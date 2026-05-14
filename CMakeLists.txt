@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qsensors)
+project(qsensors VERSION 0.80.1)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
@@ -35,6 +35,7 @@ add_executable(qsensors
         src/ui/widgets/sensor_value_widget.cpp
         src/sensors/sensors_backend.cpp
 )
+target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
 target_include_directories(qsensors PRIVATE
         src/ui
         src/ui/panels

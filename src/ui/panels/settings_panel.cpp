@@ -13,7 +13,13 @@
 
 SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) {
     setObjectName(QStringLiteral("settingsCard"));
-    setStyleSheet(QStringLiteral("#settingsCard { border: 1px solid palette(mid); background: #ececec; }"));
+    setStyleSheet(QStringLiteral(
+        "#settingsCard {"
+        "  border: 1px solid palette(mid);"
+        "  background: palette(window);"
+        "  color: palette(window-text);"
+        "}"
+    ));
 
     auto *settingsLayout = new QVBoxLayout(this);
     settingsLayout->setContentsMargins(0, 0, 0, 0);
@@ -32,7 +38,8 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) 
         "  text-align: left;"
         "  font-weight: bold;"
         "  padding: 6px 8px;"
-        "  background: #dddddd;"
+        "  background: palette(button);"
+        "  color: palette(button-text);"
         "}"
     ));
 
