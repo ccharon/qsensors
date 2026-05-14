@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=qsensors
+Comment=Hardware sensor monitor
+Exec=qsensors
+Icon=qsensors
+Terminal=false
+Categories=System;Monitor;
