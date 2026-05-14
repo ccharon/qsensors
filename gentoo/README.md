@@ -7,16 +7,16 @@ to an overlay.
 
 The package files follow the normal Portage path layout:
 
-`util-misc/qsensors/qsensors-0.80.1.ebuild`
+`sys-apps/qsensors/qsensors-0.80.1.ebuild`
 
 ## Usage
 
-1. Copy `gentoo/util-misc/qsensors/` into your overlay at:
-   `/var/db/repos/<overlay>/util-misc/qsensors/`
+1. Copy `gentoo/sys-apps/qsensors/` into your overlay at:
+   `/var/db/repos/<overlay>/sys-apps/qsensors/`
 2. In that overlay directory, generate Manifest:
    `ebuild qsensors-0.80.1.ebuild manifest`
 3. Emerge:
-   `emerge -av =util-misc/qsensors-0.80.1`
+   `emerge -av =sys-apps/qsensors-0.80.1`
 
 ## Notes
 
