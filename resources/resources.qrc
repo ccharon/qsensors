@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/xsensors.png</file>
+        <file>themes/xsensors-theme.png</file>
+    </qresource>
+</RCC>
