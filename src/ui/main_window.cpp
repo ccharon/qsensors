@@ -6,22 +6,17 @@
 #include "settings_panel.h"
 #include "sensors_panel.h"
 
-#include <QCloseEvent>
-#include <QCoreApplication>
-#include <QGuiApplication>
 #include <QLabel>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
-#include <QShowEvent>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QWindow>
-#include <QStringList>
 
 namespace {
     constexpr int kDefaultPollingIntervalSec = 2;

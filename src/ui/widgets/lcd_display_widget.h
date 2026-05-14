@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "lcd_glyph_atlas.h"
 #include "sensors_backend.h"
 
 #include <QWidget>
@@ -12,7 +13,7 @@ class LcdDisplayWidget final : public QWidget {
     Q_OBJECT
 
 public:
-    explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
+    explicit LcdDisplayWidget(SensorReading reading, QWidget *parent = nullptr);
 
     void setReading(const SensorReading &reading);
 
@@ -22,14 +23,6 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    struct Glyph {
-        int x;
-        int y;
-        int w;
-    };
-
-    static bool glyphFor(QChar c, Glyph &glyph);
-
     /** Formats the numeric part exactly like xsensors for known units. */
     static QString valueDigitsFor(const SensorReading &reading);
 

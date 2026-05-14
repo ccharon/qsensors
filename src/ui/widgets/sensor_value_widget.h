@@ -19,7 +19,7 @@ public:
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
     /** Refreshes title, LCD and range bar using xsensors-like limit semantics. */
-    void setReading(const SensorReading &reading);
+    void setReading(const SensorReading &reading) const;
 
 private:
     QGroupBox *m_groupBox;

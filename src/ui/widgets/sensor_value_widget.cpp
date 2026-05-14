@@ -58,7 +58,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     setLayout(layout);
 }
 
-void SensorValueWidget::setReading(const SensorReading &reading) {
+void SensorValueWidget::setReading(const SensorReading &reading) const {
     m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
     m_lcdValue->setReading(reading);
 

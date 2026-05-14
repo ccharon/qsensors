@@ -31,7 +31,7 @@ private slots:
     /** Polls backend data, applies structure checks and refreshes visible state. */
     void refreshReadings();
 
-private:
+protected:
     void closeEvent(QCloseEvent *event) override;
 
     /** Reflows sensor cards to current viewport width while preserving expand state. */
@@ -40,6 +40,7 @@ private:
     /** Applies initial relayout and optional width fit once after first data is shown. */
     void showEvent(QShowEvent *event) override;
 
+private:
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
 

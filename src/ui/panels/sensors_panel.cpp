@@ -6,7 +6,6 @@
 #include "sensor_value_widget.h"
 
 #include <QCoreApplication>
-#include <QFrame>
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -15,7 +14,6 @@
 #include <QStringList>
 #include <QStyle>
 #include <QToolButton>
-#include <QVBoxLayout>
 #include <algorithm>
 
 namespace {
@@ -63,8 +61,8 @@ void SensorsPanel::relayout(const int viewportWidth) {
     renderReadings(viewportWidth);
 }
 
-void SensorsPanel::clearContent() {
-    while (QLayoutItem *item = m_layout->takeAt(0)) {
+void SensorsPanel::clearContent() const {
+    while (const QLayoutItem *item = m_layout->takeAt(0)) {
         if (item->widget() != nullptr) {
             item->widget()->deleteLater();
         }
@@ -84,13 +82,13 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
 
     const int scrollbarReserve = style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     const int stableViewportWidth = std::max(200, viewportWidth - scrollbarReserve);
-    constexpr int kCardWidth = 170;
-    constexpr int kCategorySpacing = 12;
-    constexpr int kGridSpacing = 3;
-    constexpr int kMaxColumnsPerCategory = 3;
-    constexpr int kChipContentHorizontalMargins = 16;
 
     for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
+        constexpr int kChipContentHorizontalMargins = 16;
+        constexpr int kMaxColumnsPerCategory = 3;
+        constexpr int kGridSpacing = 3;
+        constexpr int kCategorySpacing = 12;
+        constexpr int kCardWidth = 170;
         const QString &chipName = chipIt.key();
         const QMap<SensorCategory, QVector<SensorReading> > &categories = chipIt.value();
         QList<SensorCategory> orderedCategories = categories.keys();

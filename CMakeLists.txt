@@ -31,6 +31,7 @@ add_executable(qsensors
         src/ui/main_window.cpp
         src/ui/panels/settings_panel.cpp
         src/ui/panels/sensors_panel.cpp
+        src/ui/widgets/lcd_glyph_atlas.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/sensors/sensors_backend.cpp

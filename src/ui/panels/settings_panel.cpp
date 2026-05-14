@@ -3,7 +3,6 @@
 
 #include "settings_panel.h"
 
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -76,7 +75,7 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) 
     settingsLayout->addWidget(content);
 }
 
-void SettingsPanel::setPollingInterval(const int seconds) {
+void SettingsPanel::setPollingInterval(const int seconds) const {
     const QSignalBlocker blocker(m_spin);
     m_spin->setValue(seconds);
 }

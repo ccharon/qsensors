@@ -5,7 +5,6 @@
 
 #include "sensors_backend.h"
 
-#include <QHash>
 #include <QString>
 #include <QWidget>
 
@@ -36,7 +35,7 @@ signals:
 
 private:
     /** Deletes all currently rendered chip/category widgets from the root layout. */
-    void clearContent();
+    void clearContent() const;
 
     /** Rebuilds full chip/category/widget UI based on current readings. */
     void renderReadings(int viewportWidth);

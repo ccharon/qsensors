@@ -15,7 +15,7 @@ public:
     explicit SettingsPanel(QWidget *parent = nullptr);
 
     /** Applies persisted polling interval without re-emitting change signals. */
-    void setPollingInterval(int seconds);
+    void setPollingInterval(int seconds) const;
 
 signals:
     void pollingIntervalChanged(int seconds);
