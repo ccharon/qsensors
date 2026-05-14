@@ -8,22 +8,23 @@
 #include <QVector>
 
 namespace SensorDomain {
-Q_NAMESPACE
+    Q_NAMESPACE
 
-enum class SensorCategory {
-    Voltages = 0,
-    Temperatures = 1,
-    Fans = 2,
-    Currents = 10,
-    Power = 11,
-    Other = 12,
-};
-Q_ENUM_NS(SensorCategory)
+    enum class SensorCategory {
+        Voltages = 0,
+        Temperatures = 1,
+        Fans = 2,
+        Currents = 10,
+        Power = 11,
+        Other = 12,
+    };
+
+    Q_ENUM_NS(SensorCategory)
 }
 
 using SensorCategory = SensorDomain::SensorCategory;
 
-// Normalized sensor sample used by the UI layer.
+/** Normalized sensor sample used by the UI layer. */
 struct SensorReading {
     QString chip;
     SensorCategory category = SensorCategory::Other;
@@ -37,20 +38,24 @@ struct SensorReading {
     double maxValue = 0.0;
 };
 
-// Thin wrapper around libsensors discovery/readout.
+/** Thin wrapper around libsensors discovery/readout. */
 class SensorsBackend {
 public:
     SensorsBackend();
+
     ~SensorsBackend();
 
     SensorsBackend(const SensorsBackend &) = delete;
+
     SensorsBackend &operator=(const SensorsBackend &) = delete;
 
-    // True when libsensors init succeeded and reads are valid.
+    /** True when libsensors init succeeded and reads are valid. */
     [[nodiscard]] bool isInitialized() const;
-    // Human-readable backend init error.
+
+    /** Human-readable backend init error. */
     [[nodiscard]] QString lastError() const;
-    // Snapshot of all supported sensor input values.
+
+    /** Snapshot of all supported sensor input values. */
     [[nodiscard]] QVector<SensorReading> readAll() const;
 
 private:

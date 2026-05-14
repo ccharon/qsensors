@@ -7,13 +7,14 @@
 
 class QSpinBox;
 
-// Collapsible settings section rendered at the bottom of the main structure.
+/** Collapsible settings section rendered at the bottom of the main structure. */
 class SettingsPanel final : public QFrame {
     Q_OBJECT
 
 public:
     explicit SettingsPanel(QWidget *parent = nullptr);
 
+    /** Applies persisted polling interval without re-emitting change signals. */
     void setPollingInterval(int seconds);
 
 signals:
@@ -22,4 +23,3 @@ signals:
 private:
     QSpinBox *m_spin;
 };
-

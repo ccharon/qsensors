@@ -24,7 +24,7 @@
 #include <QStringList>
 
 namespace {
-constexpr int kDefaultPollingIntervalSec = 2;
+    constexpr int kDefaultPollingIntervalSec = 2;
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -91,8 +91,6 @@ void MainWindow::setupUi() {
     m_contentContainer = new QWidget(m_scrollArea);
     m_contentLayout = new QVBoxLayout(m_contentContainer);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
-    // SensorsPanel has an internal top margin of 8px; keep outer spacing at 2px
-    // so the visual gap to the first sensor card matches the 10px card-to-card gap.
     m_contentLayout->setSpacing(2);
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
@@ -101,7 +99,6 @@ void MainWindow::setupUi() {
         m_chipExpanded = state;
     });
 
-    // Keep settings width aligned with sensor cards by using the same side insets.
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
     settingsHostLayout->setContentsMargins(8, 0, 8, 0);
@@ -133,7 +130,9 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     if (!m_lastReadings.isEmpty()) {
         m_sensorsPanel->setChipExpandedState(m_chipExpanded);
-        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width() : width());
+        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr
+                                     ? m_scrollArea->viewport()->width()
+                                     : width());
     }
 }
 
@@ -141,7 +140,9 @@ void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutApplied && !m_lastReadings.isEmpty()) {
         m_sensorsPanel->setChipExpandedState(m_chipExpanded);
-        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width() : width());
+        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr
+                                     ? m_scrollArea->viewport()->width()
+                                     : width());
         if (!m_hasSavedGeometry) {
             fitInitialWidthWithoutHorizontalScroll();
         }
@@ -161,7 +162,7 @@ void MainWindow::loadSettings() {
 
     settings.beginGroup(QStringLiteral("ui/chips"));
     const QStringList keys = settings.childKeys();
-    for (const QString &key : keys) {
+    for (const QString &key: keys) {
         m_chipExpanded.insert(key, settings.value(key, true).toBool());
     }
     settings.endGroup();
@@ -213,7 +214,7 @@ void MainWindow::fitInitialWidthWithoutHorizontalScroll() {
 QString MainWindow::chipFingerprint(const QVector<SensorReading> &readings) {
     QStringList chips;
     chips.reserve(readings.size());
-    for (const SensorReading &r : readings) {
+    for (const SensorReading &r: readings) {
         chips.push_back(r.chip);
     }
     chips.removeDuplicates();

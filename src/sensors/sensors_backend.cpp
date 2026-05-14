@@ -9,91 +9,93 @@
 #include <optional>
 
 namespace {
-// Maps libsensors input types to visible category columns.
-SensorCategory categoryForType(const sensors_subfeature_type type) {
-    switch (type) {
-        case SENSORS_SUBFEATURE_TEMP_INPUT:
-            return SensorCategory::Temperatures;
-        case SENSORS_SUBFEATURE_IN_INPUT:
-            return SensorCategory::Voltages;
-        case SENSORS_SUBFEATURE_FAN_INPUT:
-            return SensorCategory::Fans;
-        case SENSORS_SUBFEATURE_CURR_INPUT:
-            return SensorCategory::Currents;
-        case SENSORS_SUBFEATURE_POWER_INPUT:
-            return SensorCategory::Power;
-        default:
-            return SensorCategory::Other;
+    // Maps libsensors input types to visible category columns.
+    SensorCategory categoryForType(const sensors_subfeature_type type) {
+        switch (type) {
+            case SENSORS_SUBFEATURE_TEMP_INPUT:
+                return SensorCategory::Temperatures;
+            case SENSORS_SUBFEATURE_IN_INPUT:
+                return SensorCategory::Voltages;
+            case SENSORS_SUBFEATURE_FAN_INPUT:
+                return SensorCategory::Fans;
+            case SENSORS_SUBFEATURE_CURR_INPUT:
+                return SensorCategory::Currents;
+            case SENSORS_SUBFEATURE_POWER_INPUT:
+                return SensorCategory::Power;
+            default:
+                return SensorCategory::Other;
+        }
     }
-}
 
-// Unit symbol used by the LCD renderer and range logic.
-QString unitForType(const sensors_subfeature_type type) {
-    switch (type) {
-        case SENSORS_SUBFEATURE_TEMP_INPUT:
-            return QStringLiteral("°C");
-        case SENSORS_SUBFEATURE_IN_INPUT:
-            return QStringLiteral("V");
-        case SENSORS_SUBFEATURE_FAN_INPUT:
-            return QStringLiteral("RPM");
-        case SENSORS_SUBFEATURE_CURR_INPUT:
-            return QStringLiteral("A");
-        case SENSORS_SUBFEATURE_POWER_INPUT:
-            return QStringLiteral("W");
-        default:
-            return QString();
+    // Unit symbol used by the LCD renderer and range logic.
+    QString unitForType(const sensors_subfeature_type type) {
+        switch (type) {
+            case SENSORS_SUBFEATURE_TEMP_INPUT:
+                return QStringLiteral("°C");
+            case SENSORS_SUBFEATURE_IN_INPUT:
+                return QStringLiteral("V");
+            case SENSORS_SUBFEATURE_FAN_INPUT:
+                return QStringLiteral("RPM");
+            case SENSORS_SUBFEATURE_CURR_INPUT:
+                return QStringLiteral("A");
+            case SENSORS_SUBFEATURE_POWER_INPUT:
+                return QStringLiteral("W");
+            default:
+                return QString();
+        }
     }
-}
 
-// Helper that returns nullopt when a subfeature is missing or unreadable.
-std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
-    const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
-    if (sf == nullptr) {
-        return std::nullopt;
+    // Helper that returns nullopt when a subfeature is missing or unreadable.
+    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature,
+                                              const sensors_subfeature_type type) {
+        const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
+        if (sf == nullptr) {
+            return std::nullopt;
+        }
+        double value = 0.0;
+        if (sensors_get_value(chip, sf->number, &value) != 0) {
+            return std::nullopt;
+        }
+        return value;
     }
-    double value = 0.0;
-    if (sensors_get_value(chip, sf->number, &value) != 0) {
-        return std::nullopt;
+
+    struct RangeInfo {
+        std::optional<double> min;
+        std::optional<double> max;
+    };
+
+    // Reads native min/max limits where available for the given input type.
+    RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature,
+                        const sensors_subfeature_type type) {
+        RangeInfo range;
+
+        switch (type) {
+            case SENSORS_SUBFEATURE_TEMP_INPUT:
+                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MIN);
+                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MAX);
+                if (!range.max) {
+                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT);
+                }
+                break;
+            case SENSORS_SUBFEATURE_IN_INPUT:
+                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MIN);
+                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MAX);
+                break;
+            case SENSORS_SUBFEATURE_FAN_INPUT:
+                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MIN);
+                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MAX);
+                break;
+            case SENSORS_SUBFEATURE_CURR_INPUT:
+                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MIN);
+                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
+                break;
+            case SENSORS_SUBFEATURE_POWER_INPUT:
+                break;
+            default:
+                break;
+        }
+        return range;
     }
-    return value;
-}
-
-struct RangeInfo {
-    std::optional<double> min;
-    std::optional<double> max;
-};
-
-// Reads native min/max limits where available for the given input type.
-RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
-    RangeInfo range;
-
-    switch (type) {
-        case SENSORS_SUBFEATURE_TEMP_INPUT:
-            range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MIN);
-            range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MAX);
-            if (!range.max) {
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT);
-            }
-            break;
-        case SENSORS_SUBFEATURE_IN_INPUT:
-            range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MIN);
-            range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MAX);
-            break;
-        case SENSORS_SUBFEATURE_FAN_INPUT:
-            range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MIN);
-            range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MAX);
-            break;
-        case SENSORS_SUBFEATURE_CURR_INPUT:
-            range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MIN);
-            range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
-            break;
-        case SENSORS_SUBFEATURE_POWER_INPUT:
-            break;
-        default:
-            break;
-    }
-    return range;
-}
 }
 
 SensorsBackend::SensorsBackend() : m_initialized(false) {

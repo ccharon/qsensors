@@ -7,12 +7,13 @@
 
 #include <QWidget>
 
-// Paints xsensors-style LCD digits using the imported theme sprite.
+/** Paints xsensors-style LCD digits using the imported theme sprite. */
 class LcdDisplayWidget final : public QWidget {
     Q_OBJECT
 
 public:
     explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
+
     void setReading(const SensorReading &reading);
 
     QSize sizeHint() const override;
@@ -28,11 +29,14 @@ private:
     };
 
     static bool glyphFor(QChar c, Glyph &glyph);
-    // Formats the numeric part exactly like xsensors for known units.
+
+    /** Formats the numeric part exactly like xsensors for known units. */
     static QString valueDigitsFor(const SensorReading &reading);
-    // Maps unit strings to available sprite glyph markers.
+
+    /** Maps unit strings to available sprite glyph markers. */
     static QChar unitGlyphFor(const SensorReading &reading);
-    // Alarm state decides which sprite row is used for rendering.
+
+    /** Alarm state decides which sprite row is used for rendering. */
     static bool isAlertState(const SensorReading &reading);
 
     SensorReading m_reading;

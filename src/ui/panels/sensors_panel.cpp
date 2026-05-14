@@ -19,17 +19,17 @@
 #include <algorithm>
 
 namespace {
-QString translatedCategoryName(const SensorCategory category) {
-    const QMetaEnum metaEnum = QMetaEnum::fromType<SensorCategory>();
-    const char *key = metaEnum.valueToKey(static_cast<int>(category));
-    if (key == nullptr) {
-        key = metaEnum.valueToKey(static_cast<int>(SensorCategory::Other));
+    QString translatedCategoryName(const SensorCategory category) {
+        const QMetaEnum metaEnum = QMetaEnum::fromType<SensorCategory>();
+        const char *key = metaEnum.valueToKey(static_cast<int>(category));
+        if (key == nullptr) {
+            key = metaEnum.valueToKey(static_cast<int>(SensorCategory::Other));
+        }
+        if (key == nullptr) {
+            return {};
+        }
+        return QCoreApplication::translate("MainWindow", key);
     }
-    if (key == nullptr) {
-        return {};
-    }
-    return QCoreApplication::translate("MainWindow", key);
-}
 }
 
 SensorsPanel::SensorsPanel(QWidget *parent) : QWidget(parent), m_layout(new QVBoxLayout(this)) {
@@ -77,8 +77,8 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
     clearContent();
     m_sensorWidgets.clear();
 
-    QMap<QString, QMap<SensorCategory, QVector<SensorReading>>> grouped;
-    for (const SensorReading &r : m_readings) {
+    QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > grouped;
+    for (const SensorReading &r: m_readings) {
         grouped[r.chip][r.category].push_back(r);
     }
 
@@ -92,11 +92,12 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
 
     for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
         const QString &chipName = chipIt.key();
-        const QMap<SensorCategory, QVector<SensorReading>> &categories = chipIt.value();
+        const QMap<SensorCategory, QVector<SensorReading> > &categories = chipIt.value();
         QList<SensorCategory> orderedCategories = categories.keys();
-        std::sort(orderedCategories.begin(), orderedCategories.end(), [](const SensorCategory a, const SensorCategory b) {
-            return static_cast<int>(a) < static_cast<int>(b);
-        });
+        std::sort(orderedCategories.begin(), orderedCategories.end(),
+                  [](const SensorCategory a, const SensorCategory b) {
+                      return static_cast<int>(a) < static_cast<int>(b);
+                  });
 
         auto *chipCard = new QFrame(this);
         chipCard->setObjectName(QStringLiteral("chipCard"));
@@ -154,7 +155,8 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
         const int categoryCount = std::max(1, static_cast<int>(orderedCategories.size()));
         const int perCategoryWidth = std::max(
             kCardWidth,
-            (stableViewportWidth - kChipContentHorizontalMargins - ((categoryCount - 1) * kCategorySpacing)) / categoryCount
+            (stableViewportWidth - kChipContentHorizontalMargins - ((categoryCount - 1) * kCategorySpacing)) /
+            categoryCount
         );
         const int columnsPerCategory = std::clamp(
             (perCategoryWidth + kGridSpacing) / (kCardWidth + kGridSpacing),
@@ -162,7 +164,7 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
             kMaxColumnsPerCategory
         );
 
-        for (const SensorCategory categoryName : orderedCategories) {
+        for (const SensorCategory categoryName: orderedCategories) {
             const QVector<SensorReading> &categoryReadings = categories.value(categoryName);
 
             auto *categoryContainer = new QWidget(chipContent);
@@ -202,7 +204,7 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
 }
 
 void SensorsPanel::updateVisibleReadings() {
-    for (const SensorReading &reading : m_readings) {
+    for (const SensorReading &reading: m_readings) {
         if (SensorValueWidget *widget = m_sensorWidgets.value(sensorKey(reading), nullptr)) {
             widget->setReading(reading);
         }
@@ -212,7 +214,7 @@ void SensorsPanel::updateVisibleReadings() {
 QString SensorsPanel::structureFingerprint(const QVector<SensorReading> &readings) {
     QStringList entries;
     entries.reserve(readings.size());
-    for (const SensorReading &r : readings) {
+    for (const SensorReading &r: readings) {
         entries.push_back(sensorKey(r));
     }
     entries.sort();

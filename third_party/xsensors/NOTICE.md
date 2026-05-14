@@ -13,7 +13,7 @@ License:
 
 - GNU General Public License, version 2 or later (GPL-2.0-or-later)
 - Full license text included at:
-  - `third_party/xsensors/COPYING.GPL-2.0`
+    - `third_party/xsensors/COPYING.GPL-2.0`
 
 Notes:
 

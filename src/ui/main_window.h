@@ -20,7 +20,7 @@ class QScreen;
 class SensorsPanel;
 class SettingsPanel;
 
-// Main application surface: polling, persistence and sensor panel layout.
+/** Main application surface: polling, persistence and sensor panel layout. */
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
@@ -28,17 +28,34 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 private slots:
+    /** Polls backend data, applies structure checks and refreshes visible state. */
     void refreshReadings();
 
 private:
     void closeEvent(QCloseEvent *event) override;
+
+    /** Reflows sensor cards to current viewport width while preserving expand state. */
     void resizeEvent(QResizeEvent *event) override;
+
+    /** Applies initial relayout and optional width fit once after first data is shown. */
     void showEvent(QShowEvent *event) override;
+
+    /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
+
+    /** Updates status bar text in one place. */
     void setStatusMessage(const QString &text);
+
+    /** Expands first-start window width to avoid horizontal scrolling. */
     void fitInitialWidthWithoutHorizontalScroll();
+
+    /** Loads persisted geometry, expand-state, polling interval and fingerprint. */
     void loadSettings();
+
+    /** Persists geometry, expand-state, polling interval and current fingerprint. */
     void saveSettings() const;
+
+    /** Fingerprint based on chip set to detect structural sensor changes. */
     static QString chipFingerprint(const QVector<SensorReading> &readings);
 
     SensorsBackend m_backend;

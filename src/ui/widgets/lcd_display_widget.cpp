@@ -8,27 +8,27 @@
 #include <QImage>
 
 namespace {
-constexpr int kDigitHeight = 30;
-constexpr int kRowOffsetAlert = 30;
-constexpr int kDisplayPaddingX = 0;
+    constexpr int kDigitHeight = 30;
+    constexpr int kRowOffsetAlert = 30;
+    constexpr int kDisplayPaddingX = 0;
 
-QImage loadThemeWithWhiteTransparency() {
-    QImage src(QStringLiteral(":/themes/xsensors-theme.png"));
-    if (src.isNull()) {
-        return {};
-    }
-    QImage img = src.convertToFormat(QImage::Format_ARGB32);
-    for (int y = 0; y < img.height(); ++y) {
-        QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
-        for (int x = 0; x < img.width(); ++x) {
-            const QColor c = QColor::fromRgb(line[x]);
-            if (c.red() >= 248 && c.green() >= 248 && c.blue() >= 248) {
-                line[x] = qRgba(c.red(), c.green(), c.blue(), 0);
+    QImage loadThemeWithWhiteTransparency() {
+        QImage src(QStringLiteral(":/themes/xsensors-theme.png"));
+        if (src.isNull()) {
+            return {};
+        }
+        QImage img = src.convertToFormat(QImage::Format_ARGB32);
+        for (int y = 0; y < img.height(); ++y) {
+            QRgb *line = reinterpret_cast<QRgb *>(img.scanLine(y));
+            for (int x = 0; x < img.width(); ++x) {
+                const QColor c = QColor::fromRgb(line[x]);
+                if (c.red() >= 248 && c.green() >= 248 && c.blue() >= 248) {
+                    line[x] = qRgba(c.red(), c.green(), c.blue(), 0);
+                }
             }
         }
+        return img;
     }
-    return img;
-}
 }
 
 LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent)
@@ -62,7 +62,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const QRect inner = rect();
     const QColor panelBg = palette().color(QPalette::Window);
     const QColor lcdBg = panelBg.lightness() > 140
-                             ? QColor(245, 245, 245)  // near-white for light themes
+                             ? QColor(245, 245, 245) // near-white for light themes
                              : QColor(230, 230, 230); // 90% brightness
     painter.fillRect(inner, lcdBg);
     painter.setClipRect(inner);
@@ -70,7 +70,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     int xPos = kDisplayPaddingX;
     // Draw number glyphs left-to-right from the sprite atlas.
     const QString digits = valueDigitsFor(m_reading);
-    for (const QChar c : digits) {
+    for (const QChar c: digits) {
         Glyph g{};
         if (!glyphFor(c, g)) {
             continue;
