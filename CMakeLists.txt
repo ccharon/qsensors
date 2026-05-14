@@ -6,14 +6,24 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC ON)
 
-
 find_package(Qt6 COMPONENTS
         Core
         Gui
         Widgets
         LinguistTools
         REQUIRED)
-find_library(SENSORS_LIBRARY sensors REQUIRED)
+find_package(PkgConfig QUIET)
+if (PkgConfig_FOUND)
+    pkg_check_modules(SENSORS QUIET IMPORTED_TARGET libsensors)
+    if (NOT SENSORS_FOUND)
+        pkg_check_modules(SENSORS QUIET IMPORTED_TARGET sensors)
+    endif ()
+endif ()
+
+if (NOT SENSORS_FOUND)
+    find_path(SENSORS_INCLUDE_DIR NAMES sensors/sensors.h REQUIRED)
+    find_library(SENSORS_LIBRARY NAMES sensors REQUIRED)
+endif ()
 
 add_executable(qsensors
         src/main.cpp
@@ -31,12 +41,38 @@ target_include_directories(qsensors PRIVATE
         src/ui/widgets
         src/sensors
 )
+if (NOT SENSORS_FOUND)
+    target_include_directories(qsensors PRIVATE ${SENSORS_INCLUDE_DIR})
+endif ()
 target_link_libraries(qsensors
         Qt::Core
         Qt::Gui
         Qt::Widgets
-        ${SENSORS_LIBRARY}
 )
+if (SENSORS_FOUND)
+    target_link_libraries(qsensors PkgConfig::SENSORS)
+else ()
+    target_link_libraries(qsensors ${SENSORS_LIBRARY})
+endif ()
+
+include(CheckCXXSourceCompiles)
+set(CMAKE_REQUIRED_QUIET TRUE)
+if (SENSORS_FOUND)
+    set(CMAKE_REQUIRED_LIBRARIES PkgConfig::SENSORS)
+    set(CMAKE_REQUIRED_INCLUDES ${SENSORS_INCLUDE_DIRS})
+else ()
+    set(CMAKE_REQUIRED_LIBRARIES ${SENSORS_LIBRARY})
+    set(CMAKE_REQUIRED_INCLUDES ${SENSORS_INCLUDE_DIR})
+endif ()
+check_cxx_source_compiles("
+    #include <sensors/sensors.h>
+    int main() {
+        return sensors_init(nullptr);
+    }
+" QSENSORS_LIBSENSORS_COMPILE_OK)
+if (NOT QSENSORS_LIBSENSORS_COMPILE_OK)
+    message(FATAL_ERROR "libsensors development files are missing or unusable (headers/library mismatch)")
+endif ()
 
 set(TS_FILES
         i18n/qsensors_en.ts
