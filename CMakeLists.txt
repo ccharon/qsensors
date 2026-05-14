@@ -56,6 +56,8 @@ else ()
     target_link_libraries(qsensors ${SENSORS_LIBRARY})
 endif ()
 
+install(TARGETS qsensors RUNTIME DESTINATION bin)
+
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_QUIET TRUE)
 if (SENSORS_FOUND)
