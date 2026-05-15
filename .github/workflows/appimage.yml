@@ -47,7 +47,7 @@ jobs:
         run: cmake --build build -j"$(nproc)"
 
       - name: Install to AppDir
-        run: cmake --install build --prefix /usr --config Release --strip --destdir AppDir
+        run: DESTDIR=AppDir cmake --install build --prefix /usr --config Release --strip
 
       - name: Add desktop entry and icon
         run: |
