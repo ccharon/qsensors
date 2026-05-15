@@ -7,7 +7,7 @@ inherit cmake desktop xdg
 
 DESCRIPTION="Qt6/Wayland-oriented sensor monitor with xsensors-inspired UI"
 HOMEPAGE="https://github.com/ccharon/qsensors"
-SRC_URI="https://github.com/ccharon/qsensors/archive/refs/tags/v${PV}.tar.gz -> ${P}.tar.gz"
+SRC_URI="https://github.com/ccharon/qsensors/archive/refs/tags/${PV}.tar.gz -> ${P}.tar.gz"
 
 LICENSE="GPL-2+"
 SLOT="0"
