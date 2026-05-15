@@ -37,6 +37,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_settingsPanel->setFanDefaultMaxRpm(m_runtimeConfig.fanDefaultMaxRpm);
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
         m_runtimeConfig.pollingIntervalSec = value;
+        // Apply immediately so the next tick uses the new cadence without restart.
         applyRuntimeConfig();
         setStatusMessage(
             tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec)
@@ -44,6 +45,7 @@ MainWindow::MainWindow(QWidget *parent)
     });
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
+        // This only affects fallback limits when firmware does not expose FAN_MAX.
         applyRuntimeConfig();
     });
 
@@ -55,6 +57,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_timer, &QTimer::timeout, this, &MainWindow::refreshReadings);
     m_timer->start(m_runtimeConfig.pollingIntervalSec * 1000);
+    // Intentional first immediate sample for fast startup feedback.
     refreshReadings();
 }
 
@@ -157,6 +160,7 @@ void MainWindow::showEvent(QShowEvent *event) {
 }
 
 void MainWindow::loadSettings() {
+    // Runtime config and UI layout state are intentionally persisted independently.
     m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
     const MainWindowState state = MainWindowStateStore::load();
     if (state.hasGeometry) {
@@ -179,6 +183,7 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
+    // Centralized fan-out point for runtime-tunable behavior.
     m_timer->setInterval(m_runtimeConfig.pollingIntervalSec * 1000);
     m_backend.applyConfig(m_runtimeConfig);
 }

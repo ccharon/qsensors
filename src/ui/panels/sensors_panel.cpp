@@ -80,6 +80,7 @@ void SensorsPanel::clearContent(const bool resetState) {
 void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebuild) {
     const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > grouped = groupReadingsByChip(m_readings);
     const LayoutMetrics metrics = computeLayoutMetrics(viewportWidth);
+    // Batch updates avoid flicker while chip sections are reconciled/reordered.
     setUpdatesEnabled(false);
 
     const QStringList orderedChips = orderedChipNames(grouped);
@@ -93,6 +94,7 @@ void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebui
 
     applyChipOrder(orderedChips);
 
+    // Keep stable widget instances whenever structure matches; value refresh happens below.
     m_sensorWidgets = reconciledWidgets;
     updateVisibleReadings();
     setUpdatesEnabled(true);

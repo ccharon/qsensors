@@ -9,6 +9,7 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
     RuntimeConfig config;
     QSettings settings;
 
+    // Keep stable keys for backward compatibility with existing user settings.
     config.pollingIntervalSec = settings.value(
         QStringLiteral("ui/polling_interval_sec"),
         RuntimeConfigLimits::kDefaultPollingIntervalSec
@@ -32,7 +33,7 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
 
 void AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
     QSettings settings;
+    // Store only runtime-tunable values; window/chip UI state lives in MainWindowStateStore.
     settings.setValue(QStringLiteral("ui/polling_interval_sec"), config.pollingIntervalSec);
     settings.setValue(QStringLiteral("ui/fan_default_max_rpm"), config.fanDefaultMaxRpm);
 }
-

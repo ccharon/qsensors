@@ -106,6 +106,7 @@ namespace {
 
     InputSelection selectInputSubfeature(const sensors_chip_name *chip, const sensors_feature *feature) {
         InputSelection selection{};
+        // Priority order defines which "input" is shown when a feature exposes multiple candidates.
         const sensors_subfeature_type candidates[] = {
             SENSORS_SUBFEATURE_TEMP_INPUT,
             SENSORS_SUBFEATURE_IN_INPUT,
@@ -130,6 +131,7 @@ namespace {
                                   ? QString::fromUtf8(labelRaw)
                                   : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
         if (labelRaw != nullptr) {
+            // libsensors allocates this label buffer; caller must free it.
             free(const_cast<char *>(labelRaw));
         }
         return label;
@@ -245,5 +247,6 @@ QVector<SensorReading> SensorsBackend::readAll() const {
 }
 
 void SensorsBackend::applyConfig(const RuntimeConfig &config) {
+    // Only fallback policy values are runtime-configurable in backend today.
     m_defaultFanMaxRpm = config.fanDefaultMaxRpm;
 }

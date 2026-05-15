@@ -48,6 +48,7 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
     // Keep bar behavior aligned with xsensors-style limit semantics.
     if (reading.hasRange) {
         constexpr int scale = 1000;
+        // Scale doubles to integer domain for QProgressBar while preserving precision.
         double min = reading.hasMin ? reading.minValue : reading.value;
         double max = reading.hasMax ? reading.maxValue : reading.value;
 
