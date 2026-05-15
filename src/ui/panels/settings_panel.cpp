@@ -5,6 +5,7 @@
 
 #include "theme/app_theme.h"
 
+#include <QFormLayout>
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
@@ -13,7 +14,7 @@
 #include <QVBoxLayout>
 #include <QWidget>
 
-SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) {
+SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_pollingSpin(nullptr), m_fanMaxRpmSpin(nullptr) {
     setObjectName(QStringLiteral("settingsCard"));
     setStyleSheet(AppTheme::settingsCardStyle());
 
@@ -31,7 +32,7 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) 
     header->setStyleSheet(AppTheme::sectionHeaderStyle());
 
     auto *content = new QWidget(this);
-    auto *contentLayout = new QHBoxLayout(content);
+    auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(
         AppTheme::kSectionInset, AppTheme::kSectionInset,
         AppTheme::kSectionInset, AppTheme::kSectionInset
@@ -47,17 +48,33 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) 
 
     settingsLayout->addWidget(header);
 
-    auto *label = new QLabel(tr("Polling Interval (s):"), content);
-    m_spin = new QSpinBox(content);
-    m_spin->setRange(1, 10);
-    m_spin->setKeyboardTracking(false);
-    m_spin->setAccelerated(true);
-    m_spin->setStyleSheet(AppTheme::spinBoxStyle());
+    auto *formLayout = new QFormLayout();
+    formLayout->setContentsMargins(0, 0, 0, 0);
+    formLayout->setHorizontalSpacing(AppTheme::kSectionInset);
+    formLayout->setVerticalSpacing(AppTheme::kSectionInset);
+    formLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 
-    connect(m_spin, &QSpinBox::valueChanged, this, &SettingsPanel::pollingIntervalChanged);
+    auto *pollingLabel = new QLabel(tr("Polling Interval (s):"), content);
+    m_pollingSpin = new QSpinBox(content);
+    m_pollingSpin->setRange(1, 10);
+    m_pollingSpin->setKeyboardTracking(false);
+    m_pollingSpin->setAccelerated(true);
+    m_pollingSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    connect(m_pollingSpin, &QSpinBox::valueChanged, this, &SettingsPanel::pollingIntervalChanged);
 
-    contentLayout->addWidget(label);
-    contentLayout->addWidget(m_spin, 0, Qt::AlignLeft);
+    auto *fanRpmLabel = new QLabel(tr("Fan Max RPM:"), content);
+    m_fanMaxRpmSpin = new QSpinBox(content);
+    m_fanMaxRpmSpin->setRange(1000, 50000);
+    m_fanMaxRpmSpin->setSingleStep(100);
+    m_fanMaxRpmSpin->setKeyboardTracking(false);
+    m_fanMaxRpmSpin->setAccelerated(true);
+    m_fanMaxRpmSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    connect(m_fanMaxRpmSpin, &QSpinBox::valueChanged, this, &SettingsPanel::fanDefaultMaxRpmChanged);
+
+    formLayout->addRow(pollingLabel, m_pollingSpin);
+    formLayout->addRow(fanRpmLabel, m_fanMaxRpmSpin);
+
+    contentLayout->addLayout(formLayout);
     contentLayout->addStretch(1);
 
     settingsLayout->addWidget(content);
@@ -65,6 +82,12 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_spin(nullptr) 
 
 void SettingsPanel::setPollingInterval(const int seconds) {
     // Prevent synthetic value restore from feeding back into polling updates.
-    const QSignalBlocker blocker(m_spin);
-    m_spin->setValue(seconds);
+    const QSignalBlocker blocker(m_pollingSpin);
+    m_pollingSpin->setValue(seconds);
+}
+
+void SettingsPanel::setFanDefaultMaxRpm(const int rpm) {
+    // Prevent synthetic value restore from feeding back into policy updates.
+    const QSignalBlocker blocker(m_fanMaxRpmSpin);
+    m_fanMaxRpmSpin->setValue(rpm);
 }

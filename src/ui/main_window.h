@@ -4,6 +4,7 @@
 #pragma once
 
 #include "sensors_backend.h"
+#include "runtime_config.h"
 
 #include <QMainWindow>
 #include <QHash>
@@ -43,6 +44,8 @@ protected:
 private:
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
+    /** Applies runtime config to backend and polling timer. */
+    void applyRuntimeConfig();
 
     /** Updates status bar text in one place. */
     void setStatusMessage(const QString &text);
@@ -50,10 +53,10 @@ private:
     /** Expands first-start window width to avoid horizontal scrolling. */
     void fitInitialWidthWithoutHorizontalScroll();
 
-    /** Loads persisted geometry, expand-state, polling interval and fingerprint. */
+    /** Loads persisted geometry, expand-state and fingerprint (+ runtime config). */
     void loadSettings();
 
-    /** Persists geometry, expand-state, polling interval and current fingerprint. */
+    /** Persists geometry, expand-state and current fingerprint (+ runtime config). */
     void saveSettings() const;
 
     /** Fingerprint based on chip set to detect structural sensor changes. */
@@ -73,5 +76,5 @@ private:
     QVector<SensorReading> m_lastReadings;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
-    int m_pollingIntervalSec = 2;
+    RuntimeConfig m_runtimeConfig;
 };

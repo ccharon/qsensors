@@ -3,6 +3,7 @@
 
 #include "main_window.h"
 
+#include "app_config_store.h"
 #include "theme/app_theme.h"
 #include "main_window_state_store.h"
 #include "settings_panel.h"
@@ -20,10 +21,6 @@
 #include <QWidget>
 #include <QWindow>
 
-namespace {
-    constexpr int kDefaultPollingIntervalSec = 2;
-}
-
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       m_scrollArea(nullptr),
@@ -36,20 +33,28 @@ MainWindow::MainWindow(QWidget *parent)
     setupUi();
     loadSettings();
 
-    m_settingsPanel->setPollingInterval(m_pollingIntervalSec);
+    m_settingsPanel->setPollingInterval(m_runtimeConfig.pollingIntervalSec);
+    m_settingsPanel->setFanDefaultMaxRpm(m_runtimeConfig.fanDefaultMaxRpm);
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
-        m_pollingIntervalSec = value;
-        m_timer->setInterval(m_pollingIntervalSec * 1000);
-        setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_pollingIntervalSec));
+        m_runtimeConfig.pollingIntervalSec = value;
+        applyRuntimeConfig();
+        setStatusMessage(
+            tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec)
+        );
+    });
+    connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
+        m_runtimeConfig.fanDefaultMaxRpm = value;
+        applyRuntimeConfig();
     });
 
     if (!m_backend.isInitialized()) {
         setStatusMessage(tr("libsensors init failed: %1").arg(m_backend.lastError()));
         return;
     }
+    applyRuntimeConfig();
 
     connect(m_timer, &QTimer::timeout, this, &MainWindow::refreshReadings);
-    m_timer->start(m_pollingIntervalSec * 1000);
+    m_timer->start(m_runtimeConfig.pollingIntervalSec * 1000);
     refreshReadings();
 }
 
@@ -71,7 +76,7 @@ void MainWindow::refreshReadings() {
         m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width() : width()
     );
 
-    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_pollingIntervalSec));
+    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
 }
 
 void MainWindow::setupUi() {
@@ -100,11 +105,15 @@ void MainWindow::setupUi() {
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
     settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset, 0);
     settingsHostLayout->setSpacing(0);
-    settingsHostLayout->addWidget(m_settingsPanel);
+    settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignTop);
+
+    // Settings section should keep its natural height and never consume spare vertical space.
+    m_settingsPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
+    settingsHost->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Settings first, then sensor panels.
-    m_contentLayout->addWidget(settingsHost);
-    m_contentLayout->addWidget(m_sensorsPanel);
+    m_contentLayout->addWidget(settingsHost, 0, Qt::AlignTop);
+    m_contentLayout->addWidget(m_sensorsPanel, 1);
 
     m_scrollArea->setWidget(m_contentContainer);
     layout->addWidget(m_scrollArea);
@@ -148,7 +157,8 @@ void MainWindow::showEvent(QShowEvent *event) {
 }
 
 void MainWindow::loadSettings() {
-    const MainWindowState state = MainWindowStateStore::load(kDefaultPollingIntervalSec);
+    m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
+    const MainWindowState state = MainWindowStateStore::load();
     if (state.hasGeometry) {
         m_hasSavedGeometry = true;
         restoreGeometry(state.geometry);
@@ -156,12 +166,21 @@ void MainWindow::loadSettings() {
         m_hasSavedGeometry = false;
     }
     m_chipExpanded = state.chipExpanded;
-    m_pollingIntervalSec = state.pollingIntervalSec;
     m_loadedChipFingerprint = state.sensorFingerprint;
 }
 
 void MainWindow::saveSettings() const {
-    MainWindowStateStore::save(saveGeometry(), m_pollingIntervalSec, m_currentFingerprint, m_chipExpanded);
+    AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
+    MainWindowStateStore::save(
+        saveGeometry(),
+        m_currentFingerprint,
+        m_chipExpanded
+    );
+}
+
+void MainWindow::applyRuntimeConfig() {
+    m_timer->setInterval(m_runtimeConfig.pollingIntervalSec * 1000);
+    m_backend.applyConfig(m_runtimeConfig);
 }
 
 void MainWindow::fitInitialWidthWithoutHorizontalScroll() {

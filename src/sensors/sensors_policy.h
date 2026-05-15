@@ -12,7 +12,8 @@ namespace SensorsPolicy {
 inline void applyDefaultRangePolicy(
     const SensorCategory category,
     std::optional<double> &min,
-    std::optional<double> &max
+    std::optional<double> &max,
+    const int fanDefaultMaxRpm
 ) {
     if (category == SensorCategory::Temperatures) {
         if (!min.has_value() && !max.has_value()) {
@@ -28,7 +29,7 @@ inline void applyDefaultRangePolicy(
             min = 0.0;
         }
         if (!max.has_value()) {
-            max = 10000.0;
+            max = static_cast<double>(fanDefaultMaxRpm);
         }
     }
 }

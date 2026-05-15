@@ -10,7 +10,7 @@
 #include <optional>
 
 namespace {
-    // Maps libsensors input types to visible category columns.
+    /** Maps libsensors input types to visible category columns. */
     SensorCategory categoryForType(const sensors_subfeature_type type) {
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
@@ -28,7 +28,7 @@ namespace {
         }
     }
 
-    // Unit symbol used by the LCD renderer and range logic.
+    /**  Unit symbol used by the LCD renderer and range logic. */
     QString unitForType(const sensors_subfeature_type type) {
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
@@ -46,17 +46,18 @@ namespace {
         }
     }
 
-    // Helper that returns nullopt when a subfeature is missing or unreadable.
-    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature,
-                                              const sensors_subfeature_type type) {
+    /**  Helper that returns nullopt when a subfeature is missing or unreadable. */
+    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
         if (sf == nullptr) {
             return std::nullopt;
         }
+
         double value = 0.0;
         if (sensors_get_value(chip, sf->number, &value) != 0) {
             return std::nullopt;
         }
+
         return value;
     }
 
@@ -70,7 +71,7 @@ namespace {
         sensors_subfeature_type type = SENSORS_SUBFEATURE_UNKNOWN;
     };
 
-    // Reads native min/max limits where available for the given input type.
+    /** Reads native min/max limits where available for the given input type. */
     RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature,
                         const sensors_subfeature_type type) {
         RangeInfo range;
@@ -153,7 +154,8 @@ namespace {
         const sensors_chip_name *chip,
         const QString &chipName,
         const sensors_feature *feature,
-        QVector<SensorReading> &readings
+        QVector<SensorReading> &readings,
+        const int defaultFanMaxRpm
     ) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
         if (selected.subfeature == nullptr) {
@@ -176,7 +178,7 @@ namespace {
         const RangeInfo nativeRange = readRange(chip, feature, selected.type);
         std::optional<double> min = nativeRange.min;
         std::optional<double> max = nativeRange.max;
-        SensorsPolicy::applyDefaultRangePolicy(reading.category, min, max);
+        SensorsPolicy::applyDefaultRangePolicy(reading.category, min, max, defaultFanMaxRpm);
         applyRangeToReading(reading, min, max);
         readings.push_back(reading);
         return true;
@@ -190,7 +192,7 @@ namespace {
         return QString::fromUtf8(chipNameBuffer);
     }
 
-    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings) {
+    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, const int defaultFanMaxRpm) {
         const QString chipName = chipNameFrom(chip);
         if (chipName.isEmpty()) {
             return;
@@ -199,7 +201,7 @@ namespace {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, chipName, feature, readings);
+            appendFeatureReading(chip, chipName, feature, readings, defaultFanMaxRpm);
         }
     }
 }
@@ -236,8 +238,12 @@ QVector<SensorReading> SensorsBackend::readAll() const {
     const sensors_chip_name *chip = nullptr;
     int chipNr = 0;
     while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings);
+        appendChipReadings(chip, readings, m_defaultFanMaxRpm);
     }
 
     return readings;
+}
+
+void SensorsBackend::applyConfig(const RuntimeConfig &config) {
+    m_defaultFanMaxRpm = config.fanDefaultMaxRpm;
 }

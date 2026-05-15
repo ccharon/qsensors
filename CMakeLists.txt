@@ -28,6 +28,7 @@ endif ()
 add_executable(qsensors
         src/main.cpp
         resources/resources.qrc
+        src/config/app_config_store.cpp
         src/ui/main_window.cpp
         src/ui/main_window_state_store.cpp
         src/ui/theme/app_theme.cpp
@@ -40,6 +41,7 @@ add_executable(qsensors
 )
 target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
 target_include_directories(qsensors PRIVATE
+        src/config
         src/ui
         src/ui/panels
         src/ui/widgets

@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "runtime_config.h"
+
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -58,7 +60,11 @@ public:
     /** Snapshot of all supported sensor input values. */
     [[nodiscard]] QVector<SensorReading> readAll() const;
 
+    /** Applies runtime configuration relevant to backend range defaults. */
+    void applyConfig(const RuntimeConfig &config);
+
 private:
     bool m_initialized;
     QString m_lastError;
+    int m_defaultFanMaxRpm = 5000;
 };

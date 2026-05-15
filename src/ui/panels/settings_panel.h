@@ -16,10 +16,14 @@ public:
 
     /** Applies persisted polling interval without re-emitting change signals. */
     void setPollingInterval(int seconds);
+    /** Applies persisted fan fallback max rpm without re-emitting change signals. */
+    void setFanDefaultMaxRpm(int rpm);
 
 signals:
     void pollingIntervalChanged(int seconds);
+    void fanDefaultMaxRpmChanged(int rpm);
 
 private:
-    QSpinBox *m_spin;
+    QSpinBox *m_pollingSpin;
+    QSpinBox *m_fanMaxRpmSpin;
 };

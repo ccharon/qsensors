@@ -62,5 +62,9 @@
       <source>Polling Interval (s):</source>
       <translation>Polling Interval (s):</translation>
     </message>
+    <message>
+      <source>Fan Max RPM:</source>
+      <translation>Fan Max RPM:</translation>
+    </message>
   </context>
 </TS>

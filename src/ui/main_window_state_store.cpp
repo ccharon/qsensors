@@ -6,7 +6,7 @@
 #include <QSettings>
 #include <QStringList>
 
-MainWindowState MainWindowStateStore::load(const int defaultPollingIntervalSec) {
+MainWindowState MainWindowStateStore::load() {
     MainWindowState state;
     QSettings settings;
 
@@ -20,25 +20,17 @@ MainWindowState MainWindowStateStore::load(const int defaultPollingIntervalSec) 
     }
     settings.endGroup();
 
-    state.pollingIntervalSec = settings.value(QStringLiteral("ui/polling_interval_sec"), defaultPollingIntervalSec).
-            toInt();
-    if (state.pollingIntervalSec < 1 || state.pollingIntervalSec > 10) {
-        state.pollingIntervalSec = defaultPollingIntervalSec;
-    }
-
     state.sensorFingerprint = settings.value(QStringLiteral("sensors/fingerprint")).toString();
     return state;
 }
 
 void MainWindowStateStore::save(
     const QByteArray &geometry,
-    const int pollingIntervalSec,
     const QString &sensorFingerprint,
     const QHash<QString, bool> &chipExpanded
 ) {
     QSettings settings;
     settings.setValue(QStringLiteral("ui/geometry"), geometry);
-    settings.setValue(QStringLiteral("ui/polling_interval_sec"), pollingIntervalSec);
     settings.setValue(QStringLiteral("sensors/fingerprint"), sensorFingerprint);
     settings.beginGroup(QStringLiteral("ui/chips"));
     settings.remove(QString());

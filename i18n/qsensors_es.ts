@@ -62,5 +62,9 @@
       <source>Polling Interval (s):</source>
       <translation>Intervalo de actualización (s):</translation>
     </message>
+    <message>
+      <source>Fan Max RPM:</source>
+      <translation>RPM máx. del ventilador:</translation>
+    </message>
   </context>
 </TS>
