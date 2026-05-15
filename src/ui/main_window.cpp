@@ -100,6 +100,7 @@ void MainWindow::setupUi() {
     m_contentLayout = new QVBoxLayout(m_contentContainer);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
     m_contentLayout->setSpacing(AppTheme::kNarrowGap);
+    m_contentLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
     m_settingsPanel = new SettingsPanel(m_contentContainer);

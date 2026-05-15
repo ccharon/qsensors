@@ -267,6 +267,7 @@ void SensorsPanel::rebuildChipSection(
 
         auto *categoryContainer = new QWidget(section.content);
         categoryContainer->setMinimumWidth(perCategoryWidth);
+        categoryContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
         auto *categoryContainerLayout = new QVBoxLayout(categoryContainer);
         categoryContainerLayout->setContentsMargins(0, 0, 0, 0);
         categoryContainerLayout->setSpacing(3);
@@ -291,8 +292,9 @@ void SensorsPanel::rebuildChipSection(
         categoryGrid->setColumnStretch(columnsPerCategory, 1);
         categoryContainerLayout->addLayout(categoryGrid);
         categoryContainerLayout->addStretch(1);
-        section.categoryRow->addWidget(categoryContainer, 1);
+        section.categoryRow->addWidget(categoryContainer, 0, Qt::AlignLeft | Qt::AlignTop);
     }
+    section.categoryRow->addStretch(1);
 }
 
 void SensorsPanel::updateVisibleReadings() {

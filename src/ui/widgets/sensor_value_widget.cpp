@@ -14,7 +14,8 @@
 
 SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *parent)
     : QWidget(parent), m_groupBox(new QGroupBox(this)), m_lcdValue(new LcdDisplayWidget(reading, this)), m_rangeBar(new QProgressBar(this)) {
-    setMinimumSize(150, AppTheme::kCardMinHeight);
+    setMinimumWidth(150);
+    setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMaximumWidth(AppTheme::kCardWidth);
 
     auto *layout = new QVBoxLayout(this);
@@ -27,18 +28,20 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
                                     ? QStringLiteral("palette(mid)")
                                     : QStringLiteral("rgb(230,230,230)");
     m_groupBox->setStyleSheet(AppTheme::sensorGroupStyle(borderColor));
+    m_groupBox->setContentsMargins(0,12,0,0);
 
     auto *groupLayout = new QVBoxLayout(m_groupBox);
-    groupLayout->setContentsMargins(AppTheme::kCardBorderPadding, 0, AppTheme::kCardBorderPadding, 0);
+    groupLayout->setContentsMargins(AppTheme::kCardBorderPadding, 3, AppTheme::kCardBorderPadding, 3);
     groupLayout->setSpacing(0);
 
     setReading(reading);
 
-    groupLayout->addWidget(m_lcdValue, 1);
+    groupLayout->addWidget(m_lcdValue);
     groupLayout->addWidget(m_rangeBar);
     layout->addWidget(m_groupBox);
 
     setLayout(layout);
+    setFixedHeight(layout->sizeHint().height());
 }
 
 void SensorValueWidget::setReading(const SensorReading &reading) {
