@@ -110,7 +110,7 @@ void MainWindow::setupUi() {
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
-    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset, 0);
+    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 2, AppTheme::kSectionInset, 0);
     settingsHostLayout->setSpacing(0);
     settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignTop);
 
