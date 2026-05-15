@@ -21,13 +21,16 @@ jobs:
             ninja-build \
             pkg-config \
             libsensors-dev \
+            libgl1-mesa-dev \
+            libopengl-dev \
             desktop-file-utils \
             patchelf \
             libfuse2 \
             python3-pip \
             qt6-base-dev \
             qt6-tools-dev \
-            qt6-tools-dev-tools
+            qt6-tools-dev-tools \
+            linguist-qt6
 
       - name: Install CMake >= 4.2
         run: |
