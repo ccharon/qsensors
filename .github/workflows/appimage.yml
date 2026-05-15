@@ -23,6 +23,8 @@ jobs:
             libsensors-dev \
             libgl1-mesa-dev \
             libopengl-dev \
+            libxkbcommon-dev \
+            libvulkan-dev \
             desktop-file-utils \
             patchelf \
             libfuse2 \
@@ -30,7 +32,8 @@ jobs:
             qt6-base-dev \
             qt6-tools-dev \
             qt6-tools-dev-tools \
-            linguist-qt6
+            linguist-qt6 \
+            qt6-l10n-tools
 
       - name: Install CMake >= 4.2
         run: |
