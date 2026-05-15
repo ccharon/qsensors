@@ -65,7 +65,7 @@ void SensorsPanel::relayout(const int viewportWidth) {
 void SensorsPanel::clearContent(const bool resetState) {
     while (QLayoutItem *item = m_layout->takeAt(0)) {
         if (item->widget() != nullptr) {
-            item->widget()->deleteLater();
+            delete item->widget();
         }
         delete item;
     }
@@ -98,6 +98,7 @@ void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebui
     m_sensorWidgets = reconciledWidgets;
     updateVisibleReadings();
     setUpdatesEnabled(true);
+    update();
     emit chipExpandedStateChanged(m_chipExpanded);
 }
 
@@ -127,7 +128,7 @@ void SensorsPanel::removeStaleChipSections(
         if (!grouped.contains(it.key())) {
             if (it->card != nullptr) {
                 m_layout->removeWidget(it->card);
-                it->card->deleteLater();
+                delete it->card;
             }
             it = m_chipSections.erase(it);
         } else {
@@ -249,7 +250,7 @@ void SensorsPanel::rebuildChipSection(
     // Replace only this chip's subtree; keep the outer chip card/header instance alive.
     while (QLayoutItem *item = section.categoryRow->takeAt(0)) {
         if (item->widget() != nullptr) {
-            item->widget()->deleteLater();
+            delete item->widget();
         }
         delete item;
     }
