@@ -10,7 +10,8 @@ const LcdGlyphAtlas &LcdGlyphAtlas::instance() {
     return atlas;
 }
 
-LcdGlyphAtlas::LcdGlyphAtlas() : m_theme(loadThemeWithWhiteTransparency()) {}
+LcdGlyphAtlas::LcdGlyphAtlas() : m_theme(loadThemeWithWhiteTransparency()) {
+}
 
 bool LcdGlyphAtlas::isValid() const {
     return !m_theme.isNull();

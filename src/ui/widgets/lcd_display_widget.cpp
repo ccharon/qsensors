@@ -5,7 +5,6 @@
 
 #include <QPainter>
 #include <QPalette>
-#include <utility>
 
 namespace {
     constexpr int kDigitHeight = 30;
@@ -13,8 +12,8 @@ namespace {
     constexpr int kDisplayPaddingX = 0;
 }
 
-LcdDisplayWidget::LcdDisplayWidget(SensorReading reading, QWidget *parent)
-    : QWidget(parent), m_reading(std::move(reading)) {
+LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent)
+    : QWidget(parent), m_reading(reading) {
     setMinimumHeight(kDigitHeight + 2);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
 }
@@ -44,8 +43,16 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const QRect inner = rect();
     const QColor panelBg = palette().color(QPalette::Window);
     const QColor lcdBg = panelBg.lightness() > 140
-                             ? QColor(245, 245, 245) // near-white for light themes
-                             : QColor(230, 230, 230); // 90% brightness
+                             ? QColor(
+                                 AppTheme::kLcdLightThemeBrightness,
+                                 AppTheme::kLcdLightThemeBrightness,
+                                 AppTheme::kLcdLightThemeBrightness
+                             )
+                             : QColor(
+                                 AppTheme::kLcdDarkThemeBrightness,
+                                 AppTheme::kLcdDarkThemeBrightness,
+                                 AppTheme::kLcdDarkThemeBrightness
+                             );
     painter.fillRect(inner, lcdBg);
     painter.setClipRect(inner);
 
@@ -121,7 +128,8 @@ bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
         return reading.hasMax && reading.value > reading.maxValue;
     }
     if (reading.unit == QStringLiteral("V")) {
-        return (reading.hasMin && reading.value < reading.minValue) || (reading.hasMax && reading.value > reading.maxValue);
+        return (reading.hasMin && reading.value < reading.minValue) || (
+                   reading.hasMax && reading.value > reading.maxValue);
     }
     return false;
 }

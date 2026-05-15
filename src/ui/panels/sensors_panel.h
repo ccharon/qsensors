@@ -5,9 +5,13 @@
 
 #include "sensors_backend.h"
 
+#include <QFrame>
+#include <QHash>
 #include <QString>
 #include <QWidget>
 
+class QHBoxLayout;
+class QToolButton;
 class QVBoxLayout;
 class SensorValueWidget;
 
@@ -34,24 +38,75 @@ signals:
     void chipExpandedStateChanged(const QHash<QString, bool> &state);
 
 private:
-    /** Deletes all currently rendered chip/category widgets from the root layout. */
-    void clearContent() const;
+    struct LayoutMetrics {
+        int stableViewportWidth = 0;
+    };
 
-    /** Rebuilds full chip/category/widget UI based on current readings. */
-    void renderReadings(int viewportWidth);
+    /** One persistent UI section per chip, reused across refresh cycles. */
+    struct ChipSection {
+        QFrame *card = nullptr;
+        QToolButton *header = nullptr;
+        QWidget *content = nullptr;
+        QHBoxLayout *categoryRow = nullptr;
+        /** Fingerprint of category/feature layout currently rendered in this section. */
+        QString structureFingerprint;
+        /** Widget map for fast value-only updates without rebuilding chip content. */
+        QHash<QString, SensorValueWidget *> widgets;
+    };
+
+    /** Deletes all currently rendered chip/category widgets from the root layout. */
+    void clearContent(bool resetState);
+
+    /** Reconciles chip sections and rebuilds only changed chip/category trees. */
+    void renderReadings(int viewportWidth, bool forceRebuild);
+
+    [[nodiscard]] static QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > groupReadingsByChip(
+        const QVector<SensorReading> &readings
+    );
+
+    [[nodiscard]] static QStringList orderedChipNames(
+        const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped
+    );
+
+    void removeStaleChipSections(const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped);
+
+    [[nodiscard]] LayoutMetrics computeLayoutMetrics(int viewportWidth) const;
+
+    void reconcileChipSection(
+        const QString &chipName,
+        const QMap<SensorCategory, QVector<SensorReading> > &categories,
+        const LayoutMetrics &metrics,
+        bool forceRebuild,
+        QHash<QString, SensorValueWidget *> &reconciledWidgets
+    );
+
+    /** Creates and wires one reusable chip section container. */
+    [[nodiscard]] ChipSection *createChipSection(const QString &chipName);
+
+    /** Rebuilds one chip section's category/widget subtree. */
+    void rebuildChipSection(
+        ChipSection &section,
+        const QMap<SensorCategory, QVector<SensorReading> > &categories,
+        int perCategoryWidth,
+        int columnsPerCategory
+    );
+
+    /** Fingerprint for one chip's structural content. */
+    [[nodiscard]] static QString chipStructureFingerprint(
+        const QMap<SensorCategory, QVector<SensorReading> > &categories);
+
+    /** Reorders chip cards in layout to match current chip ordering. */
+    void applyChipOrder(const QStringList &orderedChips);
 
     /** Applies value updates to already rendered widgets without rebuilding layout. */
     void updateVisibleReadings();
 
-    /** Stable key for structure-change detection (chip/category/feature/unit). */
-    static QString structureFingerprint(const QVector<SensorReading> &readings);
-
     /** Unique widget lookup key for one sensor reading instance. */
-    static QString sensorKey(const SensorReading &reading);
+    [[nodiscard]] static QString sensorKey(const SensorReading &reading);
 
     QVBoxLayout *m_layout;
     QVector<SensorReading> m_readings;
-    QString m_lastStructureFingerprint;
     QHash<QString, SensorValueWidget *> m_sensorWidgets;
     QHash<QString, bool> m_chipExpanded;
+    QHash<QString, ChipSection> m_chipSections;
 };

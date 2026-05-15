@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors_backend.h"
+#include "sensors_policy.h"
 
 #include <sensors/sensors.h>
 
@@ -64,6 +65,11 @@ namespace {
         std::optional<double> max;
     };
 
+    struct InputSelection {
+        const sensors_subfeature *subfeature = nullptr;
+        sensors_subfeature_type type = SENSORS_SUBFEATURE_UNKNOWN;
+    };
+
     // Reads native min/max limits where available for the given input type.
     RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature,
                         const sensors_subfeature_type type) {
@@ -95,6 +101,106 @@ namespace {
                 break;
         }
         return range;
+    }
+
+    InputSelection selectInputSubfeature(const sensors_chip_name *chip, const sensors_feature *feature) {
+        InputSelection selection{};
+        const sensors_subfeature_type candidates[] = {
+            SENSORS_SUBFEATURE_TEMP_INPUT,
+            SENSORS_SUBFEATURE_IN_INPUT,
+            SENSORS_SUBFEATURE_FAN_INPUT,
+            SENSORS_SUBFEATURE_CURR_INPUT,
+            SENSORS_SUBFEATURE_POWER_INPUT
+        };
+
+        for (const sensors_subfeature_type type : candidates) {
+            if (const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type); sf != nullptr) {
+                selection.subfeature = sf;
+                selection.type = type;
+                return selection;
+            }
+        }
+        return selection;
+    }
+
+    QString resolveFeatureLabel(const sensors_chip_name *chip, const sensors_feature *feature) {
+        const char *labelRaw = sensors_get_label(chip, feature);
+        const QString label = labelRaw != nullptr
+                                  ? QString::fromUtf8(labelRaw)
+                                  : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
+        if (labelRaw != nullptr) {
+            free(const_cast<char *>(labelRaw));
+        }
+        return label;
+    }
+
+    void applyRangeToReading(SensorReading &reading, const std::optional<double> &min, const std::optional<double> &max) {
+        if (!min.has_value() && !max.has_value()) {
+            return;
+        }
+        reading.hasRange = true;
+        if (min.has_value()) {
+            reading.hasMin = true;
+            reading.minValue = *min;
+        }
+        if (max.has_value()) {
+            reading.hasMax = true;
+            reading.maxValue = *max;
+        }
+    }
+
+    bool appendFeatureReading(
+        const sensors_chip_name *chip,
+        const QString &chipName,
+        const sensors_feature *feature,
+        QVector<SensorReading> &readings
+    ) {
+        const InputSelection selected = selectInputSubfeature(chip, feature);
+        if (selected.subfeature == nullptr) {
+            return false;
+        }
+
+        double value = 0.0;
+        if (sensors_get_value(chip, selected.subfeature->number, &value) != 0) {
+            return false;
+        }
+
+        SensorReading reading{
+            .chip = chipName,
+            .category = categoryForType(selected.type),
+            .feature = resolveFeatureLabel(chip, feature),
+            .value = value,
+            .unit = unitForType(selected.type),
+        };
+
+        const RangeInfo nativeRange = readRange(chip, feature, selected.type);
+        std::optional<double> min = nativeRange.min;
+        std::optional<double> max = nativeRange.max;
+        SensorsPolicy::applyDefaultRangePolicy(reading.category, min, max);
+        applyRangeToReading(reading, min, max);
+        readings.push_back(reading);
+        return true;
+    }
+
+    QString chipNameFrom(const sensors_chip_name *chip) {
+        char chipNameBuffer[256] = {0};
+        if (sensors_snprintf_chip_name(chipNameBuffer, sizeof(chipNameBuffer), chip) < 0) {
+            return {};
+        }
+        return QString::fromUtf8(chipNameBuffer);
+    }
+
+    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings) {
+        const QString chipName = chipNameFrom(chip);
+        if (chipName.isEmpty()) {
+            return;
+        }
+
+        const sensors_feature *feature = nullptr;
+        int featureNr = 0;
+        while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
+            appendFeatureReading(chip, chipName, feature, readings);
+        }
     }
 }
 
@@ -130,97 +236,7 @@ QVector<SensorReading> SensorsBackend::readAll() const {
     const sensors_chip_name *chip = nullptr;
     int chipNr = 0;
     while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        char chipNameBuffer[256] = {0};
-        if (sensors_snprintf_chip_name(chipNameBuffer, sizeof(chipNameBuffer), chip) < 0) {
-            continue;
-        }
-        const QString chipName = QString::fromUtf8(chipNameBuffer);
-
-        const sensors_feature *feature = nullptr;
-        int featureNr = 0;
-        while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            // Select the first supported input subfeature in priority order.
-            sensors_subfeature_type inputType = SENSORS_SUBFEATURE_UNKNOWN;
-            const sensors_subfeature *input = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_TEMP_INPUT);
-            if (input != nullptr) inputType = SENSORS_SUBFEATURE_TEMP_INPUT;
-            if (input == nullptr) {
-                input = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_IN_INPUT);
-                if (input != nullptr) inputType = SENSORS_SUBFEATURE_IN_INPUT;
-            }
-            if (input == nullptr) {
-                input = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_FAN_INPUT);
-                if (input != nullptr) inputType = SENSORS_SUBFEATURE_FAN_INPUT;
-            }
-            if (input == nullptr) {
-                input = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_CURR_INPUT);
-                if (input != nullptr) inputType = SENSORS_SUBFEATURE_CURR_INPUT;
-            }
-            if (input == nullptr) {
-                input = sensors_get_subfeature(chip, feature, SENSORS_SUBFEATURE_POWER_INPUT);
-                if (input != nullptr) inputType = SENSORS_SUBFEATURE_POWER_INPUT;
-            }
-
-            if (input == nullptr) {
-                continue;
-            }
-
-            double value = 0.0;
-            if (sensors_get_value(chip, input->number, &value) != 0) {
-                continue;
-            }
-
-            const char *labelRaw = sensors_get_label(chip, feature);
-            const QString label = labelRaw != nullptr
-                                      ? QString::fromUtf8(labelRaw)
-                                      : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
-            if (labelRaw != nullptr) {
-                free(const_cast<char *>(labelRaw));
-            }
-
-            SensorReading reading{
-                .chip = chipName,
-                .category = categoryForType(inputType),
-                .feature = label,
-                .value = value,
-                .unit = unitForType(inputType),
-            };
-
-            const RangeInfo range = readRange(chip, feature, inputType);
-            std::optional<double> min = range.min;
-            std::optional<double> max = range.max;
-
-            // Sensible defaults when firmware does not expose limits.
-            if (inputType == SENSORS_SUBFEATURE_TEMP_INPUT) {
-                if (!min.has_value() && !max.has_value()) {
-                    min = 0.0;
-                    max = 100.0;
-                } else if (!min.has_value() && max.has_value()) {
-                    min = 0.0;
-                }
-            }
-
-            if (inputType == SENSORS_SUBFEATURE_FAN_INPUT) {
-                if (!min.has_value()) {
-                    min = 0.0;
-                }
-                if (!max.has_value()) {
-                    max = 10000.0;
-                }
-            }
-
-            if (min.has_value() || max.has_value()) {
-                reading.hasRange = true;
-                if (min.has_value()) {
-                    reading.hasMin = true;
-                    reading.minValue = *min;
-                }
-                if (max.has_value()) {
-                    reading.hasMax = true;
-                    reading.maxValue = *max;
-                }
-            }
-            readings.push_back(reading);
-        }
+        appendChipReadings(chip, readings);
     }
 
     return readings;

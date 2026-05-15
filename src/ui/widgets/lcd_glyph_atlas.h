@@ -17,7 +17,7 @@ public:
     };
 
     /** Returns process-wide atlas instance loaded from Qt resources. */
-    static const LcdGlyphAtlas &instance();
+    [[nodiscard]] static const LcdGlyphAtlas &instance();
 
     /** True when atlas image could be loaded and preprocessed. */
     [[nodiscard]] bool isValid() const;
@@ -26,13 +26,14 @@ public:
     [[nodiscard]] QRect sourceRect(const Glyph &glyph, int yOffset, int glyphHeight) const;
 
     /** Returns atlas glyph definition for one symbol. */
-    static bool glyphFor(QChar c, Glyph &glyph);
+    [[nodiscard]] static bool glyphFor(QChar c, Glyph &glyph);
 
     /** Atlas image with transparent background. */
     [[nodiscard]] const QImage &image() const;
 
 private:
     LcdGlyphAtlas();
+
     static QImage loadThemeWithWhiteTransparency();
 
     QImage m_theme;

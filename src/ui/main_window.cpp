@@ -3,6 +3,8 @@
 
 #include "main_window.h"
 
+#include "theme/app_theme.h"
+#include "main_window_state_store.h"
 #include "settings_panel.h"
 #include "sensors_panel.h"
 
@@ -10,7 +12,7 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
-#include <QSettings>
+#include <QStringList>
 #include <QStatusBar>
 #include <QStyle>
 #include <QTimer>
@@ -86,7 +88,7 @@ void MainWindow::setupUi() {
     m_contentContainer = new QWidget(m_scrollArea);
     m_contentLayout = new QVBoxLayout(m_contentContainer);
     m_contentLayout->setContentsMargins(0, 0, 0, 0);
-    m_contentLayout->setSpacing(2);
+    m_contentLayout->setSpacing(AppTheme::kNarrowGap);
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
     m_settingsPanel = new SettingsPanel(m_contentContainer);
@@ -96,7 +98,7 @@ void MainWindow::setupUi() {
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
-    settingsHostLayout->setContentsMargins(8, 0, 8, 0);
+    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset, 0);
     settingsHostLayout->setSpacing(0);
     settingsHostLayout->addWidget(m_settingsPanel);
 
@@ -146,41 +148,20 @@ void MainWindow::showEvent(QShowEvent *event) {
 }
 
 void MainWindow::loadSettings() {
-    QSettings settings;
-    const QByteArray geometry = settings.value(QStringLiteral("ui/geometry")).toByteArray();
-    if (!geometry.isEmpty()) {
+    const MainWindowState state = MainWindowStateStore::load(kDefaultPollingIntervalSec);
+    if (state.hasGeometry) {
         m_hasSavedGeometry = true;
-        restoreGeometry(geometry);
+        restoreGeometry(state.geometry);
     } else {
         m_hasSavedGeometry = false;
     }
-
-    settings.beginGroup(QStringLiteral("ui/chips"));
-    const QStringList keys = settings.childKeys();
-    for (const QString &key: keys) {
-        m_chipExpanded.insert(key, settings.value(key, true).toBool());
-    }
-    settings.endGroup();
-
-    m_pollingIntervalSec = settings.value(QStringLiteral("ui/polling_interval_sec"), kDefaultPollingIntervalSec).toInt();
-    if (m_pollingIntervalSec < 1 || m_pollingIntervalSec > 10) {
-        m_pollingIntervalSec = kDefaultPollingIntervalSec;
-    }
-
-    m_loadedChipFingerprint = settings.value(QStringLiteral("sensors/fingerprint")).toString();
+    m_chipExpanded = state.chipExpanded;
+    m_pollingIntervalSec = state.pollingIntervalSec;
+    m_loadedChipFingerprint = state.sensorFingerprint;
 }
 
 void MainWindow::saveSettings() const {
-    QSettings settings;
-    settings.setValue(QStringLiteral("ui/geometry"), saveGeometry());
-    settings.setValue(QStringLiteral("ui/polling_interval_sec"), m_pollingIntervalSec);
-    settings.setValue(QStringLiteral("sensors/fingerprint"), m_currentFingerprint);
-    settings.beginGroup(QStringLiteral("ui/chips"));
-    settings.remove(QString());
-    for (auto it = m_chipExpanded.constBegin(); it != m_chipExpanded.constEnd(); ++it) {
-        settings.setValue(it.key(), it.value());
-    }
-    settings.endGroup();
+    MainWindowStateStore::save(saveGeometry(), m_pollingIntervalSec, m_currentFingerprint, m_chipExpanded);
 }
 
 void MainWindow::fitInitialWidthWithoutHorizontalScroll() {

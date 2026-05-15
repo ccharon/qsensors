@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "theme/app_theme.h"
 #include "lcd_glyph_atlas.h"
 #include "sensors_backend.h"
 
@@ -13,7 +14,7 @@ class LcdDisplayWidget final : public QWidget {
     Q_OBJECT
 
 public:
-    explicit LcdDisplayWidget(SensorReading reading, QWidget *parent = nullptr);
+    explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
     void setReading(const SensorReading &reading);
 
