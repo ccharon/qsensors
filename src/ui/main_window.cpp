@@ -9,10 +9,13 @@
 #include "settings_panel.h"
 #include "sensors_panel.h"
 
+#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QLabel>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QScreen>
 #include <QStringList>
 #include <QStatusBar>
 #include <QStyle>
