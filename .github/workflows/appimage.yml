@@ -1,0 +1,98 @@
+name: AppImage CI
+
+on:
+  push:
+    branches: ["master"]
+  workflow_dispatch:
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            ninja-build \
+            pkg-config \
+            libsensors-dev \
+            desktop-file-utils \
+            patchelf \
+            libfuse2 \
+            qt6-base-dev \
+            qt6-tools-dev \
+            qt6-tools-dev-tools
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Install to AppDir
+        run: cmake --install build --prefix /usr --config Release --strip --destdir AppDir
+
+      - name: Add desktop entry and icon
+        run: |
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+          cp gentoo/sys-apps/qsensors/files/qsensors.desktop AppDir/usr/share/applications/qsensors.desktop
+          cp resources/icons/xsensors.png AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png
+
+      - name: Download linuxdeploy tooling
+        run: |
+          set -euo pipefail
+          LINUXDEPLOY_VERSION=1-alpha-20251107-1
+          LINUXDEPLOY_PLUGIN_QT_VERSION=1-alpha-20250213-1
+          LINUXDEPLOY_PLUGIN_APPIMAGE_VERSION=1-alpha-20250213-1
+
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+            -o linuxdeploy-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-x86_64.AppImage
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+            -o linuxdeploy-plugin-qt-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/${LINUXDEPLOY_PLUGIN_QT_VERSION}/linuxdeploy-plugin-qt-x86_64.AppImage
+          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
+            -o linuxdeploy-plugin-appimage-x86_64.AppImage \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/${LINUXDEPLOY_PLUGIN_APPIMAGE_VERSION}/linuxdeploy-plugin-appimage-x86_64.AppImage
+
+          cat > linuxdeploy-checksums.txt << 'EOF'
+          c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  linuxdeploy-x86_64.AppImage
+          15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724  linuxdeploy-plugin-qt-x86_64.AppImage
+          992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3  linuxdeploy-plugin-appimage-x86_64.AppImage
+          EOF
+
+          sha256sum -c linuxdeploy-checksums.txt
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
+
+      - name: Build AppImage
+        env:
+          ARCH: x86_64
+        run: |
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --desktop-file AppDir/usr/share/applications/qsensors.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Verify libsensors bundled
+        run: |
+          if ! find AppDir -type f -name 'libsensors.so*' | grep -q . ; then
+            echo "libsensors was not bundled into AppDir"
+            exit 1
+          fi
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qsensors-appimage-${{ github.sha }}
+          path: ./*.AppImage
+          if-no-files-found: error
+          retention-days: 14
