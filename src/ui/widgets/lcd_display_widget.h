@@ -3,7 +3,6 @@
 
 #pragma once
 
-#include "theme/app_theme.h"
 #include "lcd_glyph_atlas.h"
 #include "sensors_backend.h"
 
@@ -26,9 +25,6 @@ protected:
 private:
     /** Formats the numeric part exactly like xsensors for known units. */
     static QString valueDigitsFor(const SensorReading &reading);
-
-    /** Maps unit strings to available sprite glyph markers. */
-    static QChar unitGlyphFor(const SensorReading &reading);
 
     /** Alarm state decides which sprite row is used for rendering. */
     static bool isAlertState(const SensorReading &reading);

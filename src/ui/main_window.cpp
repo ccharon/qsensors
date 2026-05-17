@@ -87,11 +87,13 @@ void MainWindow::refreshReadings() {
         updateMinimumWindowWidthConstraint();
     }
 
-    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
+    setStatusMessage(
+        tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
 }
 
 void MainWindow::setupUi() {
-    setWindowTitle(QStringLiteral("%1 %2").arg(QCoreApplication::applicationName(), QCoreApplication::applicationVersion()));
+    setWindowTitle(QStringLiteral("%1 %2").arg(QCoreApplication::applicationName(),
+                                               QCoreApplication::applicationVersion()));
     resize(900, 520);
 
     auto *central = new QWidget(this);
@@ -117,12 +119,7 @@ void MainWindow::setupUi() {
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
-    settingsHostLayout->setContentsMargins(
-        AppTheme::kSectionInset,
-        AppTheme::kSectionInset + AppTheme::kNarrowGap,
-        AppTheme::kSectionInset,
-        0
-    );
+    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, AppTheme::kSectionInset + AppTheme::kNarrowGap, AppTheme::kSectionInset, 0);
     settingsHostLayout->setSpacing(0);
     settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignTop);
 
@@ -154,21 +151,15 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
     if (!m_lastReadings.isEmpty()) {
-        m_sensorsPanel->setChipExpandedState(m_chipExpanded);
-        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr
-                                     ? m_scrollArea->viewport()->width()
-                                     : width());
+        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width(): width());
     }
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutApplied && !m_lastReadings.isEmpty()) {
-        m_sensorsPanel->setChipExpandedState(m_chipExpanded);
-        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr
-                                     ? m_scrollArea->viewport()->width()
-                                     : width());
-        ensureNoHorizontalOverflow(m_hasSavedGeometry ? 8 : 24);
+        m_sensorsPanel->relayout(m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width() : width());
+        ensureNoHorizontalOverflow(m_hasSavedGeometry ? AppTheme::kRestoredWidthFitPadding : AppTheme::kInitialWidthFitPadding);
         updateMinimumWindowWidthConstraint();
         m_initialLayoutApplied = true;
     }
@@ -178,18 +169,21 @@ void MainWindow::loadSettings() {
     // Runtime config and UI layout state are intentionally persisted independently.
     m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
     const MainWindowState state = MainWindowStateStore::load();
+
     if (state.hasGeometry) {
         m_hasSavedGeometry = true;
         restoreGeometry(state.geometry);
     } else {
         m_hasSavedGeometry = false;
     }
+
     m_chipExpanded = state.chipExpanded;
     m_loadedChipFingerprint = state.sensorFingerprint;
 }
 
 void MainWindow::saveSettings() const {
     AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
+
     MainWindowStateStore::save(
         saveGeometry(),
         m_currentFingerprint,
@@ -245,9 +239,7 @@ void MainWindow::updateMinimumWindowWidthConstraint() {
 
     m_contentContainer->setMinimumWidth(requiredContentWidth);
 
-    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar() != nullptr
-                                             ? m_scrollArea->verticalScrollBar()->sizeHint().width()
-                                             : style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar() != nullptr ? m_scrollArea->verticalScrollBar()->sizeHint().width() : style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     const int scrollAreaChrome = (m_scrollArea->frameWidth() * 2) + verticalScrollbarReserve;
     const int requiredCentralWidth = requiredContentWidth + scrollAreaChrome;
     m_scrollArea->setMinimumWidth(requiredCentralWidth);

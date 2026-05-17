@@ -19,27 +19,27 @@
 #include <algorithm>
 
 namespace {
-    constexpr int kUnifiedHorizontalSpacing = AppTheme::kGridSpacing + 2;
+    constexpr int kUnifiedHorizontalSpacing = AppTheme::kGridSpacing + AppTheme::kCategoryVsGridSpacingDelta;
 
     QString translatedCategoryName(const SensorCategory category) {
         const QMetaEnum metaEnum = QMetaEnum::fromType<SensorCategory>();
         const char *key = metaEnum.valueToKey(static_cast<int>(category));
+
         if (key == nullptr) {
             key = metaEnum.valueToKey(static_cast<int>(SensorCategory::Other));
         }
+
         if (key == nullptr) {
             return {};
         }
+
         return QCoreApplication::translate("MainWindow", key);
     }
 }
 
 SensorsPanel::SensorsPanel(QWidget *parent) : QWidget(parent), m_layout(new QVBoxLayout(this)) {
-    m_layout->setContentsMargins(
-        AppTheme::kSectionInset, AppTheme::kSectionInset,
-        AppTheme::kSectionInset, AppTheme::kSectionInset
-    );
-    m_layout->setSpacing(10);
+    m_layout->setContentsMargins(AppTheme::kSectionInset, AppTheme::kSectionInset, AppTheme::kSectionInset, AppTheme::kSectionInset);
+    m_layout->setSpacing(AppTheme::kSensorsPanelVerticalSpacing);
     m_layout->addStretch(1);
 }
 
@@ -60,6 +60,7 @@ void SensorsPanel::relayout(const int viewportWidth) {
     if (m_readings.isEmpty()) {
         return;
     }
+
     renderReadings(viewportWidth, true);
 }
 
@@ -71,26 +72,29 @@ int SensorsPanel::minimumRequiredWidth() const {
     }
 
     const int panelHorizontalMargins = m_layout->contentsMargins().left() + m_layout->contentsMargins().right();
-    constexpr int kChipCardBorder = 2; // 1px left + 1px right
     const int chipContentHorizontalMargins = AppTheme::kSectionInset * 2;
-    const int categoriesWidth =
-        (maxCategoryCount * AppTheme::kCardMinWidth) + ((maxCategoryCount - 1) * kUnifiedHorizontalSpacing);
-    return panelHorizontalMargins + kChipCardBorder + chipContentHorizontalMargins + categoriesWidth;
+    const int categoriesWidth = (maxCategoryCount * AppTheme::kCardMinWidth) + ((maxCategoryCount - 1) * kUnifiedHorizontalSpacing);
+    return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + chipContentHorizontalMargins + categoriesWidth;
 }
 
 void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebuild) {
     const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > grouped = groupReadingsByChip(m_readings);
-    const LayoutMetrics metrics = computeLayoutMetrics(viewportWidth);
+    const int stableViewportWidth = computeStableViewportWidth(viewportWidth);
+
     // Batch updates avoid flicker while chip sections are reconciled/reordered.
     setUpdatesEnabled(false);
 
-    const QStringList orderedChips = orderedChipNames(grouped);
+    QStringList orderedChips;
+    orderedChips.reserve(grouped.size());
+    for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
+        orderedChips.push_back(chipIt.key());
+    }
     removeStaleChipSections(grouped);
 
     QHash<QString, SensorValueWidget *> reconciledWidgets;
     for (const QString &chipName: orderedChips) {
         const QMap<SensorCategory, QVector<SensorReading> > &categories = grouped.value(chipName);
-        reconcileChipSection(chipName, categories, metrics, forceRebuild, reconciledWidgets);
+        reconcileChipSection(chipName, categories, stableViewportWidth, forceRebuild, reconciledWidgets);
     }
 
     applyChipOrder(orderedChips);
@@ -103,9 +107,7 @@ void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebui
     emit chipExpandedStateChanged(m_chipExpanded);
 }
 
-QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > SensorsPanel::groupReadingsByChip(
-    const QVector<SensorReading> &readings
-) {
+QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > SensorsPanel::groupReadingsByChip(const QVector<SensorReading> &readings) {
     QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > grouped;
     for (const SensorReading &r: readings) {
         grouped[r.chip][r.category].push_back(r);
@@ -113,18 +115,9 @@ QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > SensorsPanel::grou
     return grouped;
 }
 
-QStringList SensorsPanel::orderedChipNames(
-    const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped) {
-    QStringList orderedChips;
-    orderedChips.reserve(grouped.size());
-    for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
-        orderedChips.push_back(chipIt.key());
-    }
-    return orderedChips;
-}
-
 void SensorsPanel::removeStaleChipSections(
     const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped) {
+
     for (auto it = m_chipSections.begin(); it != m_chipSections.end();) {
         if (!grouped.contains(it.key())) {
             if (it->card != nullptr) {
@@ -138,16 +131,18 @@ void SensorsPanel::removeStaleChipSections(
     }
 }
 
-SensorsPanel::LayoutMetrics SensorsPanel::computeLayoutMetrics(const int viewportWidth) const {
-    LayoutMetrics metrics;
-    metrics.stableViewportWidth = std::max(200, viewportWidth);
-    return metrics;
+int SensorsPanel::computeStableViewportWidth(const int viewportWidth) {
+    return std::max(200, viewportWidth);
+}
+
+int SensorsPanel::widthForColumns(const int columns) {
+    return (columns * AppTheme::kCardMinWidth) + ((columns - 1) * kUnifiedHorizontalSpacing);
 }
 
 void SensorsPanel::reconcileChipSection(
     const QString &chipName,
     const QMap<SensorCategory, QVector<SensorReading> > &categories,
-    const LayoutMetrics &metrics,
+    const int stableViewportWidth,
     const bool forceRebuild,
     QHash<QString, SensorValueWidget *> &reconciledWidgets
 ) {
@@ -155,8 +150,7 @@ void SensorsPanel::reconcileChipSection(
     const int categoryCount = std::max(1, static_cast<int>(categories.size()));
     const int perCategoryWidth = std::max(
         AppTheme::kCardMinWidth,
-        (metrics.stableViewportWidth - kChipContentHorizontalMargins
-         - ((categoryCount - 1) * kUnifiedHorizontalSpacing)) / categoryCount
+        (stableViewportWidth - kChipContentHorizontalMargins - ((categoryCount - 1) * kUnifiedHorizontalSpacing)) / categoryCount
     );
     const int columnsPerCategory = std::clamp(
         (perCategoryWidth + kUnifiedHorizontalSpacing) / (AppTheme::kCardMinWidth + kUnifiedHorizontalSpacing),
@@ -164,7 +158,8 @@ void SensorsPanel::reconcileChipSection(
         AppTheme::kMaxColumnsPerCategory
     );
 
-    ChipSection *section = m_chipSections.contains(chipName) ? &m_chipSections[chipName] : createChipSection(chipName);
+    auto it = m_chipSections.find(chipName);
+    ChipSection *section = it != m_chipSections.end() ? &it.value() : createChipSection(chipName);
     if (section == nullptr) {
         return;
     }
@@ -185,8 +180,9 @@ void SensorsPanel::applyChipOrder(const QStringList &orderedChips) {
         delete item;
     }
     for (const QString &chipName: orderedChips) {
-        if (m_chipSections.contains(chipName) && m_chipSections[chipName].card != nullptr) {
-            m_layout->addWidget(m_chipSections[chipName].card);
+        auto it = m_chipSections.constFind(chipName);
+        if (it != m_chipSections.cend() && it->card != nullptr) {
+            m_layout->addWidget(it->card);
         }
     }
     m_layout->addStretch(1);
@@ -217,6 +213,7 @@ SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipNa
         AppTheme::kSectionInset, AppTheme::kSectionInset,
         AppTheme::kSectionInset, AppTheme::kSectionInset
     );
+
     chipContentLayout->setSpacing(AppTheme::kSectionInset);
     section.categoryRow = new QHBoxLayout();
     section.categoryRow->setSpacing(kUnifiedHorizontalSpacing);
@@ -224,10 +221,11 @@ SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipNa
 
     section.content->setVisible(section.header->isChecked());
     connect(section.header, &QToolButton::toggled, this, [this, chipName](bool expanded) {
-        if (!m_chipSections.contains(chipName)) {
+        auto it = m_chipSections.find(chipName);
+        if (it == m_chipSections.end()) {
             return;
         }
-        ChipSection &liveSection = m_chipSections[chipName];
+        ChipSection &liveSection = it.value();
         m_chipExpanded[chipName] = expanded;
         liveSection.header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
         liveSection.content->setVisible(expanded);
@@ -256,16 +254,14 @@ void SensorsPanel::rebuildChipSection(
     section.widgets.clear();
 
     QList<SensorCategory> orderedCategories = categories.keys();
-    std::sort(orderedCategories.begin(), orderedCategories.end(),
-              [](const SensorCategory a, const SensorCategory b) {
-                  return static_cast<int>(a) < static_cast<int>(b);
-              });
+    std::sort(orderedCategories.begin(), orderedCategories.end(), [](const SensorCategory a, const SensorCategory b) {
+        return static_cast<int>(a) < static_cast<int>(b);
+    });
 
     for (const SensorCategory categoryName: orderedCategories) {
         const QVector<SensorReading> &categoryReadings = categories.value(categoryName);
         const int usedColumns = std::max(1, std::min(columnsPerCategory, static_cast<int>(categoryReadings.size())));
-        const int categoryWidth =
-            (usedColumns * AppTheme::kCardMinWidth) + ((usedColumns - 1) * kUnifiedHorizontalSpacing);
+        const int categoryWidth = widthForColumns(usedColumns);
 
         auto *categoryContainer = new QWidget(section.content);
         categoryContainer->setMinimumWidth(categoryWidth);
@@ -273,7 +269,7 @@ void SensorsPanel::rebuildChipSection(
         categoryContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
         auto *categoryContainerLayout = new QVBoxLayout(categoryContainer);
         categoryContainerLayout->setContentsMargins(0, 0, 0, 0);
-        categoryContainerLayout->setSpacing(3);
+        categoryContainerLayout->setSpacing(AppTheme::kCategoryBlockSpacing);
 
         auto *categoryTitle = new QLabel(translatedCategoryName(categoryName) + QStringLiteral(":"), categoryContainer);
         QFont catFont = categoryTitle->font();
@@ -286,6 +282,7 @@ void SensorsPanel::rebuildChipSection(
         categoryGrid->setHorizontalSpacing(kUnifiedHorizontalSpacing);
         categoryGrid->setVerticalSpacing(AppTheme::kGridSpacing);
         categoryGrid->setAlignment(Qt::AlignLeft | Qt::AlignTop);
+
         for (int i = 0; i < categoryReadings.size(); ++i) {
             const int row = i / columnsPerCategory;
             const int col = i % columnsPerCategory;
@@ -293,11 +290,13 @@ void SensorsPanel::rebuildChipSection(
             categoryGrid->addWidget(sensorWidget, row, col, Qt::AlignLeft | Qt::AlignTop);
             section.widgets.insert(sensorKey(categoryReadings[i]), sensorWidget);
         }
+
         categoryGrid->setColumnStretch(columnsPerCategory, 1);
         categoryContainerLayout->addLayout(categoryGrid);
         categoryContainerLayout->addStretch(1);
         section.categoryRow->addWidget(categoryContainer, 0, Qt::AlignLeft | Qt::AlignTop);
     }
+
     section.categoryRow->addStretch(1);
 }
 
@@ -311,11 +310,13 @@ void SensorsPanel::updateVisibleReadings() {
 
 QString SensorsPanel::chipStructureFingerprint(const QMap<SensorCategory, QVector<SensorReading> > &categories) {
     QStringList entries;
+
     for (auto catIt = categories.cbegin(); catIt != categories.cend(); ++catIt) {
         for (const SensorReading &reading: catIt.value()) {
             entries.push_back(sensorKey(reading));
         }
     }
+
     entries.sort();
     return entries.join(QStringLiteral("\n"));
 }
@@ -323,5 +324,6 @@ QString SensorsPanel::chipStructureFingerprint(const QMap<SensorCategory, QVecto
 QString SensorsPanel::sensorKey(const SensorReading &reading) {
     return reading.chip + QStringLiteral("|")
            + QString::number(static_cast<int>(reading.category)) + QStringLiteral("|")
-           + reading.feature + QStringLiteral("|") + reading.unit;
+           + reading.feature + QStringLiteral("|")
+           + QString::number(static_cast<int>(reading.unit));
 }

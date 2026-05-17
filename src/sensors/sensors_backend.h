@@ -26,13 +26,34 @@ namespace SensorDomain {
 
 using SensorCategory = SensorDomain::SensorCategory;
 
+enum class SensorUnit {
+    Celsius,
+    Volt,
+    Rpm,
+    Ampere,
+    Watt,
+    Unknown
+};
+
+[[nodiscard]] inline QString sensorUnitSymbol(const SensorUnit unit) {
+    switch (unit) {
+        case SensorUnit::Celsius: return QStringLiteral("°C");
+        case SensorUnit::Volt: return QStringLiteral("V");
+        case SensorUnit::Rpm: return QStringLiteral("RPM");
+        case SensorUnit::Ampere: return QStringLiteral("A");
+        case SensorUnit::Watt: return QStringLiteral("W");
+        case SensorUnit::Unknown: return QString();
+    }
+    return QString();
+}
+
 /** Normalized sensor sample used by the UI layer. */
 struct SensorReading {
     QString chip;
     SensorCategory category = SensorCategory::Other;
     QString feature;
     double value = 0.0;
-    QString unit;
+    SensorUnit unit = SensorUnit::Unknown;
     bool hasRange = false;
     bool hasMin = false;
     bool hasMax = false;

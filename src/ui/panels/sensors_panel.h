@@ -41,10 +41,6 @@ signals:
     void chipExpandedStateChanged(const QHash<QString, bool> &state);
 
 private:
-    struct LayoutMetrics {
-        int stableViewportWidth = 0;
-    };
-
     /** One persistent UI section per chip, reused across refresh cycles. */
     struct ChipSection {
         QFrame *card = nullptr;
@@ -64,18 +60,15 @@ private:
         const QVector<SensorReading> &readings
     );
 
-    [[nodiscard]] static QStringList orderedChipNames(
-        const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped
-    );
-
     void removeStaleChipSections(const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped);
 
-    [[nodiscard]] LayoutMetrics computeLayoutMetrics(int viewportWidth) const;
+    [[nodiscard]] static int computeStableViewportWidth(int viewportWidth);
+    [[nodiscard]] static int widthForColumns(int columns);
 
     void reconcileChipSection(
         const QString &chipName,
         const QMap<SensorCategory, QVector<SensorReading> > &categories,
-        const LayoutMetrics &metrics,
+        int stableViewportWidth,
         bool forceRebuild,
         QHash<QString, SensorValueWidget *> &reconciledWidgets
     );
@@ -84,15 +77,10 @@ private:
     [[nodiscard]] ChipSection *createChipSection(const QString &chipName);
 
     /** Rebuilds one chip section's category/widget subtree. */
-    void rebuildChipSection(
-        ChipSection &section,
-        const QMap<SensorCategory, QVector<SensorReading> > &categories,
-        int columnsPerCategory
-    );
+    void rebuildChipSection(ChipSection &section, const QMap<SensorCategory, QVector<SensorReading> > &categories, int columnsPerCategory);
 
     /** Fingerprint for one chip's structural content. */
-    [[nodiscard]] static QString chipStructureFingerprint(
-        const QMap<SensorCategory, QVector<SensorReading> > &categories);
+    [[nodiscard]] static QString chipStructureFingerprint(const QMap<SensorCategory, QVector<SensorReading> > &categories);
 
     /** Reorders chip cards in layout to match current chip ordering. */
     void applyChipOrder(const QStringList &orderedChips);
