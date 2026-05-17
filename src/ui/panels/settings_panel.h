@@ -19,6 +19,9 @@ public:
     /** Applies persisted fan fallback max rpm without re-emitting change signals. */
     void setFanDefaultMaxRpm(int rpm);
 
+    /** Minimum width required so settings content is fully visible. */
+    [[nodiscard]] int minimumRequiredWidth() const;
+
 signals:
     void pollingIntervalChanged(int seconds);
     void fanDefaultMaxRpmChanged(int rpm);

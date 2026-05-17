@@ -14,7 +14,7 @@
 
 SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *parent)
     : QWidget(parent), m_groupBox(new QGroupBox(this)), m_lcdValue(new LcdDisplayWidget(reading, this)), m_rangeBar(new QProgressBar(this)) {
-    setMinimumWidth(150);
+    setMinimumWidth(AppTheme::kCardMinWidth);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMaximumWidth(AppTheme::kCardWidth);
 

@@ -49,7 +49,7 @@ namespace AppTheme {
             "}"
             "QGroupBox::title {"
             "  subcontrol-origin: margin;"
-            "  left: 6px;"
+            "  left: 4px;"
             "  top: -2px;"
             "  padding: 0 2px;"
             "  font-size: 11px;"

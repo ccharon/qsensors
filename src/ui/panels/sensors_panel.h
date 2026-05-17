@@ -34,6 +34,9 @@ public:
     /** Forces a layout rebuild for viewport width changes without changing values. */
     void relayout(int viewportWidth);
 
+    /** Minimum width required so each category can still render at least one sensor column. */
+    [[nodiscard]] int minimumRequiredWidth() const;
+
 signals:
     void chipExpandedStateChanged(const QHash<QString, bool> &state);
 
@@ -87,7 +90,6 @@ private:
     void rebuildChipSection(
         ChipSection &section,
         const QMap<SensorCategory, QVector<SensorReading> > &categories,
-        int perCategoryWidth,
         int columnsPerCategory
     );
 

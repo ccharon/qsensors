@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLabel>
+#include <QLayout>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -81,6 +82,7 @@ void MainWindow::refreshReadings() {
         m_lastReadings,
         m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr ? m_scrollArea->viewport()->width() : width()
     );
+    updateMinimumWindowWidthConstraint();
 
     setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
 }
@@ -91,6 +93,7 @@ void MainWindow::setupUi() {
 
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
+    layout->setContentsMargins(0, 0, 0, 0);
 
     m_scrollArea = new QScrollArea(central);
     m_scrollArea->setWidgetResizable(true);
@@ -110,7 +113,12 @@ void MainWindow::setupUi() {
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
-    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 2, AppTheme::kSectionInset, 0);
+    settingsHostLayout->setContentsMargins(
+        AppTheme::kSectionInset,
+        AppTheme::kSectionInset + AppTheme::kNarrowGap,
+        AppTheme::kSectionInset,
+        0
+    );
     settingsHostLayout->setSpacing(0);
     settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignTop);
 
@@ -159,6 +167,7 @@ void MainWindow::showEvent(QShowEvent *event) {
         if (!m_hasSavedGeometry) {
             fitInitialWidthWithoutHorizontalScroll();
         }
+        updateMinimumWindowWidthConstraint();
         m_initialLayoutApplied = true;
     }
 }
@@ -213,6 +222,25 @@ void MainWindow::fitInitialWidthWithoutHorizontalScroll() {
     if (targetWidth > width()) {
         resize(targetWidth, height());
     }
+}
+
+void MainWindow::updateMinimumWindowWidthConstraint() {
+    if (m_scrollArea == nullptr || m_sensorsPanel == nullptr || m_settingsPanel == nullptr) {
+        return;
+    }
+
+    const int sensorsMin = m_sensorsPanel->minimumRequiredWidth();
+    const int settingsMin = (AppTheme::kSectionInset * 2) + m_settingsPanel->minimumRequiredWidth();
+    const int requiredContentWidth = std::max(sensorsMin, settingsMin);
+
+    m_contentContainer->setMinimumWidth(requiredContentWidth);
+
+    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar() != nullptr
+                                             ? m_scrollArea->verticalScrollBar()->sizeHint().width()
+                                             : style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    const int scrollAreaChrome = (m_scrollArea->frameWidth() * 2) + verticalScrollbarReserve;
+    const int requiredCentralWidth = requiredContentWidth + scrollAreaChrome;
+    m_scrollArea->setMinimumWidth(requiredCentralWidth);
 }
 
 QString MainWindow::chipFingerprint(const QVector<SensorReading> &readings) {

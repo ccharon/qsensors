@@ -91,3 +91,7 @@ void SettingsPanel::setFanDefaultMaxRpm(const int rpm) {
     const QSignalBlocker blocker(m_fanMaxRpmSpin);
     m_fanMaxRpmSpin->setValue(rpm);
 }
+
+int SettingsPanel::minimumRequiredWidth() const {
+    return minimumSizeHint().width();
+}

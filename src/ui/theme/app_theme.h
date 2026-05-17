@@ -6,6 +6,7 @@
 #include <QString>
 
 namespace AppTheme {
+    inline constexpr int kCardMinWidth = 150;
     inline constexpr int kCardWidth = 170;
     inline constexpr int kCardBorderPadding = 2;
     inline constexpr int kCategorySpacing = 2;

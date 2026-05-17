@@ -53,6 +53,9 @@ private:
     /** Expands first-start window width to avoid horizontal scrolling. */
     void fitInitialWidthWithoutHorizontalScroll();
 
+    /** Keeps top-level minimum width aligned to widest currently required content. */
+    void updateMinimumWindowWidthConstraint();
+
     /** Loads persisted geometry, expand-state and fingerprint (+ runtime config). */
     void loadSettings();
 
