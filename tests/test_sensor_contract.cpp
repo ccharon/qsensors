@@ -17,6 +17,7 @@ private slots:
 void SensorContractTest::known_units_have_symbols_and_glyphs() {
     const SensorUnit units[] = {
         SensorUnit::Celsius,
+        SensorUnit::Fahrenheit,
         SensorUnit::Volt,
         SensorUnit::Rpm,
         SensorUnit::Ampere,
@@ -28,7 +29,7 @@ void SensorContractTest::known_units_have_symbols_and_glyphs() {
         QVERIFY2(!symbol.isEmpty(), "Known unit must have symbol");
 
         // Only units rendered via LCD unit glyph must resolve to glyphs.
-        if (unit == SensorUnit::Celsius || unit == SensorUnit::Volt || unit == SensorUnit::Rpm) {
+        if (unit == SensorUnit::Celsius || unit == SensorUnit::Fahrenheit || unit == SensorUnit::Volt || unit == SensorUnit::Rpm) {
             const auto glyph = LcdGlyphAtlas::GlyphId::bySymbol(QStringView(symbol));
             QVERIFY2(glyph.has_value(), "LCD-rendered unit must have glyph mapping");
         }

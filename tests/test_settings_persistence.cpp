@@ -37,11 +37,13 @@ void SettingsPersistenceTest::runtime_config_roundtrip() {
     RuntimeConfig written;
     written.pollingIntervalSec = 7;
     written.fanDefaultMaxRpm = 6400;
+    written.temperatureUnit = TemperatureUnit::Fahrenheit;
     AppConfigStore::saveRuntimeConfig(written);
 
     const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
     QCOMPARE(loaded.pollingIntervalSec, 7);
     QCOMPARE(loaded.fanDefaultMaxRpm, 6400);
+    QCOMPARE(loaded.temperatureUnit, TemperatureUnit::Fahrenheit);
 }
 
 void SettingsPersistenceTest::main_window_state_roundtrip() {
@@ -67,7 +69,7 @@ void SettingsPersistenceTest::schema_version_is_written() {
     (void) MainWindowStateStore::load();
 
     QSettings s;
-    QCOMPARE(s.value(QStringLiteral("meta/schema_version")).toInt(), 1);
+    QCOMPARE(s.value(QStringLiteral("meta/schema_version")).toInt(), 2);
 }
 
 QTEST_APPLESS_MAIN(SettingsPersistenceTest)

@@ -57,5 +57,17 @@
         <source>Fan Max RPM:</source>
         <translation>Max. Lüfter-RPM:</translation>
     </message>
+    <message>
+        <source>Temperature Unit:</source>
+        <translation>Temperatur-Einheit:</translation>
+    </message>
+    <message>
+        <source>Celsius</source>
+        <translation>Celsius</translation>
+    </message>
+    <message>
+        <source>Fahrenheit</source>
+        <translation>Fahrenheit</translation>
+    </message>
 </context>
 </TS>

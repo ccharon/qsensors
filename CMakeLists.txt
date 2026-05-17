@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qsensors VERSION 0.80.6)
+project(qsensors VERSION 0.80.7)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
@@ -30,6 +30,7 @@ add_executable(qsensors
         src/main.cpp
         resources/resources.qrc
         src/config/app_config_store.cpp
+        src/config/runtime_config.cpp
         src/config/settings_schema.cpp
         src/ui/main_window.cpp
         src/ui/main_window_state_store.cpp
@@ -135,6 +136,7 @@ if (BUILD_TESTING)
     add_qsensors_test(test_settings_persistence
             tests/test_settings_persistence.cpp
             src/config/app_config_store.cpp
+            src/config/runtime_config.cpp
             src/config/settings_schema.cpp
             src/ui/main_window_state_store.cpp
     )

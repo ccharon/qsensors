@@ -3,6 +3,17 @@
 
 #pragma once
 
+class QString;
+class QStringView;
+
+enum class TemperatureUnit {
+    Celsius = 'C',
+    Fahrenheit = 'F'
+};
+
+[[nodiscard]] TemperatureUnit temperatureUnitFromToken(QStringView token);
+[[nodiscard]] QString temperatureUnitToToken(TemperatureUnit unit);
+
 namespace RuntimeConfigLimits {
     constexpr int kDefaultPollingIntervalSec = 2;
     constexpr int kMinPollingIntervalSec = 1;
@@ -16,5 +27,5 @@ namespace RuntimeConfigLimits {
 struct RuntimeConfig {
     int pollingIntervalSec = RuntimeConfigLimits::kDefaultPollingIntervalSec;
     int fanDefaultMaxRpm = RuntimeConfigLimits::kDefaultFanDefaultMaxRpm;
+    TemperatureUnit temperatureUnit = TemperatureUnit::Celsius;
 };
-

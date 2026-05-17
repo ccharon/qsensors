@@ -72,12 +72,15 @@ QString LcdDisplayWidget::valueDigitsFor(const SensorReading &reading) {
     if (reading.unit == SensorUnit::Rpm) {
         return QStringLiteral("%1").arg(reading.value, 5, 'f', 0, QChar(' '));
     }
-    if (reading.unit == SensorUnit::Celsius) {
+
+    if (reading.unit == SensorUnit::Celsius || reading.unit == SensorUnit::Fahrenheit) {
         return QStringLiteral("%1").arg(reading.value, 6, 'f', 1, QChar(' '));
     }
+
     if (reading.unit == SensorUnit::Volt) {
         return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
     }
+
     return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
 }
 
@@ -85,15 +88,19 @@ bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
     if (!reading.hasRange) {
         return false;
     }
+
     if (reading.unit == SensorUnit::Rpm) {
         return reading.hasMin && reading.value < reading.minValue;
     }
-    if (reading.unit == SensorUnit::Celsius) {
+
+    if (reading.unit == SensorUnit::Celsius || reading.unit == SensorUnit::Fahrenheit) {
         return reading.hasMax && reading.value > reading.maxValue;
     }
+
     if (reading.unit == SensorUnit::Volt) {
         return (reading.hasMin && reading.value < reading.minValue) || (
                    reading.hasMax && reading.value > reading.maxValue);
     }
+
     return false;
 }

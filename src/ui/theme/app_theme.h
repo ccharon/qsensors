@@ -33,5 +33,7 @@ namespace AppTheme {
 
     [[nodiscard]] QString spinBoxStyle();
 
+    [[nodiscard]] QString comboBoxStyle();
+
     [[nodiscard]] QString progressBarStyle(bool hasRange);
 }

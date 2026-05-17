@@ -6,9 +6,8 @@
 class QSettings;
 
 namespace SettingsSchema {
-    constexpr int kCurrentVersion = 1;
+    constexpr int kCurrentVersion = 2;
 
     /** Ensures persisted settings are migrated to the current schema version. */
     void ensureUpToDate(QSettings &settings);
 }
-

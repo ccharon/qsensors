@@ -49,24 +49,9 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
     // Keep bar behavior aligned with xsensors-style limit semantics.
     if (reading.hasRange) {
         constexpr int scale = 1000;
-        // Scale doubles to integer domain for QProgressBar while preserving precision.
-        double min = reading.hasMin ? reading.minValue : reading.value;
-        double max = reading.hasMax ? reading.maxValue : reading.value;
-
-        if (reading.unit == SensorUnit::Volt && reading.hasMin && reading.hasMax &&
-            min < 0.0 && max < 0.0 && max < min) {
-            std::swap(min, max);
-        }
-
-        if (!reading.hasMin && reading.hasMax) {
-            min = (reading.unit == SensorUnit::Celsius) ? 0.0 : std::max(0.0, reading.maxValue * 0.2);
-        } else if (reading.hasMin && !reading.hasMax) {
-            if (reading.unit == SensorUnit::Rpm) {
-                max = std::max(reading.value, reading.minValue * 2.0);
-            } else {
-                max = std::max(reading.value, reading.minValue + std::max(1.0, std::abs(reading.minValue) * 0.5));
-            }
-        }
+        // Backend provides finalized range policy values; widget only renders.
+        double min = reading.minValue;
+        double max = reading.maxValue;
 
         if (max <= min) {
             max = min + 1.0;

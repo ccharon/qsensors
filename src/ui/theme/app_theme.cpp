@@ -67,6 +67,14 @@ namespace AppTheme {
         );
     }
 
+    QString comboBoxStyle() {
+        return QStringLiteral(
+            "QComboBox {"
+            "  min-width: 120px;"
+            "}"
+        );
+    }
+
     QString progressBarStyle(const bool hasRange) {
         if (hasRange) {
             return QStringLiteral(

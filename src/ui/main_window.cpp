@@ -39,6 +39,8 @@ MainWindow::MainWindow(QWidget *parent)
 
     m_settingsPanel->setPollingInterval(m_runtimeConfig.pollingIntervalSec);
     m_settingsPanel->setFanDefaultMaxRpm(m_runtimeConfig.fanDefaultMaxRpm);
+    m_settingsPanel->setTemperatureUnit(m_runtimeConfig.temperatureUnit);
+
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
         m_runtimeConfig.pollingIntervalSec = value;
         // Apply immediately so the next tick uses the new cadence without restart.
@@ -47,10 +49,15 @@ MainWindow::MainWindow(QWidget *parent)
             tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec)
         );
     });
+
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
-        // This only affects fallback limits when firmware does not expose FAN_MAX.
-        applyRuntimeConfig();
+        refreshReadings();
+    });
+
+    connect(m_settingsPanel, &SettingsPanel::temperatureUnitChanged, this, [this](const TemperatureUnit unit) {
+        m_runtimeConfig.temperatureUnit = unit;
+        refreshReadings();
     });
 
     if (!m_backend.isInitialized()) {
@@ -66,7 +73,7 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 void MainWindow::refreshReadings() {
-    m_lastReadings = m_backend.readAll();
+    m_lastReadings = m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit);
     const QString currentFingerprint = chipFingerprint(m_lastReadings);
     const bool structureChanged = (m_currentFingerprint != currentFingerprint);
 
@@ -194,7 +201,6 @@ void MainWindow::saveSettings() const {
 void MainWindow::applyRuntimeConfig() {
     // Centralized fan-out point for runtime-tunable behavior.
     m_timer->setInterval(m_runtimeConfig.pollingIntervalSec * 1000);
-    m_backend.applyConfig(m_runtimeConfig);
 }
 
 void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {

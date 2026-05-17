@@ -11,30 +11,31 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
 
-    config.pollingIntervalSec = settings.value(
-        QStringLiteral("runtime/polling_interval_sec"),
-        RuntimeConfigLimits::kDefaultPollingIntervalSec
-    ).toInt();
+    config.pollingIntervalSec = settings.value(QStringLiteral("runtime/polling_interval_sec"),RuntimeConfigLimits::kDefaultPollingIntervalSec).toInt();
+
     if (config.pollingIntervalSec < RuntimeConfigLimits::kMinPollingIntervalSec ||
         config.pollingIntervalSec > RuntimeConfigLimits::kMaxPollingIntervalSec) {
         config.pollingIntervalSec = RuntimeConfigLimits::kDefaultPollingIntervalSec;
     }
 
-    config.fanDefaultMaxRpm = settings.value(
-        QStringLiteral("runtime/fan_default_max_rpm"),
-        RuntimeConfigLimits::kDefaultFanDefaultMaxRpm
-    ).toInt();
+    config.fanDefaultMaxRpm = settings.value(QStringLiteral("runtime/fan_default_max_rpm"),RuntimeConfigLimits::kDefaultFanDefaultMaxRpm).toInt();
+
     if (config.fanDefaultMaxRpm < RuntimeConfigLimits::kMinFanDefaultMaxRpm ||
         config.fanDefaultMaxRpm > RuntimeConfigLimits::kMaxFanDefaultMaxRpm) {
         config.fanDefaultMaxRpm = RuntimeConfigLimits::kDefaultFanDefaultMaxRpm;
     }
+
+    const QString temperatureUnitRaw = settings.value(QStringLiteral("runtime/temperature_unit"),QStringLiteral("C")).toString().trimmed().toUpper();
+    config.temperatureUnit = temperatureUnitFromToken(QStringView(temperatureUnitRaw));
 
     return config;
 }
 
 void AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
     QSettings settings;
+
     SettingsSchema::ensureUpToDate(settings);
     settings.setValue(QStringLiteral("runtime/polling_interval_sec"), config.pollingIntervalSec);
     settings.setValue(QStringLiteral("runtime/fan_default_max_rpm"), config.fanDefaultMaxRpm);
+    settings.setValue(QStringLiteral("runtime/temperature_unit"),temperatureUnitToToken(config.temperatureUnit));
 }

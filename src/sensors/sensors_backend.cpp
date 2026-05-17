@@ -10,6 +10,10 @@
 #include <optional>
 
 namespace {
+    [[nodiscard]] double celsiusToFahrenheit(const double valueC) {
+        return (valueC * (9.0 / 5.0)) + 32.0;
+    }
+
     /** Maps libsensors input types to visible category columns. */
     SensorCategory categoryForType(const sensors_subfeature_type type) {
         switch (type) {
@@ -153,7 +157,23 @@ namespace {
         }
     }
 
-    bool appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature, QVector<SensorReading> &readings, const int defaultFanMaxRpm) {
+    void applyTemperatureUnitToReading(SensorReading &reading, const TemperatureUnit temperatureUnit) {
+        if (temperatureUnit != TemperatureUnit::Fahrenheit || reading.unit != SensorUnit::Celsius) {
+            return;
+        }
+
+        reading.value = celsiusToFahrenheit(reading.value);
+        if (reading.hasMin) {
+            reading.minValue = celsiusToFahrenheit(reading.minValue);
+        }
+        if (reading.hasMax) {
+            reading.maxValue = celsiusToFahrenheit(reading.maxValue);
+        }
+        reading.unit = SensorUnit::Fahrenheit;
+    }
+
+    bool appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature,
+                              QVector<SensorReading> &readings, const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
 
         if (selected.subfeature == nullptr) {
@@ -178,8 +198,9 @@ namespace {
         const RangeInfo nativeRange = readRange(chip, feature, selected.type);
         std::optional<double> min = nativeRange.min;
         std::optional<double> max = nativeRange.max;
-        SensorsPolicy::applyDefaultRangePolicy(reading.category, min, max, defaultFanMaxRpm);
+        SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, min, max, defaultFanMaxRpm);
         applyRangeToReading(reading, min, max);
+        applyTemperatureUnitToReading(reading, temperatureUnit);
         readings.push_back(reading);
         return true;
     }
@@ -192,7 +213,8 @@ namespace {
         return QString::fromUtf8(chipNameBuffer);
     }
 
-    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, const int defaultFanMaxRpm) {
+    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings,
+                            const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
         const QString chipName = chipNameFrom(chip);
         if (chipName.isEmpty()) {
             return;
@@ -201,7 +223,7 @@ namespace {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, chipName, feature, readings, defaultFanMaxRpm);
+            appendFeatureReading(chip, chipName, feature, readings, defaultFanMaxRpm, temperatureUnit);
         }
     }
 }
@@ -229,7 +251,7 @@ QString SensorsBackend::lastError() const {
     return m_lastError;
 }
 
-QVector<SensorReading> SensorsBackend::readAll() const {
+QVector<SensorReading> SensorsBackend::readAll(const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) const {
     QVector<SensorReading> readings;
     if (!m_initialized) {
         return readings;
@@ -238,13 +260,8 @@ QVector<SensorReading> SensorsBackend::readAll() const {
     const sensors_chip_name *chip = nullptr;
     int chipNr = 0;
     while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings, m_defaultFanMaxRpm);
+        appendChipReadings(chip, readings, defaultFanMaxRpm, temperatureUnit);
     }
 
     return readings;
-}
-
-void SensorsBackend::applyConfig(const RuntimeConfig &config) {
-    // Only fallback policy values are runtime-configurable in backend today.
-    m_defaultFanMaxRpm = config.fanDefaultMaxRpm;
 }
