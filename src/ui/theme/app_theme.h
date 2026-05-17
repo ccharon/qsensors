@@ -9,7 +9,6 @@ namespace AppTheme {
     inline constexpr int kCardMinWidth = 150;
     inline constexpr int kCardWidth = 170;
     inline constexpr int kCardBorderPadding = 2;
-    inline constexpr int kCategorySpacing = 2;
     inline constexpr int kGridSpacing = 4;
     inline constexpr int kMaxColumnsPerCategory = 5;
     inline constexpr int kSectionInset = 8;

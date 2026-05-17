@@ -14,7 +14,6 @@
 #include <QMap>
 #include <QMetaEnum>
 #include <QStringList>
-#include <QStyle>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
@@ -79,21 +78,6 @@ int SensorsPanel::minimumRequiredWidth() const {
     return panelHorizontalMargins + kChipCardBorder + chipContentHorizontalMargins + categoriesWidth;
 }
 
-void SensorsPanel::clearContent(const bool resetState) {
-    while (QLayoutItem *item = m_layout->takeAt(0)) {
-        if (item->widget() != nullptr) {
-            delete item->widget();
-        }
-        delete item;
-    }
-    m_layout->addStretch(1);
-    m_sensorWidgets.clear();
-    m_chipSections.clear();
-    if (resetState) {
-        m_chipExpanded.clear();
-    }
-}
-
 void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebuild) {
     const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > grouped = groupReadingsByChip(m_readings);
     const LayoutMetrics metrics = computeLayoutMetrics(viewportWidth);
@@ -155,9 +139,8 @@ void SensorsPanel::removeStaleChipSections(
 }
 
 SensorsPanel::LayoutMetrics SensorsPanel::computeLayoutMetrics(const int viewportWidth) const {
-    const int scrollbarReserve = style()->pixelMetric(QStyle::PM_ScrollBarExtent);
     LayoutMetrics metrics;
-    metrics.stableViewportWidth = std::max(200, viewportWidth - scrollbarReserve);
+    metrics.stableViewportWidth = std::max(200, viewportWidth);
     return metrics;
 }
 

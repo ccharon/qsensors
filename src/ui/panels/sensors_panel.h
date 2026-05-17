@@ -57,9 +57,6 @@ private:
         QHash<QString, SensorValueWidget *> widgets;
     };
 
-    /** Deletes all currently rendered chip/category widgets from the root layout. */
-    void clearContent(bool resetState);
-
     /** Reconciles chip sections and rebuilds only changed chip/category trees. */
     void renderReadings(int viewportWidth, bool forceRebuild);
 

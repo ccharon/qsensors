@@ -6,7 +6,6 @@
 #include "theme/app_theme.h"
 
 #include <QFormLayout>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSpinBox>

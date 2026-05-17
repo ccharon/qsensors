@@ -50,11 +50,11 @@ private:
     /** Updates status bar text in one place. */
     void setStatusMessage(const QString &text);
 
-    /** Expands first-start window width to avoid horizontal scrolling. */
-    void fitInitialWidthWithoutHorizontalScroll();
-
     /** Keeps top-level minimum width aligned to widest currently required content. */
     void updateMinimumWindowWidthConstraint();
+
+    /** Expands window width minimally until horizontal overflow is gone. */
+    void ensureNoHorizontalOverflow(int extraPadding);
 
     /** Loads persisted geometry, expand-state and fingerprint (+ runtime config). */
     void loadSettings();
