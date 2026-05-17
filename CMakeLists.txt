@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qsensors VERSION 0.80.5)
+project(qsensors VERSION 0.80.6)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
@@ -10,6 +10,7 @@ find_package(Qt6 COMPONENTS
         Core
         Gui
         Widgets
+        Test
         LinguistTools
         REQUIRED)
 find_package(PkgConfig QUIET)
@@ -29,6 +30,7 @@ add_executable(qsensors
         src/main.cpp
         resources/resources.qrc
         src/config/app_config_store.cpp
+        src/config/settings_schema.cpp
         src/ui/main_window.cpp
         src/ui/main_window_state_store.cpp
         src/ui/theme/app_theme.cpp
@@ -92,4 +94,53 @@ set(TS_FILES
 qt_add_translations(qsensors
         TS_FILES ${TS_FILES}
         RESOURCE_PREFIX "/i18n"
+        LUPDATE_OPTIONS -no-obsolete -locations none
 )
+
+include(CTest)
+if (BUILD_TESTING)
+    function(add_qsensors_test target)
+        add_executable(${target} ${ARGN})
+        target_include_directories(${target} PRIVATE
+                src/config
+                src/ui
+                src/ui/panels
+                src/ui/widgets
+                src/sensors
+        )
+        target_link_libraries(${target}
+                Qt::Core
+                Qt::Gui
+                Qt::Widgets
+                Qt::Test
+        )
+        add_test(NAME ${target} COMMAND ${target})
+    endfunction()
+
+    add_qsensors_test(test_sensors_policy
+            tests/test_sensors_policy.cpp
+    )
+
+    add_qsensors_test(test_lcd_logic
+            tests/test_lcd_logic.cpp
+            src/ui/widgets/lcd_display_widget.cpp
+            src/ui/widgets/lcd_glyph_atlas.cpp
+    )
+
+    add_qsensors_test(test_glyph_model
+            tests/test_glyph_model.cpp
+            src/ui/widgets/lcd_glyph_atlas.cpp
+    )
+
+    add_qsensors_test(test_settings_persistence
+            tests/test_settings_persistence.cpp
+            src/config/app_config_store.cpp
+            src/config/settings_schema.cpp
+            src/ui/main_window_state_store.cpp
+    )
+
+    add_qsensors_test(test_sensor_contract
+            tests/test_sensor_contract.cpp
+            src/ui/widgets/lcd_glyph_atlas.cpp
+    )
+endif ()

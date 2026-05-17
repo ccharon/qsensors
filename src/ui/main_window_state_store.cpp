@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "main_window_state_store.h"
+#include "settings_schema.h"
 
 #include <QSettings>
 #include <QStringList>
@@ -9,6 +10,7 @@
 MainWindowState MainWindowStateStore::load() {
     MainWindowState state;
     QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
 
     state.geometry = settings.value(QStringLiteral("ui/geometry")).toByteArray();
     state.hasGeometry = !state.geometry.isEmpty();
@@ -30,6 +32,7 @@ void MainWindowStateStore::save(
     const QHash<QString, bool> &chipExpanded
 ) {
     QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
     settings.setValue(QStringLiteral("ui/geometry"), geometry);
     settings.setValue(QStringLiteral("sensors/fingerprint"), sensorFingerprint);
     settings.beginGroup(QStringLiteral("ui/chips"));

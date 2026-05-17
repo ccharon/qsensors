@@ -169,6 +169,8 @@ namespace {
             .chip = chipName,
             .category = categoryForType(selected.type),
             .feature = resolveFeatureLabel(chip, feature),
+            .featureNumber = feature->number,
+            .subfeatureNumber = selected.subfeature->number,
             .value = value,
             .unit = unitForType(selected.type),
         };

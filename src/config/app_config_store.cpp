@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "app_config_store.h"
+#include "settings_schema.h"
 
 #include <QSettings>
 
 RuntimeConfig AppConfigStore::loadRuntimeConfig() {
     RuntimeConfig config;
     QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
 
     config.pollingIntervalSec = settings.value(
         QStringLiteral("runtime/polling_interval_sec"),
@@ -32,6 +34,7 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
 
 void AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
     QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
     settings.setValue(QStringLiteral("runtime/polling_interval_sec"), config.pollingIntervalSec);
     settings.setValue(QStringLiteral("runtime/fan_default_max_rpm"), config.fanDefaultMaxRpm);
 }

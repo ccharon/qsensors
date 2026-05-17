@@ -12,7 +12,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMap>
-#include <QMetaEnum>
 #include <QStringList>
 #include <QToolButton>
 #include <QVBoxLayout>
@@ -22,18 +21,21 @@ namespace {
     constexpr int kUnifiedHorizontalSpacing = AppTheme::kGridSpacing + AppTheme::kCategoryVsGridSpacingDelta;
 
     QString translatedCategoryName(const SensorCategory category) {
-        const QMetaEnum metaEnum = QMetaEnum::fromType<SensorCategory>();
-        const char *key = metaEnum.valueToKey(static_cast<int>(category));
-
-        if (key == nullptr) {
-            key = metaEnum.valueToKey(static_cast<int>(SensorCategory::Other));
+        switch (category) {
+            case SensorCategory::Voltages:
+                return QCoreApplication::translate("SensorsPanel", "Voltages");
+            case SensorCategory::Temperatures:
+                return QCoreApplication::translate("SensorsPanel", "Temperatures");
+            case SensorCategory::Fans:
+                return QCoreApplication::translate("SensorsPanel", "Fans");
+            case SensorCategory::Currents:
+                return QCoreApplication::translate("SensorsPanel", "Currents");
+            case SensorCategory::Power:
+                return QCoreApplication::translate("SensorsPanel", "Power");
+            case SensorCategory::Other:
+                return QCoreApplication::translate("SensorsPanel", "Other");
         }
-
-        if (key == nullptr) {
-            return {};
-        }
-
-        return QCoreApplication::translate("MainWindow", key);
+        return QCoreApplication::translate("SensorsPanel", "Other");
     }
 }
 
@@ -324,6 +326,8 @@ QString SensorsPanel::chipStructureFingerprint(const QMap<SensorCategory, QVecto
 QString SensorsPanel::sensorKey(const SensorReading &reading) {
     return reading.chip + QStringLiteral("|")
            + QString::number(static_cast<int>(reading.category)) + QStringLiteral("|")
-           + reading.feature + QStringLiteral("|")
-           + QString::number(static_cast<int>(reading.unit));
+           + QString::number(reading.featureNumber) + QStringLiteral("|")
+           + QString::number(reading.subfeatureNumber) + QStringLiteral("|")
+           + QString::number(static_cast<int>(reading.unit)) + QStringLiteral("|")
+           + reading.feature;
 }
