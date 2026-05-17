@@ -44,6 +44,7 @@ Primary focus:
   - chip expand/collapse state
   - polling interval
   - default fan max RPM fallback
+  - temperature unit (`C` / `F`)
 - structural vs value updates are separated to keep refreshes efficient
 - minimum-width behavior is stabilized to avoid layout jumps
 
@@ -55,22 +56,24 @@ Responsible for:
 - `libsensors` init/cleanup lifecycle
 - chip/feature/subfeature enumeration
 - normalized `SensorReading` output
-- runtime config application for backend policy values
+- explicit read-parameter handling (`defaultFanMaxRpm`, `temperatureUnit`)
+- centralized range policy normalization for missing min/max values
 
 ### UI Composition
 
 - `MainWindow`: top-level orchestration (polling, persistence, sizing behavior)
 - `SensorsPanel`: chip/category layout and widget reconciliation
-- `SettingsPanel`: runtime options (polling interval, fan fallback max RPM)
+- `SettingsPanel`: runtime options (polling interval, fan fallback max RPM, temperature unit)
 - `SensorValueWidget`: per-sensor card (title, LCD value, range bar)
 - `LcdDisplayWidget` + `LcdGlyphAtlas`: atlas-based LCD rendering
 
 ### Data/State Flow
 1. timer triggers backend poll
-2. readings are normalized and delivered to panel layer
-3. structure changes trigger selective layout rebuild
-4. value-only changes update existing widgets in place
-5. relevant UI/runtime state is persisted via `QSettings`
+2. backend returns normalized readings (including range defaults and temperature unit conversion)
+3. readings are delivered to panel layer
+4. structure changes trigger selective layout rebuild
+5. value-only changes update existing widgets in place
+6. relevant UI/runtime state is persisted via `QSettings`
 
 ## Product and UX Decisions
 
@@ -102,6 +105,7 @@ Responsible for:
 - any behavior change should add or update automated tests when feasible
 - keep data model and presentation concerns clearly separated
 - translation drift is CI-gated: translation source files must stay in sync (run `cmake --build build --target update_translations`)
+- if a change is user-visible, behavior-relevant, packaging-relevant, or otherwise release-noteworthy, update `CHANGELOG.md` in the same change package (Keep a Changelog format)
 
 ## AGENTS.md Governance
 

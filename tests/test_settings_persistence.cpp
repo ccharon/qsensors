@@ -18,6 +18,8 @@ private:
 private slots:
     void init();
     void runtime_config_roundtrip();
+    void runtime_config_temperatureUnit_token_roundtrip();
+    void runtime_config_temperatureUnit_invalid_fallbacks_to_celsius();
     void main_window_state_roundtrip();
     void schema_version_is_written();
 };
@@ -44,6 +46,27 @@ void SettingsPersistenceTest::runtime_config_roundtrip() {
     QCOMPARE(loaded.pollingIntervalSec, 7);
     QCOMPARE(loaded.fanDefaultMaxRpm, 6400);
     QCOMPARE(loaded.temperatureUnit, TemperatureUnit::Fahrenheit);
+}
+
+void SettingsPersistenceTest::runtime_config_temperatureUnit_token_roundtrip() {
+    RuntimeConfig written;
+    written.temperatureUnit = TemperatureUnit::Fahrenheit;
+    AppConfigStore::saveRuntimeConfig(written);
+
+    QSettings s;
+    QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("F"));
+
+    written.temperatureUnit = TemperatureUnit::Celsius;
+    AppConfigStore::saveRuntimeConfig(written);
+    QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
+}
+
+void SettingsPersistenceTest::runtime_config_temperatureUnit_invalid_fallbacks_to_celsius() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/temperature_unit"), QStringLiteral("X"));
+
+    const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(loaded.temperatureUnit, TemperatureUnit::Celsius);
 }
 
 void SettingsPersistenceTest::main_window_state_roundtrip() {
