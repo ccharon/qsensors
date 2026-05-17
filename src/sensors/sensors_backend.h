@@ -52,6 +52,8 @@ struct SensorReading {
     QString chip;
     SensorCategory category = SensorCategory::Other;
     QString feature;
+    int featureNumber = -1;
+    int subfeatureNumber = -1;
     double value = 0.0;
     SensorUnit unit = SensorUnit::Unknown;
     bool hasRange = false;
