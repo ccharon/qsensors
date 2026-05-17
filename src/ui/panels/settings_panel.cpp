@@ -3,6 +3,7 @@
 
 #include "settings_panel.h"
 
+#include "runtime_config.h"
 #include "theme/app_theme.h"
 
 #include <QFormLayout>
@@ -63,7 +64,7 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_pollingSpin(nu
 
     auto *fanRpmLabel = new QLabel(tr("Fan Max RPM:"), content);
     m_fanMaxRpmSpin = new QSpinBox(content);
-    m_fanMaxRpmSpin->setRange(1000, 50000);
+    m_fanMaxRpmSpin->setRange(RuntimeConfigLimits::kMinFanDefaultMaxRpm, RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
     m_fanMaxRpmSpin->setSingleStep(100);
     m_fanMaxRpmSpin->setKeyboardTracking(false);
     m_fanMaxRpmSpin->setAccelerated(true);
