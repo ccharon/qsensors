@@ -19,15 +19,15 @@ public:
 
     QSize sizeHint() const override;
 
-protected:
-    void paintEvent(QPaintEvent *event) override;
-
-private:
     /** Formats the numeric part exactly like xsensors for known units. */
     static QString valueDigitsFor(const SensorReading &reading);
 
     /** Alarm state decides which sprite row is used for rendering. */
     static bool isAlertState(const SensorReading &reading);
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
+private:
     SensorReading m_reading;
 };

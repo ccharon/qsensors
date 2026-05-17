@@ -43,6 +43,15 @@ jobs:
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
 
+      - name: Verify translations are up to date
+        run: |
+          cmake --build build --target update_translations -j"$(nproc)"
+          if ! git diff --quiet -- i18n/qsensors_*.ts; then
+            echo "Translation sources are outdated. Run: cmake --build build --target update_translations"
+            git --no-pager diff -- i18n/qsensors_*.ts
+            exit 1
+          fi
+
       - name: Build
         run: cmake --build build -j"$(nproc)"
 
