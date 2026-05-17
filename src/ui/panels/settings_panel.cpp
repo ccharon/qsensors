@@ -6,7 +6,6 @@
 #include "theme/app_theme.h"
 
 #include <QFormLayout>
-#include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSpinBox>
@@ -90,4 +89,8 @@ void SettingsPanel::setFanDefaultMaxRpm(const int rpm) {
     // Prevent synthetic value restore from feeding back into policy updates.
     const QSignalBlocker blocker(m_fanMaxRpmSpin);
     m_fanMaxRpmSpin->setValue(rpm);
+}
+
+int SettingsPanel::minimumRequiredWidth() const {
+    return minimumSizeHint().width();
 }

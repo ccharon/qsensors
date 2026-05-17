@@ -8,7 +8,6 @@
 
 namespace {
     constexpr int kDigitHeight = 30;
-    constexpr int kRowOffsetAlert = 30;
     constexpr int kDisplayPaddingX = 0;
 }
 
@@ -36,98 +35,63 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     }
 
     const bool alert = isAlertState(m_reading);
-    const int yOffset = alert ? kRowOffsetAlert : 0;
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
     const QRect inner = rect();
-    const QColor panelBg = palette().color(QPalette::Window);
-    const QColor lcdBg = panelBg.lightness() > 140
-                             ? QColor(
-                                 AppTheme::kLcdLightThemeBrightness,
-                                 AppTheme::kLcdLightThemeBrightness,
-                                 AppTheme::kLcdLightThemeBrightness
-                             )
-                             : QColor(
-                                 AppTheme::kLcdDarkThemeBrightness,
-                                 AppTheme::kLcdDarkThemeBrightness,
-                                 AppTheme::kLcdDarkThemeBrightness
-                             );
+    const QColor lcdBg = palette().color(QPalette::Base);
     painter.fillRect(inner, lcdBg);
     painter.setClipRect(inner);
 
     int xPos = kDisplayPaddingX;
-    // Draw number glyphs left-to-right from the sprite atlas.
+    // Draw numeric value glyphs left-to-right from the sprite atlas.
     const QString digits = valueDigitsFor(m_reading);
     for (const QChar c: digits) {
-        LcdGlyphAtlas::Glyph g{};
-        if (!LcdGlyphAtlas::glyphFor(c, g)) {
+        const auto glyph = LcdGlyphAtlas::GlyphId::bySymbol(QStringView(&c, 1));
+        if (!glyph.has_value()) {
             continue;
         }
-        const QRect src = atlas.sourceRect(g, yOffset, kDigitHeight);
-        const QRect dst(xPos, 0, g.w, kDigitHeight);
+        const QRect src = glyph->sourceRect(alert, kDigitHeight);
+        const QRect dst(xPos, 0, glyph->width(), kDigitHeight);
         painter.drawImage(dst, atlas.image(), src);
-        xPos += g.w;
+        xPos += glyph->width();
     }
 
     // Draw fixed-position unit marker to match xsensors layout.
-    const QChar unit = unitGlyphFor(m_reading);
-    LcdGlyphAtlas::Glyph unitGlyph{};
-    if (LcdGlyphAtlas::glyphFor(unit, unitGlyph) && unit != QChar(' ')) {
-        int unitX = -1;
-        if (unit == QChar('R')) {
-            unitX = 90;
-        } else if (unit == QChar('C') || unit == QChar('F') || unit == QChar('V')) {
-            unitX = 96;
-        }
-        if (unitX >= 0) {
-            const QRect src = atlas.sourceRect(unitGlyph, yOffset, kDigitHeight);
-            const QRect dst(unitX + kDisplayPaddingX, 0, unitGlyph.w, kDigitHeight);
-            painter.drawImage(dst, atlas.image(), src);
-        }
+    const QString unitSymbol = sensorUnitSymbol(m_reading.unit);
+    const auto unitGlyph = LcdGlyphAtlas::GlyphId::bySymbol(QStringView(unitSymbol));
+    if (!unitGlyph.has_value() || !unitGlyph->hasAnchor()) {
+        return;
     }
+    const QRect src = unitGlyph->sourceRect(alert, kDigitHeight);
+    const QRect dst(unitGlyph->anchorX() + kDisplayPaddingX, 0, unitGlyph->width(), kDigitHeight);
+    painter.drawImage(dst, atlas.image(), src);
 }
 
 QString LcdDisplayWidget::valueDigitsFor(const SensorReading &reading) {
-    if (reading.unit == QStringLiteral("RPM")) {
+    if (reading.unit == SensorUnit::Rpm) {
         return QStringLiteral("%1").arg(reading.value, 5, 'f', 0, QChar(' '));
     }
-    if (reading.unit == QStringLiteral("°C")) {
+    if (reading.unit == SensorUnit::Celsius) {
         return QStringLiteral("%1").arg(reading.value, 6, 'f', 1, QChar(' '));
     }
-    if (reading.unit == QStringLiteral("V")) {
+    if (reading.unit == SensorUnit::Volt) {
         return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
     }
     return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
-}
-
-QChar LcdDisplayWidget::unitGlyphFor(const SensorReading &reading) {
-    if (reading.unit == QStringLiteral("RPM")) {
-        return {'R'};
-    }
-    if (reading.unit == QStringLiteral("°C")) {
-        return {'C'};
-    }
-    if (reading.unit == QStringLiteral("°F")) {
-        return {'F'};
-    }
-    if (reading.unit == QStringLiteral("V")) {
-        return {'V'};
-    }
-    return {' '};
 }
 
 bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
     if (!reading.hasRange) {
         return false;
     }
-    if (reading.unit == QStringLiteral("RPM")) {
+    if (reading.unit == SensorUnit::Rpm) {
         return reading.hasMin && reading.value < reading.minValue;
     }
-    if (reading.unit == QStringLiteral("°C")) {
+    if (reading.unit == SensorUnit::Celsius) {
         return reading.hasMax && reading.value > reading.maxValue;
     }
-    if (reading.unit == QStringLiteral("V")) {
+    if (reading.unit == SensorUnit::Volt) {
         return (reading.hasMin && reading.value < reading.minValue) || (
                    reading.hasMax && reading.value > reading.maxValue);
     }

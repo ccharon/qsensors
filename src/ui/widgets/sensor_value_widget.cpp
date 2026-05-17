@@ -14,7 +14,7 @@
 
 SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *parent)
     : QWidget(parent), m_groupBox(new QGroupBox(this)), m_lcdValue(new LcdDisplayWidget(reading, this)), m_rangeBar(new QProgressBar(this)) {
-    setMinimumWidth(150);
+    setMinimumWidth(AppTheme::kCardMinWidth);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMaximumWidth(AppTheme::kCardWidth);
 
@@ -24,9 +24,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
 
     m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
     const QColor panelBg = palette().color(QPalette::Window);
-    const QString borderColor = panelBg.lightness() > 140
-                                    ? QStringLiteral("palette(mid)")
-                                    : QStringLiteral("rgb(230,230,230)");
+    const QString borderColor = panelBg.lightness() > 140 ? QStringLiteral("palette(mid)") : QStringLiteral("rgb(230,230,230)");
     m_groupBox->setStyleSheet(AppTheme::sensorGroupStyle(borderColor));
     m_groupBox->setContentsMargins(0,12,0,0);
 
@@ -55,15 +53,15 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         double min = reading.hasMin ? reading.minValue : reading.value;
         double max = reading.hasMax ? reading.maxValue : reading.value;
 
-        if (reading.unit == QStringLiteral("V") && reading.hasMin && reading.hasMax &&
+        if (reading.unit == SensorUnit::Volt && reading.hasMin && reading.hasMax &&
             min < 0.0 && max < 0.0 && max < min) {
             std::swap(min, max);
         }
 
         if (!reading.hasMin && reading.hasMax) {
-            min = (reading.unit == QStringLiteral("°C")) ? 0.0 : std::max(0.0, reading.maxValue * 0.2);
+            min = (reading.unit == SensorUnit::Celsius) ? 0.0 : std::max(0.0, reading.maxValue * 0.2);
         } else if (reading.hasMin && !reading.hasMax) {
-            if (reading.unit == QStringLiteral("RPM")) {
+            if (reading.unit == SensorUnit::Rpm) {
                 max = std::max(reading.value, reading.minValue * 2.0);
             } else {
                 max = std::max(reading.value, reading.minValue + std::max(1.0, std::abs(reading.minValue) * 0.5));

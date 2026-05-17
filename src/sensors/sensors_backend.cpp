@@ -28,27 +28,28 @@ namespace {
         }
     }
 
-    /**  Unit symbol used by the LCD renderer and range logic. */
-    QString unitForType(const sensors_subfeature_type type) {
+    /** Unit kind used by the LCD renderer and range logic. */
+    SensorUnit unitForType(const sensors_subfeature_type type) {
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
-                return QStringLiteral("°C");
+                return SensorUnit::Celsius;
             case SENSORS_SUBFEATURE_IN_INPUT:
-                return QStringLiteral("V");
+                return SensorUnit::Volt;
             case SENSORS_SUBFEATURE_FAN_INPUT:
-                return QStringLiteral("RPM");
+                return SensorUnit::Rpm;
             case SENSORS_SUBFEATURE_CURR_INPUT:
-                return QStringLiteral("A");
+                return SensorUnit::Ampere;
             case SENSORS_SUBFEATURE_POWER_INPUT:
-                return QStringLiteral("W");
+                return SensorUnit::Watt;
             default:
-                return QString();
+                return SensorUnit::Unknown;
         }
     }
 
     /**  Helper that returns nullopt when a subfeature is missing or unreadable. */
     std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
+
         if (sf == nullptr) {
             return std::nullopt;
         }
@@ -72,8 +73,7 @@ namespace {
     };
 
     /** Reads native min/max limits where available for the given input type. */
-    RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature,
-                        const sensors_subfeature_type type) {
+    RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         RangeInfo range;
 
         switch (type) {
@@ -115,25 +115,26 @@ namespace {
             SENSORS_SUBFEATURE_POWER_INPUT
         };
 
-        for (const sensors_subfeature_type type : candidates) {
+        for (const sensors_subfeature_type type: candidates) {
             if (const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type); sf != nullptr) {
                 selection.subfeature = sf;
                 selection.type = type;
                 return selection;
             }
         }
+
         return selection;
     }
 
     QString resolveFeatureLabel(const sensors_chip_name *chip, const sensors_feature *feature) {
         const char *labelRaw = sensors_get_label(chip, feature);
-        const QString label = labelRaw != nullptr
-                                  ? QString::fromUtf8(labelRaw)
-                                  : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
+        const QString label = labelRaw != nullptr ? QString::fromUtf8(labelRaw) : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
+
         if (labelRaw != nullptr) {
             // libsensors allocates this label buffer; caller must free it.
             free(const_cast<char *>(labelRaw));
         }
+
         return label;
     }
 
@@ -152,14 +153,9 @@ namespace {
         }
     }
 
-    bool appendFeatureReading(
-        const sensors_chip_name *chip,
-        const QString &chipName,
-        const sensors_feature *feature,
-        QVector<SensorReading> &readings,
-        const int defaultFanMaxRpm
-    ) {
+    bool appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature, QVector<SensorReading> &readings, const int defaultFanMaxRpm) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
+
         if (selected.subfeature == nullptr) {
             return false;
         }
