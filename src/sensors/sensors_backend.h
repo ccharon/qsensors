@@ -28,6 +28,7 @@ using SensorCategory = SensorDomain::SensorCategory;
 
 enum class SensorUnit {
     Celsius,
+    Fahrenheit,
     Volt,
     Rpm,
     Ampere,
@@ -38,6 +39,7 @@ enum class SensorUnit {
 [[nodiscard]] inline QString sensorUnitSymbol(const SensorUnit unit) {
     switch (unit) {
         case SensorUnit::Celsius: return QStringLiteral("°C");
+        case SensorUnit::Fahrenheit: return QStringLiteral("°F");
         case SensorUnit::Volt: return QStringLiteral("V");
         case SensorUnit::Rpm: return QStringLiteral("RPM");
         case SensorUnit::Ampere: return QStringLiteral("A");
@@ -81,13 +83,9 @@ public:
     [[nodiscard]] QString lastError() const;
 
     /** Snapshot of all supported sensor input values. */
-    [[nodiscard]] QVector<SensorReading> readAll() const;
-
-    /** Applies runtime configuration relevant to backend range defaults. */
-    void applyConfig(const RuntimeConfig &config);
+    [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit) const;
 
 private:
     bool m_initialized;
     QString m_lastError;
-    int m_defaultFanMaxRpm = 5000;
 };

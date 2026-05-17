@@ -57,5 +57,17 @@
         <source>Fan Max RPM:</source>
         <translation>Fan Max RPM:</translation>
     </message>
+    <message>
+        <source>Temperature Unit:</source>
+        <translation>Temperature Unit:</translation>
+    </message>
+    <message>
+        <source>Celsius</source>
+        <translation>Celsius</translation>
+    </message>
+    <message>
+        <source>Fahrenheit</source>
+        <translation>Fahrenheit</translation>
+    </message>
 </context>
 </TS>

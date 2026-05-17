@@ -16,10 +16,12 @@ private slots:
 void LcdLogicTest::valueDigits_formats_by_unit() {
     SensorReading rpm{.value = 1534.0, .unit = SensorUnit::Rpm};
     SensorReading celsius{.value = 38.25, .unit = SensorUnit::Celsius};
+    SensorReading fahrenheit{.value = 100.75, .unit = SensorUnit::Fahrenheit};
     SensorReading volt{.value = 1.234, .unit = SensorUnit::Volt};
 
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(rpm), QStringLiteral(" 1534"));
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(celsius), QStringLiteral("  38.3"));
+    QCOMPARE(LcdDisplayWidget::valueDigitsFor(fahrenheit), QStringLiteral(" 100.8"));
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(volt), QStringLiteral("  1.23"));
 }
 
@@ -29,6 +31,8 @@ void LcdLogicTest::alertState_matches_unit_rules() {
 
     SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .hasRange = true, .hasMax = true, .maxValue = 85.0};
     QVERIFY(LcdDisplayWidget::isAlertState(temp));
+    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .hasRange = true, .hasMax = true, .maxValue = 185.0};
+    QVERIFY(LcdDisplayWidget::isAlertState(tempF));
 
     SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 1.0, .maxValue = 1.3};
     QVERIFY(LcdDisplayWidget::isAlertState(volt));

@@ -10,11 +10,13 @@
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QSpinBox>
+#include <QComboBox>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <QWidget>
 
-SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_pollingSpin(nullptr), m_fanMaxRpmSpin(nullptr) {
+SettingsPanel::SettingsPanel(QWidget *parent)
+    : QFrame(parent), m_pollingSpin(nullptr), m_fanMaxRpmSpin(nullptr), m_temperatureUnitCombo(nullptr) {
     setObjectName(QStringLiteral("settingsCard"));
     setStyleSheet(AppTheme::settingsCardStyle());
 
@@ -71,8 +73,19 @@ SettingsPanel::SettingsPanel(QWidget *parent) : QFrame(parent), m_pollingSpin(nu
     m_fanMaxRpmSpin->setStyleSheet(AppTheme::spinBoxStyle());
     connect(m_fanMaxRpmSpin, &QSpinBox::valueChanged, this, &SettingsPanel::fanDefaultMaxRpmChanged);
 
+    auto *temperatureUnitLabel = new QLabel(tr("Temperature Unit:"), content);
+    m_temperatureUnitCombo = new QComboBox(content);
+    m_temperatureUnitCombo->addItem(tr("Celsius"), temperatureUnitToToken(TemperatureUnit::Celsius));
+    m_temperatureUnitCombo->addItem(tr("Fahrenheit"), temperatureUnitToToken(TemperatureUnit::Fahrenheit));
+    m_temperatureUnitCombo->setStyleSheet(AppTheme::comboBoxStyle());
+    connect(m_temperatureUnitCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const QString token = m_temperatureUnitCombo->itemData(index).toString();
+        emit temperatureUnitChanged(temperatureUnitFromToken(QStringView(token)));
+    });
+
     formLayout->addRow(pollingLabel, m_pollingSpin);
     formLayout->addRow(fanRpmLabel, m_fanMaxRpmSpin);
+    formLayout->addRow(temperatureUnitLabel, m_temperatureUnitCombo);
 
     contentLayout->addLayout(formLayout);
     contentLayout->addStretch(1);
@@ -90,6 +103,12 @@ void SettingsPanel::setFanDefaultMaxRpm(const int rpm) {
     // Prevent synthetic value restore from feeding back into policy updates.
     const QSignalBlocker blocker(m_fanMaxRpmSpin);
     m_fanMaxRpmSpin->setValue(rpm);
+}
+
+void SettingsPanel::setTemperatureUnit(const TemperatureUnit unit) {
+    const QSignalBlocker blocker(m_temperatureUnitCombo);
+    const int index = m_temperatureUnitCombo->findData(temperatureUnitToToken(unit));
+    m_temperatureUnitCombo->setCurrentIndex(index >= 0 ? index : 0);
 }
 
 int SettingsPanel::minimumRequiredWidth() const {
