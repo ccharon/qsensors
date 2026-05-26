@@ -12,7 +12,7 @@ namespace AppTheme {
                 "  background: palette(window);"
                 "  color: palette(window-text);"
                 "}"
-            ).arg(QLatin1StringView(selector));
+            ).arg(QLatin1String(selector));
         }
     }
 
