@@ -22,6 +22,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    // Title must be set before stylesheet/margins so QGroupBox measures the title area correctly.
     m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
     const QColor panelBg = palette().color(QPalette::Window);
     const QString borderColor = panelBg.lightness() > 140 ? QStringLiteral("palette(mid)") : QStringLiteral("rgb(230,230,230)");

@@ -24,29 +24,6 @@ public:
 
     class GlyphId final {
     public:
-        enum class Key {
-            Digit0,
-            Digit1,
-            Digit2,
-            Digit3,
-            Digit4,
-            Digit5,
-            Digit6,
-            Digit7,
-            Digit8,
-            Digit9,
-            Blank,
-            Minus,
-            Dot,
-            UnitR,
-            UnitC,
-            UnitF,
-            UnitV
-        };
-
-        explicit GlyphId(Key key);
-
-        [[nodiscard]] const GlyphSpec &spec() const;
         [[nodiscard]] QStringView symbol() const;
         [[nodiscard]] int width() const;
         [[nodiscard]] bool hasAnchor() const;
@@ -56,7 +33,8 @@ public:
         [[nodiscard]] static std::optional<GlyphId> bySymbol(QStringView symbol);
 
     private:
-        Key m_key;
+        explicit GlyphId(const GlyphSpec *spec);
+        const GlyphSpec *m_spec;
     };
 
     /** Returns process-wide atlas instance loaded from Qt resources. */

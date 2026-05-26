@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.80.8] - 2026-05-27
+
+### Added
+- Alert state rendering for Ampere and Watt sensors (same min/max logic as Volt).
+
+### Fixed
+- Non-finite values (NaN/Inf) returned by libsensors are now rejected at the read
+  site and in the range policy, preventing undefined display behavior on corrupt
+  hardware readings.
+
 ## [0.80.7] - 2026-05-18
 
 ### Added
@@ -31,5 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed translation entries for new temperature unit UI strings in `en/de/fr/es`.
 - Gentoo packaging README now explicitly requires copying `files/qsensors.desktop`.
 
-[Unreleased]: https://github.com/ccharon/qsensors/compare/0.80.7...develop
+[Unreleased]: https://github.com/ccharon/qsensors/compare/0.80.8...develop
+[0.80.8]: https://github.com/ccharon/qsensors/compare/0.80.7...0.80.8
 [0.80.7]: https://github.com/ccharon/qsensors/releases/tag/0.80.7

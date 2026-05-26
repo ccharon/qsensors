@@ -65,6 +65,9 @@ private:
     /** Fingerprint based on chip set to detect structural sensor changes. */
     static QString chipFingerprint(const QVector<SensorReading> &readings);
 
+    /** Current renderable width: scroll viewport when available, else window width. */
+    [[nodiscard]] int viewportWidth() const;
+
     SensorsBackend m_backend;
     QScrollArea *m_scrollArea;
     QWidget *m_contentContainer;

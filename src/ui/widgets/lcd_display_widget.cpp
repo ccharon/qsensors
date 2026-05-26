@@ -97,9 +97,11 @@ bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
         return reading.hasMax && reading.value > reading.maxValue;
     }
 
-    if (reading.unit == SensorUnit::Volt) {
-        return (reading.hasMin && reading.value < reading.minValue) || (
-                   reading.hasMax && reading.value > reading.maxValue);
+    if (reading.unit == SensorUnit::Volt
+        || reading.unit == SensorUnit::Ampere
+        || reading.unit == SensorUnit::Watt) {
+        return (reading.hasMin && reading.value < reading.minValue) ||
+               (reading.hasMax && reading.value > reading.maxValue);
     }
 
     return false;

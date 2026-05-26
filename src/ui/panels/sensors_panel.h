@@ -25,9 +25,6 @@ public:
     /** Injects externally persisted chip expand/collapse state before rendering. */
     void setChipExpandedState(const QHash<QString, bool> &state);
 
-    /** Returns current expand/collapse state captured from user interaction. */
-    [[nodiscard]] QHash<QString, bool> chipExpandedState() const;
-
     /** Updates panel data and rebuilds widget tree only when sensor structure changed. */
     void setReadings(const QVector<SensorReading> &readings, int viewportWidth);
 
@@ -69,8 +66,7 @@ private:
         const QString &chipName,
         const QMap<SensorCategory, QVector<SensorReading> > &categories,
         int stableViewportWidth,
-        bool forceRebuild,
-        QHash<QString, SensorValueWidget *> &reconciledWidgets
+        bool forceRebuild
     );
 
     /** Creates and wires one reusable chip section container. */

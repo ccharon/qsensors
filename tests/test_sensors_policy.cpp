@@ -3,6 +3,7 @@
 #include "sensors_policy.h"
 
 #include <QtTest/QtTest>
+#include <limits>
 
 // Verifies default-range policy behavior for normalized sensor categories.
 class SensorsPolicyTest final : public QObject {
@@ -14,8 +15,11 @@ private slots:
     void voltages_defaults_are_filled();
     void currents_defaults_are_filled();
     void power_defaults_are_filled();
+    void power_defaults_both_missing();
     void other_defaults_are_filled();
     void existing_bounds_not_overwritten();
+    void nan_input_yields_finite_range();
+    void inf_input_yields_finite_range();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
@@ -78,6 +82,18 @@ void SensorsPolicyTest::power_defaults_are_filled() {
     QCOMPARE(*max, 35.0);
 }
 
+void SensorsPolicyTest::power_defaults_both_missing() {
+    std::optional<double> min;
+    std::optional<double> max;
+
+    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Power, 80.0, min, max, 5000);
+
+    QVERIFY(min.has_value());
+    QVERIFY(max.has_value());
+    QCOMPARE(*min, 0.0);
+    QCOMPARE(*max, 120.0);
+}
+
 void SensorsPolicyTest::other_defaults_are_filled() {
     std::optional<double> min;
     std::optional<double> max;
@@ -98,6 +114,32 @@ void SensorsPolicyTest::existing_bounds_not_overwritten() {
 
     QCOMPARE(*min, 5.0);
     QCOMPARE(*max, 42.0);
+}
+
+void SensorsPolicyTest::nan_input_yields_finite_range() {
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    std::optional<double> min;
+    std::optional<double> max;
+
+    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Other, nan, min, max, 5000);
+
+    QVERIFY(min.has_value());
+    QVERIFY(max.has_value());
+    QVERIFY(std::isfinite(*min));
+    QVERIFY(std::isfinite(*max));
+}
+
+void SensorsPolicyTest::inf_input_yields_finite_range() {
+    const double inf = std::numeric_limits<double>::infinity();
+    std::optional<double> min;
+    std::optional<double> max;
+
+    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Voltages, inf, min, max, 5000);
+
+    QVERIFY(min.has_value());
+    QVERIFY(max.has_value());
+    QVERIFY(std::isfinite(*min));
+    QVERIFY(std::isfinite(*max));
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

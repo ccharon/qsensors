@@ -5,25 +5,24 @@
 #include "settings_schema.h"
 
 #include <QSettings>
+#include <algorithm>
 
 RuntimeConfig AppConfigStore::loadRuntimeConfig() {
     RuntimeConfig config;
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
 
-    config.pollingIntervalSec = settings.value(QStringLiteral("runtime/polling_interval_sec"),RuntimeConfigLimits::kDefaultPollingIntervalSec).toInt();
+    config.pollingIntervalSec = std::clamp(
+        settings.value(QStringLiteral("runtime/polling_interval_sec"), RuntimeConfigLimits::kDefaultPollingIntervalSec).toInt(),
+        RuntimeConfigLimits::kMinPollingIntervalSec,
+        RuntimeConfigLimits::kMaxPollingIntervalSec
+    );
 
-    if (config.pollingIntervalSec < RuntimeConfigLimits::kMinPollingIntervalSec ||
-        config.pollingIntervalSec > RuntimeConfigLimits::kMaxPollingIntervalSec) {
-        config.pollingIntervalSec = RuntimeConfigLimits::kDefaultPollingIntervalSec;
-    }
-
-    config.fanDefaultMaxRpm = settings.value(QStringLiteral("runtime/fan_default_max_rpm"),RuntimeConfigLimits::kDefaultFanDefaultMaxRpm).toInt();
-
-    if (config.fanDefaultMaxRpm < RuntimeConfigLimits::kMinFanDefaultMaxRpm ||
-        config.fanDefaultMaxRpm > RuntimeConfigLimits::kMaxFanDefaultMaxRpm) {
-        config.fanDefaultMaxRpm = RuntimeConfigLimits::kDefaultFanDefaultMaxRpm;
-    }
+    config.fanDefaultMaxRpm = std::clamp(
+        settings.value(QStringLiteral("runtime/fan_default_max_rpm"), RuntimeConfigLimits::kDefaultFanDefaultMaxRpm).toInt(),
+        RuntimeConfigLimits::kMinFanDefaultMaxRpm,
+        RuntimeConfigLimits::kMaxFanDefaultMaxRpm
+    );
 
     const QString temperatureUnitRaw = settings.value(QStringLiteral("runtime/temperature_unit"),QStringLiteral("C")).toString().trimmed().toUpper();
     config.temperatureUnit = temperatureUnitFromToken(QStringView(temperatureUnitRaw));

@@ -49,10 +49,6 @@ void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_chipExpanded = state;
 }
 
-QHash<QString, bool> SensorsPanel::chipExpandedState() const {
-    return m_chipExpanded;
-}
-
 void SensorsPanel::setReadings(const QVector<SensorReading> &readings, const int viewportWidth) {
     m_readings = readings;
     renderReadings(viewportWidth, false);
@@ -86,23 +82,22 @@ void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebui
     // Batch updates avoid flicker while chip sections are reconciled/reordered.
     setUpdatesEnabled(false);
 
-    QStringList orderedChips;
-    orderedChips.reserve(grouped.size());
-    for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
-        orderedChips.push_back(chipIt.key());
-    }
+    const QStringList orderedChips = grouped.keys();
     removeStaleChipSections(grouped);
 
-    QHash<QString, SensorValueWidget *> reconciledWidgets;
     for (const QString &chipName: orderedChips) {
         const QMap<SensorCategory, QVector<SensorReading> > &categories = grouped.value(chipName);
-        reconcileChipSection(chipName, categories, stableViewportWidth, forceRebuild, reconciledWidgets);
+        reconcileChipSection(chipName, categories, stableViewportWidth, forceRebuild);
     }
 
     applyChipOrder(orderedChips);
 
-    // Keep stable widget instances whenever structure matches; value refresh happens below.
-    m_sensorWidgets = reconciledWidgets;
+    m_sensorWidgets.clear();
+    for (auto it = m_chipSections.constBegin(); it != m_chipSections.constEnd(); ++it) {
+        for (auto wit = it->widgets.constBegin(); wit != it->widgets.constEnd(); ++wit) {
+            m_sensorWidgets.insert(wit.key(), wit.value());
+        }
+    }
     updateVisibleReadings();
     setUpdatesEnabled(true);
     update();
@@ -145,8 +140,7 @@ void SensorsPanel::reconcileChipSection(
     const QString &chipName,
     const QMap<SensorCategory, QVector<SensorReading> > &categories,
     const int stableViewportWidth,
-    const bool forceRebuild,
-    QHash<QString, SensorValueWidget *> &reconciledWidgets
+    const bool forceRebuild
 ) {
     constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
     const int categoryCount = std::max(1, static_cast<int>(categories.size()));
@@ -170,10 +164,6 @@ void SensorsPanel::reconcileChipSection(
     if (forceRebuild || section->structureFingerprint != structure) {
         rebuildChipSection(*section, categories, columnsPerCategory);
         section->structureFingerprint = structure;
-    }
-
-    for (auto it = section->widgets.constBegin(); it != section->widgets.constEnd(); ++it) {
-        reconciledWidgets.insert(it.key(), it.value());
     }
 }
 
@@ -255,10 +245,7 @@ void SensorsPanel::rebuildChipSection(
     }
     section.widgets.clear();
 
-    QList<SensorCategory> orderedCategories = categories.keys();
-    std::sort(orderedCategories.begin(), orderedCategories.end(), [](const SensorCategory a, const SensorCategory b) {
-        return static_cast<int>(a) < static_cast<int>(b);
-    });
+    const QList<SensorCategory> orderedCategories = categories.keys();
 
     for (const SensorCategory categoryName: orderedCategories) {
         const QVector<SensorReading> &categoryReadings = categories.value(categoryName);
@@ -266,9 +253,7 @@ void SensorsPanel::rebuildChipSection(
         const int categoryWidth = widthForColumns(usedColumns);
 
         auto *categoryContainer = new QWidget(section.content);
-        categoryContainer->setMinimumWidth(categoryWidth);
-        categoryContainer->setMaximumWidth(categoryWidth);
-        categoryContainer->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Preferred);
+        categoryContainer->setFixedWidth(categoryWidth);
         auto *categoryContainerLayout = new QVBoxLayout(categoryContainer);
         categoryContainerLayout->setContentsMargins(0, 0, 0, 0);
         categoryContainerLayout->setSpacing(AppTheme::kCategoryBlockSpacing);

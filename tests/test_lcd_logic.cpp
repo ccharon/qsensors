@@ -39,6 +39,15 @@ void LcdLogicTest::alertState_matches_unit_rules() {
 
     SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 1.0, .maxValue = 100.0};
     QVERIFY(!LcdDisplayWidget::isAlertState(normal));
+
+    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .hasRange = true, .hasMax = true, .maxValue = 100.0};
+    QVERIFY(LcdDisplayWidget::isAlertState(wattOver));
+
+    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .hasRange = true, .hasMax = true, .maxValue = 10.0};
+    QVERIFY(LcdDisplayWidget::isAlertState(ampOver));
+
+    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 0.0, .maxValue = 10.0};
+    QVERIFY(!LcdDisplayWidget::isAlertState(ampNormal));
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

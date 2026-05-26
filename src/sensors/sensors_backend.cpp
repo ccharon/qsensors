@@ -6,6 +6,7 @@
 
 #include <sensors/sensors.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <optional>
 
@@ -51,19 +52,23 @@ namespace {
     }
 
     /**  Helper that returns nullopt when a subfeature is missing or unreadable. */
-    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
-        const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
-
-        if (sf == nullptr) {
-            return std::nullopt;
-        }
-
+    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_subfeature *sf) {
         double value = 0.0;
         if (sensors_get_value(chip, sf->number, &value) != 0) {
             return std::nullopt;
         }
-
+        if (!std::isfinite(value)) {
+            return std::nullopt;
+        }
         return value;
+    }
+
+    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
+        const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
+        if (sf == nullptr) {
+            return std::nullopt;
+        }
+        return readSubfeatureValue(chip, sf);
     }
 
     struct RangeInfo {
@@ -100,8 +105,6 @@ namespace {
                 range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MIN);
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
                 break;
-            case SENSORS_SUBFEATURE_POWER_INPUT:
-                break;
             default:
                 break;
         }
@@ -111,7 +114,7 @@ namespace {
     InputSelection selectInputSubfeature(const sensors_chip_name *chip, const sensors_feature *feature) {
         InputSelection selection{};
         // Priority order defines which "input" is shown when a feature exposes multiple candidates.
-        const sensors_subfeature_type candidates[] = {
+        constexpr sensors_subfeature_type candidates[] = {
             SENSORS_SUBFEATURE_TEMP_INPUT,
             SENSORS_SUBFEATURE_IN_INPUT,
             SENSORS_SUBFEATURE_FAN_INPUT,
@@ -180,8 +183,8 @@ namespace {
             return false;
         }
 
-        double value = 0.0;
-        if (sensors_get_value(chip, selected.subfeature->number, &value) != 0) {
+        const std::optional<double> value = readSubfeatureValue(chip, selected.subfeature);
+        if (!value.has_value()) {
             return false;
         }
 
@@ -191,7 +194,7 @@ namespace {
             .feature = resolveFeatureLabel(chip, feature),
             .featureNumber = feature->number,
             .subfeatureNumber = selected.subfeature->number,
-            .value = value,
+            .value = *value,
             .unit = unitForType(selected.type),
         };
 

@@ -18,6 +18,12 @@ namespace SensorsPolicy {
         std::optional<double> &max,
         const int fanDefaultMaxRpm
     ) {
+        if (!std::isfinite(measuredValue)) {
+            if (!min.has_value()) min = 0.0;
+            if (!max.has_value()) max = 1.0;
+            return;
+        }
+
         if (category == SensorCategory::Temperatures) {
             if (!min.has_value()) {
                 min = 0.0;

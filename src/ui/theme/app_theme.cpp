@@ -4,14 +4,20 @@
 #include "app_theme.h"
 
 namespace AppTheme {
+    namespace {
+        QString cardStyle(const char *selector) {
+            return QStringLiteral(
+                "%1 {"
+                "  border: 1px solid palette(mid);"
+                "  background: palette(window);"
+                "  color: palette(window-text);"
+                "}"
+            ).arg(QLatin1StringView(selector));
+        }
+    }
+
     QString chipCardStyle() {
-        return QStringLiteral(
-            "#chipCard {"
-            "  border: 1px solid palette(mid);"
-            "  background: palette(window);"
-            "  color: palette(window-text);"
-            "}"
-        );
+        return cardStyle("#chipCard");
     }
 
     QString sectionHeaderStyle() {
@@ -28,13 +34,7 @@ namespace AppTheme {
     }
 
     QString settingsCardStyle() {
-        return QStringLiteral(
-            "#settingsCard {"
-            "  border: 1px solid palette(mid);"
-            "  background: palette(window);"
-            "  color: palette(window-text);"
-            "}"
-        );
+        return cardStyle("#settingsCard");
     }
 
     QString sensorGroupStyle(const QString &borderColor) {
@@ -76,25 +76,14 @@ namespace AppTheme {
     }
 
     QString progressBarStyle(const bool hasRange) {
-        if (hasRange) {
-            return QStringLiteral(
-                "QProgressBar {"
-                "  border: none;"
-                "  background: palette(midlight);"
-                "}"
-                "QProgressBar::chunk {"
-                "  background: palette(highlight);"
-                "}"
-            );
-        }
         return QStringLiteral(
             "QProgressBar {"
             "  border: none;"
             "  background: palette(midlight);"
             "}"
             "QProgressBar::chunk {"
-            "  background: transparent;"
+            "  background: %1;"
             "}"
-        );
+        ).arg(hasRange ? QStringLiteral("palette(highlight)") : QStringLiteral("transparent"));
     }
 }
