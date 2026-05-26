@@ -5,26 +5,17 @@
 
 #include "runtime_config.h"
 
-#include <QObject>
 #include <QString>
 #include <QVector>
 
-namespace SensorDomain {
-    Q_NAMESPACE
-
-    enum class SensorCategory {
-        Voltages = 0,
-        Temperatures = 1,
-        Fans = 2,
-        Currents = 10,
-        Power = 11,
-        Other = 12,
-    };
-
-    Q_ENUM_NS(SensorCategory)
-}
-
-using SensorCategory = SensorDomain::SensorCategory;
+enum class SensorCategory {
+    Voltages = 0,
+    Temperatures = 1,
+    Fans = 2,
+    Currents = 10,
+    Power = 11,
+    Other = 12,
+};
 
 enum class SensorUnit {
     Celsius,

@@ -16,12 +16,10 @@ namespace AppTheme {
     inline constexpr int kCategoryBlockSpacing = 3;
     inline constexpr int kInitialWidthFitPadding = 24;
     inline constexpr int kRestoredWidthFitPadding = 8;
-    inline constexpr int kMaxColumnsPerCategory = 5;
+    inline constexpr int kMaxColumnsPerCategory = 6;
     inline constexpr int kSectionInset = 8;
     inline constexpr int kNarrowGap = 2;
     inline constexpr int kRangeBarHeight = 4;
-    inline constexpr int kLcdLightThemeBrightness = 245;
-    inline constexpr int kLcdDarkThemeBrightness = 230;
 
     [[nodiscard]] QString chipCardStyle();
 
