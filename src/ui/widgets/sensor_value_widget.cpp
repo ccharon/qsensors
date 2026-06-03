@@ -6,11 +6,11 @@
 #include "lcd_display_widget.h"
 
 #include <QGroupBox>
-#include <QPalette>
 #include <QProgressBar>
 #include <QVBoxLayout>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *parent)
     : QWidget(parent), m_groupBox(new QGroupBox(this)), m_lcdValue(new LcdDisplayWidget(reading, this)), m_rangeBar(new QProgressBar(this)) {
@@ -24,9 +24,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
 
     // Title must be set before stylesheet/margins so QGroupBox measures the title area correctly.
     m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
-    const QColor panelBg = palette().color(QPalette::Window);
-    const QString borderColor = panelBg.lightness() > 140 ? QStringLiteral("palette(mid)") : QStringLiteral("rgb(230,230,230)");
-    m_groupBox->setStyleSheet(AppTheme::sensorGroupStyle(borderColor));
+    m_groupBox->setStyleSheet(AppTheme::sensorGroupStyle(palette()));
     m_groupBox->setContentsMargins(0,12,0,0);
 
     auto *groupLayout = new QVBoxLayout(m_groupBox);
@@ -44,32 +42,36 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
 }
 
 void SensorValueWidget::setReading(const SensorReading &reading) {
-    m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
+    const QString newTitle = reading.feature + QStringLiteral(":");
+    if (m_groupBox->title() != newTitle)
+        m_groupBox->setTitle(newTitle);
     m_lcdValue->setReading(reading);
 
+    m_rangeBar->setFixedHeight(AppTheme::kRangeBarHeight);
+    m_rangeBar->setTextVisible(false);
+
     // Keep bar behavior aligned with xsensors-style limit semantics.
-    if (reading.hasRange) {
+    if (reading.hasRange()) {
         constexpr int scale = 1000;
         // Backend provides finalized range policy values; widget only renders.
-        double min = reading.minValue;
-        double max = reading.maxValue;
-
+        double min = reading.minValue.value_or(reading.value);
+        double max = reading.maxValue.value_or(min + 1.0);
         if (max <= min) {
             max = min + 1.0;
         }
-
         const double clampedValue = std::clamp(reading.value, min, max);
-
-        m_rangeBar->setRange(static_cast<int>(min * scale), static_cast<int>(max * scale));
-        m_rangeBar->setValue(static_cast<int>(clampedValue * scale));
-        m_rangeBar->setTextVisible(false);
-        m_rangeBar->setFixedHeight(AppTheme::kRangeBarHeight);
+        // Clamp before cast to prevent silent int overflow for extreme sensor values.
+        constexpr double kIntMin = static_cast<double>(std::numeric_limits<int>::min());
+        constexpr double kIntMax = static_cast<double>(std::numeric_limits<int>::max());
+        const auto toScaled = [&](const double v) {
+            return static_cast<int>(std::clamp(v * scale, kIntMin, kIntMax));
+        };
+        m_rangeBar->setRange(toScaled(min), toScaled(max));
+        m_rangeBar->setValue(toScaled(clampedValue));
         m_rangeBar->setStyleSheet(AppTheme::progressBarStyle(true));
     } else {
-        m_rangeBar->setFixedHeight(AppTheme::kRangeBarHeight);
         m_rangeBar->setRange(0, 1000);
         m_rangeBar->setValue(0);
-        m_rangeBar->setTextVisible(false);
         m_rangeBar->setStyleSheet(AppTheme::progressBarStyle(false));
     }
 }

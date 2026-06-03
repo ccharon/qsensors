@@ -37,7 +37,12 @@ namespace AppTheme {
         return cardStyle("#settingsCard");
     }
 
-    QString sensorGroupStyle(const QString &borderColor) {
+    QString sensorGroupStyle(const QPalette &palette) {
+        // In dark mode palette(mid) often lacks contrast against dark backgrounds;
+        // use a fixed light grey there instead of the palette color.
+        const QString borderColor = palette.color(QPalette::Window).lightness() > 140
+                                        ? QStringLiteral("palette(mid)")
+                                        : QStringLiteral("rgb(230,230,230)");
         return QStringLiteral(
             "QGroupBox {"
             "  border: 1px solid %1;"

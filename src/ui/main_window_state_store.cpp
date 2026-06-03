@@ -6,6 +6,18 @@
 
 #include <QSettings>
 #include <QStringList>
+#include <QUrl>
+
+namespace {
+    // Chip names may contain '/' which QSettings interprets as a group separator.
+    // Percent-encoding is idempotent for normal names (isa-0000, pci-0000).
+    QString encodeChipKey(const QString &chip) {
+        return QString::fromLatin1(QUrl::toPercentEncoding(chip));
+    }
+    QString decodeChipKey(const QString &key) {
+        return QUrl::fromPercentEncoding(key.toLatin1());
+    }
+}
 
 MainWindowState MainWindowStateStore::load() {
     MainWindowState state;
@@ -18,7 +30,7 @@ MainWindowState MainWindowStateStore::load() {
     settings.beginGroup(QStringLiteral("ui/chips"));
     const QStringList keys = settings.childKeys();
     for (const QString &key: keys) {
-        state.chipExpanded.insert(key, settings.value(key, true).toBool());
+        state.chipExpanded.insert(decodeChipKey(key), settings.value(key, true).toBool());
     }
     settings.endGroup();
 
@@ -38,7 +50,7 @@ void MainWindowStateStore::save(
     settings.beginGroup(QStringLiteral("ui/chips"));
     settings.remove(QString());
     for (auto it = chipExpanded.constBegin(); it != chipExpanded.constEnd(); ++it) {
-        settings.setValue(it.key(), it.value());
+        settings.setValue(encodeChipKey(it.key()), it.value());
     }
     settings.endGroup();
 }

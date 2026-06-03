@@ -7,6 +7,7 @@
 
 #include <QFrame>
 
+class QFormLayout;
 class QSpinBox;
 class QComboBox;
 
@@ -33,6 +34,10 @@ signals:
     void temperatureUnitChanged(TemperatureUnit unit);
 
 private:
+    void buildPollingRow(QFormLayout *form, QWidget *parent);
+    void buildFanRpmRow(QFormLayout *form, QWidget *parent);
+    void buildTemperatureUnitRow(QFormLayout *form, QWidget *parent);
+
     QSpinBox *m_pollingSpin;
     QSpinBox *m_fanMaxRpmSpin;
     QComboBox *m_temperatureUnitCombo;

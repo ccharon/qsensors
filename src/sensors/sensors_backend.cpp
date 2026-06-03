@@ -8,15 +8,19 @@
 
 #include <cmath>
 #include <cstdlib>
+#include <memory>
 #include <optional>
 
 namespace {
+    // libsensors defines no hard name-length limit; 256 covers all real-world chip names.
+    constexpr size_t kChipNameBufferSize = 256;
+
     [[nodiscard]] double celsiusToFahrenheit(const double valueC) {
         return (valueC * (9.0 / 5.0)) + 32.0;
     }
 
     /** Maps libsensors input types to visible category columns. */
-    SensorCategory categoryForType(const sensors_subfeature_type type) {
+    [[nodiscard]] SensorCategory categoryForType(const sensors_subfeature_type type) {
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
                 return SensorCategory::Temperatures;
@@ -34,7 +38,7 @@ namespace {
     }
 
     /** Unit kind used by the LCD renderer and range logic. */
-    SensorUnit unitForType(const sensors_subfeature_type type) {
+    [[nodiscard]] SensorUnit unitForType(const sensors_subfeature_type type) {
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
                 return SensorUnit::Celsius;
@@ -52,7 +56,7 @@ namespace {
     }
 
     /**  Helper that returns nullopt when a subfeature is missing or unreadable. */
-    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_subfeature *sf) {
+    [[nodiscard]] std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_subfeature *sf) {
         double value = 0.0;
         if (sensors_get_value(chip, sf->number, &value) != 0) {
             return std::nullopt;
@@ -63,7 +67,7 @@ namespace {
         return value;
     }
 
-    std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
+    [[nodiscard]] std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
         if (sf == nullptr) {
             return std::nullopt;
@@ -82,7 +86,7 @@ namespace {
     };
 
     /** Reads native min/max limits where available for the given input type. */
-    RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
+    [[nodiscard]] RangeInfo readRange(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         RangeInfo range;
 
         switch (type) {
@@ -111,7 +115,7 @@ namespace {
         return range;
     }
 
-    InputSelection selectInputSubfeature(const sensors_chip_name *chip, const sensors_feature *feature) {
+    [[nodiscard]] InputSelection selectInputSubfeature(const sensors_chip_name *chip, const sensors_feature *feature) {
         InputSelection selection{};
         // Priority order defines which "input" is shown when a feature exposes multiple candidates.
         constexpr sensors_subfeature_type candidates[] = {
@@ -133,31 +137,17 @@ namespace {
         return selection;
     }
 
-    QString resolveFeatureLabel(const sensors_chip_name *chip, const sensors_feature *feature) {
-        const char *labelRaw = sensors_get_label(chip, feature);
-        const QString label = labelRaw != nullptr ? QString::fromUtf8(labelRaw) : QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
-
-        if (labelRaw != nullptr) {
-            // libsensors allocates this label buffer; caller must free it.
-            free(const_cast<char *>(labelRaw));
-        }
-
-        return label;
+    [[nodiscard]] QString resolveFeatureLabel(const sensors_chip_name *chip, const sensors_feature *feature) {
+        // sensors_get_label allocates with malloc; unique_ptr gives exception-safe cleanup.
+        std::unique_ptr<char, decltype(&std::free)> label(sensors_get_label(chip, feature), std::free);
+        if (label)
+            return QString::fromUtf8(label.get());
+        return QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
     }
 
     void applyRangeToReading(SensorReading &reading, const std::optional<double> &min, const std::optional<double> &max) {
-        if (!min.has_value() && !max.has_value()) {
-            return;
-        }
-        reading.hasRange = true;
-        if (min.has_value()) {
-            reading.hasMin = true;
-            reading.minValue = *min;
-        }
-        if (max.has_value()) {
-            reading.hasMax = true;
-            reading.maxValue = *max;
-        }
+        reading.minValue = min;
+        reading.maxValue = max;
     }
 
     void applyTemperatureUnitToReading(SensorReading &reading, const TemperatureUnit temperatureUnit) {
@@ -166,12 +156,10 @@ namespace {
         }
 
         reading.value = celsiusToFahrenheit(reading.value);
-        if (reading.hasMin) {
-            reading.minValue = celsiusToFahrenheit(reading.minValue);
-        }
-        if (reading.hasMax) {
-            reading.maxValue = celsiusToFahrenheit(reading.maxValue);
-        }
+        if (reading.minValue)
+            reading.minValue = celsiusToFahrenheit(*reading.minValue);
+        if (reading.maxValue)
+            reading.maxValue = celsiusToFahrenheit(*reading.maxValue);
         reading.unit = SensorUnit::Fahrenheit;
     }
 
@@ -198,18 +186,16 @@ namespace {
             .unit = unitForType(selected.type),
         };
 
-        const RangeInfo nativeRange = readRange(chip, feature, selected.type);
-        std::optional<double> min = nativeRange.min;
-        std::optional<double> max = nativeRange.max;
-        SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, min, max, defaultFanMaxRpm);
-        applyRangeToReading(reading, min, max);
+        RangeInfo nativeRange = readRange(chip, feature, selected.type);
+        SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, nativeRange.min, nativeRange.max, defaultFanMaxRpm);
+        applyRangeToReading(reading, nativeRange.min, nativeRange.max);
         applyTemperatureUnitToReading(reading, temperatureUnit);
         readings.push_back(reading);
         return true;
     }
 
-    QString chipNameFrom(const sensors_chip_name *chip) {
-        char chipNameBuffer[256] = {0};
+    [[nodiscard]] QString chipNameFrom(const sensors_chip_name *chip) {
+        char chipNameBuffer[kChipNameBufferSize] = {0};
         if (sensors_snprintf_chip_name(chipNameBuffer, sizeof(chipNameBuffer), chip) < 0) {
             return {};
         }
@@ -232,6 +218,9 @@ namespace {
 }
 
 SensorsBackend::SensorsBackend() : m_initialized(false) {
+    // nullptr makes libsensors read the system configuration (/etc/sensors3.conf,
+    // /etc/sensors.d/). compute expressions there affect displayed values and ranges;
+    // the configuration must be system-trusted (writable by root only).
     const int rc = sensors_init(nullptr);
     if (rc != 0) {
         m_lastError = QStringLiteral("sensors_init failed (%1)").arg(rc);

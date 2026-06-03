@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <QPalette>
 #include <QString>
 
 namespace AppTheme {
@@ -11,6 +12,7 @@ namespace AppTheme {
     inline constexpr int kCardBorderPadding = 2;
     inline constexpr int kGridSpacing = 4;
     inline constexpr int kCategoryVsGridSpacingDelta = 2;
+    inline constexpr int kUnifiedHorizontalSpacing = kGridSpacing + kCategoryVsGridSpacingDelta;
     inline constexpr int kChipCardFrameWidthTotal = 2; // 1px left + 1px right
     inline constexpr int kSensorsPanelVerticalSpacing = 10;
     inline constexpr int kCategoryBlockSpacing = 3;
@@ -20,6 +22,8 @@ namespace AppTheme {
     inline constexpr int kSectionInset = 8;
     inline constexpr int kNarrowGap = 2;
     inline constexpr int kRangeBarHeight = 4;
+    // Lower bound for stable column calculation; prevents layout collapse at zero width.
+    inline constexpr int kMinStableViewportWidth = 200;
 
     [[nodiscard]] QString chipCardStyle();
 
@@ -27,7 +31,7 @@ namespace AppTheme {
 
     [[nodiscard]] QString settingsCardStyle();
 
-    [[nodiscard]] QString sensorGroupStyle(const QString &borderColor);
+    [[nodiscard]] QString sensorGroupStyle(const QPalette &palette);
 
     [[nodiscard]] QString spinBoxStyle();
 

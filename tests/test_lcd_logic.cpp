@@ -26,27 +26,27 @@ void LcdLogicTest::valueDigits_formats_by_unit() {
 }
 
 void LcdLogicTest::alertState_matches_unit_rules() {
-    SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .hasRange = true, .hasMin = true, .minValue = 1000.0};
+    SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .minValue = 1000.0};
     QVERIFY(LcdDisplayWidget::isAlertState(rpm));
 
-    SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .hasRange = true, .hasMax = true, .maxValue = 85.0};
+    SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .maxValue = 85.0};
     QVERIFY(LcdDisplayWidget::isAlertState(temp));
-    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .hasRange = true, .hasMax = true, .maxValue = 185.0};
+    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .maxValue = 185.0};
     QVERIFY(LcdDisplayWidget::isAlertState(tempF));
 
-    SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 1.0, .maxValue = 1.3};
+    SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .minValue = 1.0, .maxValue = 1.3};
     QVERIFY(LcdDisplayWidget::isAlertState(volt));
 
-    SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 1.0, .maxValue = 100.0};
+    SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .minValue = 1.0, .maxValue = 100.0};
     QVERIFY(!LcdDisplayWidget::isAlertState(normal));
 
-    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .hasRange = true, .hasMax = true, .maxValue = 100.0};
+    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .maxValue = 100.0};
     QVERIFY(LcdDisplayWidget::isAlertState(wattOver));
 
-    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .hasRange = true, .hasMax = true, .maxValue = 10.0};
+    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .maxValue = 10.0};
     QVERIFY(LcdDisplayWidget::isAlertState(ampOver));
 
-    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .hasRange = true, .hasMin = true, .hasMax = true, .minValue = 0.0, .maxValue = 10.0};
+    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .minValue = 0.0, .maxValue = 10.0};
     QVERIFY(!LcdDisplayWidget::isAlertState(ampNormal));
 }
 

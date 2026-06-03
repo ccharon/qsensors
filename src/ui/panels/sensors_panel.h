@@ -84,12 +84,13 @@ private:
     /** Applies value updates to already rendered widgets without rebuilding layout. */
     void updateVisibleReadings();
 
-    /** Unique widget lookup key for one sensor reading instance. */
-    [[nodiscard]] static QString sensorKey(const SensorReading &reading);
-
     QVBoxLayout *m_layout;
     QVector<SensorReading> m_readings;
     QHash<QString, SensorValueWidget *> m_sensorWidgets;
     QHash<QString, bool> m_chipExpanded;
     QHash<QString, ChipSection> m_chipSections;
+    // Cached grouping reused by minimumRequiredWidth(); avoids recomputing per tick.
+    QMap<QString, QMap<SensorCategory, QVector<SensorReading>>> m_groupedCache;
+    // Last emitted expand state; suppresses redundant signals on polling ticks.
+    QHash<QString, bool> m_lastEmittedExpanded;
 };
