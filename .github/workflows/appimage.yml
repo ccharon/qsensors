@@ -119,6 +119,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: qsensors-appimage-${{ github.sha }}
-          path: ./*.AppImage
+          path: ./qsensors*.AppImage
           if-no-files-found: error
           retention-days: 14
