@@ -41,7 +41,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - `widgets/lcd_display_widget` + `lcd_glyph_atlas`: atlas-based LCD glyph rendering.
 - `theme/app_theme.h`: sizing/spacing/column constants — change layout here, not in widget code.
 
-**`tests/`** — 5 unit test files covering range policy, LCD logic, glyph model, sensor contracts, and settings persistence/migration. Treat failing tests as blockers.
+**`tests/`** — 6 unit test files covering range policy, LCD logic, glyph model, sensor contracts, settings persistence/migration, and sensor identity. Treat failing tests as blockers.
 
 ## Non-Goals
 
