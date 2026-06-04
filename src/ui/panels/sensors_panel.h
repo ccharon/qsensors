@@ -7,7 +7,9 @@
 
 #include <QFrame>
 #include <QHash>
+#include <QMap>
 #include <QString>
+#include <QVector>
 #include <QWidget>
 
 class QHBoxLayout;
