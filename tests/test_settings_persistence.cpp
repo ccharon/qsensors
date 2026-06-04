@@ -21,6 +21,7 @@ private slots:
     void runtime_config_temperatureUnit_token_roundtrip();
     void runtime_config_temperatureUnit_invalid_fallbacks_to_celsius();
     void main_window_state_roundtrip();
+    void main_window_state_chip_name_with_slash_roundtrip();
     void schema_version_is_written();
 };
 
@@ -84,6 +85,23 @@ void SettingsPersistenceTest::main_window_state_roundtrip() {
     QCOMPARE(loaded.sensorFingerprint, fingerprint);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a")), true);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-b")), false);
+}
+
+void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip() {
+    // Chip names containing '/' must not be interpreted as QSettings group separators.
+    QHash<QString, bool> expanded;
+    expanded.insert(QStringLiteral("bus/0"), true);
+    expanded.insert(QStringLiteral("pci/slot/2"), false);
+    expanded.insert(QStringLiteral("normal-chip-isa-0000"), true);
+
+    MainWindowStateStore::save(QByteArray(), QString(), expanded);
+    const MainWindowState loaded = MainWindowStateStore::load();
+
+    QCOMPARE(loaded.chipExpanded.value(QStringLiteral("bus/0")), true);
+    QCOMPARE(loaded.chipExpanded.value(QStringLiteral("pci/slot/2")), false);
+    QCOMPARE(loaded.chipExpanded.value(QStringLiteral("normal-chip-isa-0000")), true);
+    // Kein Gruppen-Trennzeichen-Artefakt: alle drei Namen vorhanden, kein vierter.
+    QCOMPARE(loaded.chipExpanded.size(), 3);
 }
 
 void SettingsPersistenceTest::schema_version_is_written() {

@@ -62,9 +62,6 @@ private:
     /** Persists geometry, expand-state and current fingerprint (+ runtime config). */
     void saveSettings() const;
 
-    /** Fingerprint based on chip set to detect structural sensor changes. */
-    static QString chipFingerprint(const QVector<SensorReading> &readings);
-
     /** Current renderable width: scroll viewport when available, else window width. */
     [[nodiscard]] int viewportWidth() const;
 
@@ -77,6 +74,7 @@ private:
     QLabel *m_statusLabel;
     QTimer *m_timer;
     QHash<QString, bool> m_chipExpanded;
+    QHash<QString, bool> m_lastPushedExpanded;
     QString m_loadedChipFingerprint;
     QString m_currentFingerprint;
     QVector<SensorReading> m_lastReadings;

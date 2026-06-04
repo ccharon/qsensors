@@ -56,36 +56,9 @@ SettingsPanel::SettingsPanel(QWidget *parent)
     formLayout->setVerticalSpacing(AppTheme::kSectionInset);
     formLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 
-    auto *pollingLabel = new QLabel(tr("Polling Interval (s):"), content);
-    m_pollingSpin = new QSpinBox(content);
-    m_pollingSpin->setRange(1, 10);
-    m_pollingSpin->setKeyboardTracking(false);
-    m_pollingSpin->setAccelerated(true);
-    m_pollingSpin->setStyleSheet(AppTheme::spinBoxStyle());
-    connect(m_pollingSpin, &QSpinBox::valueChanged, this, &SettingsPanel::pollingIntervalChanged);
-
-    auto *fanRpmLabel = new QLabel(tr("Fan Max RPM:"), content);
-    m_fanMaxRpmSpin = new QSpinBox(content);
-    m_fanMaxRpmSpin->setRange(RuntimeConfigLimits::kMinFanDefaultMaxRpm, RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
-    m_fanMaxRpmSpin->setSingleStep(100);
-    m_fanMaxRpmSpin->setKeyboardTracking(false);
-    m_fanMaxRpmSpin->setAccelerated(true);
-    m_fanMaxRpmSpin->setStyleSheet(AppTheme::spinBoxStyle());
-    connect(m_fanMaxRpmSpin, &QSpinBox::valueChanged, this, &SettingsPanel::fanDefaultMaxRpmChanged);
-
-    auto *temperatureUnitLabel = new QLabel(tr("Temperature Unit:"), content);
-    m_temperatureUnitCombo = new QComboBox(content);
-    m_temperatureUnitCombo->addItem(tr("Celsius"), temperatureUnitToToken(TemperatureUnit::Celsius));
-    m_temperatureUnitCombo->addItem(tr("Fahrenheit"), temperatureUnitToToken(TemperatureUnit::Fahrenheit));
-    m_temperatureUnitCombo->setStyleSheet(AppTheme::comboBoxStyle());
-    connect(m_temperatureUnitCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
-        const QString token = m_temperatureUnitCombo->itemData(index).toString();
-        emit temperatureUnitChanged(temperatureUnitFromToken(QStringView(token)));
-    });
-
-    formLayout->addRow(pollingLabel, m_pollingSpin);
-    formLayout->addRow(fanRpmLabel, m_fanMaxRpmSpin);
-    formLayout->addRow(temperatureUnitLabel, m_temperatureUnitCombo);
+    buildPollingRow(formLayout, content);
+    buildFanRpmRow(formLayout, content);
+    buildTemperatureUnitRow(formLayout, content);
 
     contentLayout->addLayout(formLayout);
     contentLayout->addStretch(1);
@@ -113,4 +86,42 @@ void SettingsPanel::setTemperatureUnit(const TemperatureUnit unit) {
 
 int SettingsPanel::minimumRequiredWidth() const {
     return minimumSizeHint().width();
+}
+
+void SettingsPanel::buildPollingRow(QFormLayout *form, QWidget *parent) {
+    auto *label = new QLabel(tr("Polling Interval (s):"), parent);
+    m_pollingSpin = new QSpinBox(parent);
+    m_pollingSpin->setRange(RuntimeConfigLimits::kMinPollingIntervalSec,
+                            RuntimeConfigLimits::kMaxPollingIntervalSec);
+    m_pollingSpin->setKeyboardTracking(false);
+    m_pollingSpin->setAccelerated(true);
+    m_pollingSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    connect(m_pollingSpin, &QSpinBox::valueChanged, this, &SettingsPanel::pollingIntervalChanged);
+    form->addRow(label, m_pollingSpin);
+}
+
+void SettingsPanel::buildFanRpmRow(QFormLayout *form, QWidget *parent) {
+    auto *label = new QLabel(tr("Fan Max RPM:"), parent);
+    m_fanMaxRpmSpin = new QSpinBox(parent);
+    m_fanMaxRpmSpin->setRange(RuntimeConfigLimits::kMinFanDefaultMaxRpm,
+                              RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
+    m_fanMaxRpmSpin->setSingleStep(100);
+    m_fanMaxRpmSpin->setKeyboardTracking(false);
+    m_fanMaxRpmSpin->setAccelerated(true);
+    m_fanMaxRpmSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    connect(m_fanMaxRpmSpin, &QSpinBox::valueChanged, this, &SettingsPanel::fanDefaultMaxRpmChanged);
+    form->addRow(label, m_fanMaxRpmSpin);
+}
+
+void SettingsPanel::buildTemperatureUnitRow(QFormLayout *form, QWidget *parent) {
+    auto *label = new QLabel(tr("Temperature Unit:"), parent);
+    m_temperatureUnitCombo = new QComboBox(parent);
+    m_temperatureUnitCombo->addItem(tr("Celsius"), temperatureUnitToToken(TemperatureUnit::Celsius));
+    m_temperatureUnitCombo->addItem(tr("Fahrenheit"), temperatureUnitToToken(TemperatureUnit::Fahrenheit));
+    m_temperatureUnitCombo->setStyleSheet(AppTheme::comboBoxStyle());
+    connect(m_temperatureUnitCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
+        const QString token = m_temperatureUnitCombo->itemData(index).toString();
+        emit temperatureUnitChanged(temperatureUnitFromToken(QStringView(token)));
+    });
+    form->addRow(label, m_temperatureUnitCombo);
 }

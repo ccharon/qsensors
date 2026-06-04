@@ -8,7 +8,6 @@
 
 namespace {
     constexpr int kDigitHeight = 30;
-    constexpr int kDisplayPaddingX = 0;
 }
 
 LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent)
@@ -43,7 +42,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     painter.fillRect(inner, lcdBg);
     painter.setClipRect(inner);
 
-    int xPos = kDisplayPaddingX;
+    int xPos = 0;
     // Draw numeric value glyphs left-to-right from the sprite atlas.
     const QString digits = valueDigitsFor(m_reading);
     for (const QChar c: digits) {
@@ -64,7 +63,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
         return;
     }
     const QRect src = unitGlyph->sourceRect(alert, kDigitHeight);
-    const QRect dst(unitGlyph->anchorX() + kDisplayPaddingX, 0, unitGlyph->width(), kDigitHeight);
+    const QRect dst(unitGlyph->anchorX(), 0, unitGlyph->width(), kDigitHeight);
     painter.drawImage(dst, atlas.image(), src);
 }
 
@@ -85,23 +84,23 @@ QString LcdDisplayWidget::valueDigitsFor(const SensorReading &reading) {
 }
 
 bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
-    if (!reading.hasRange) {
+    if (!reading.hasRange()) {
         return false;
     }
 
     if (reading.unit == SensorUnit::Rpm) {
-        return reading.hasMin && reading.value < reading.minValue;
+        return reading.minValue && reading.value < *reading.minValue;
     }
 
     if (reading.unit == SensorUnit::Celsius || reading.unit == SensorUnit::Fahrenheit) {
-        return reading.hasMax && reading.value > reading.maxValue;
+        return reading.maxValue && reading.value > *reading.maxValue;
     }
 
     if (reading.unit == SensorUnit::Volt
         || reading.unit == SensorUnit::Ampere
         || reading.unit == SensorUnit::Watt) {
-        return (reading.hasMin && reading.value < reading.minValue) ||
-               (reading.hasMax && reading.value > reading.maxValue);
+        return (reading.minValue && reading.value < *reading.minValue) ||
+               (reading.maxValue && reading.value > *reading.maxValue);
     }
 
     return false;

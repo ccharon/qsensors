@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qsensors VERSION 0.80.8)
+project(qsensors VERSION 0.80.9)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
@@ -90,6 +90,7 @@ set(TS_FILES
         i18n/qsensors_de.ts
         i18n/qsensors_fr.ts
         i18n/qsensors_es.ts
+        i18n/qsensors_pt.ts
 )
 
 qt_add_translations(qsensors
@@ -144,5 +145,9 @@ if (BUILD_TESTING)
     add_qsensors_test(test_sensor_contract
             tests/test_sensor_contract.cpp
             src/ui/widgets/lcd_glyph_atlas.cpp
+    )
+
+    add_qsensors_test(test_sensor_identity
+            tests/test_sensor_identity.cpp
     )
 endif ()

@@ -7,6 +7,7 @@
 
 #include <QString>
 #include <QVector>
+#include <optional>
 
 enum class SensorCategory {
     Voltages = 0,
@@ -49,11 +50,10 @@ struct SensorReading {
     int subfeatureNumber = -1;
     double value = 0.0;
     SensorUnit unit = SensorUnit::Unknown;
-    bool hasRange = false;
-    bool hasMin = false;
-    bool hasMax = false;
-    double minValue = 0.0;
-    double maxValue = 0.0;
+    std::optional<double> minValue;
+    std::optional<double> maxValue;
+
+    [[nodiscard]] bool hasRange() const { return minValue.has_value() || maxValue.has_value(); }
 };
 
 /** Thin wrapper around libsensors discovery/readout. */

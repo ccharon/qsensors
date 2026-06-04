@@ -4,6 +4,8 @@
 #include "lcd_glyph_atlas.h"
 
 #include <QColor>
+#include <QDebug>
+#include <QHash>
 #include <array>
 
 namespace {
@@ -55,12 +57,15 @@ QRect LcdGlyphAtlas::GlyphId::sourceRect(const bool alert, const int glyphHeight
 }
 
 std::optional<LcdGlyphAtlas::GlyphId> LcdGlyphAtlas::GlyphId::bySymbol(const QStringView symbol) {
-    for (const GlyphSpec &spec: kGlyphs) {
-        if (QStringView(spec.symbol) == symbol) {
-            return GlyphId(&spec);
-        }
-    }
-    return std::nullopt;
+    static const QHash<QString, const GlyphSpec *> index = [] {
+        QHash<QString, const GlyphSpec *> m;
+        m.reserve(static_cast<int>(kGlyphs.size()));
+        for (const GlyphSpec &spec: kGlyphs)
+            m.insert(spec.symbol, &spec);
+        return m;
+    }();
+    const auto it = index.find(symbol.toString());
+    return it != index.end() ? std::optional(GlyphId(it.value())) : std::nullopt;
 }
 
 const LcdGlyphAtlas &LcdGlyphAtlas::instance() {
@@ -69,6 +74,8 @@ const LcdGlyphAtlas &LcdGlyphAtlas::instance() {
 }
 
 LcdGlyphAtlas::LcdGlyphAtlas() : m_theme(loadThemeWithWhiteTransparency()) {
+    if (m_theme.isNull())
+        qWarning("qsensors: LCD glyph atlas ':/themes/xsensors-theme.png' could not be loaded — LCD display disabled");
 }
 
 bool LcdGlyphAtlas::isValid() const {

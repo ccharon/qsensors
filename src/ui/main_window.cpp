@@ -4,6 +4,7 @@
 #include "main_window.h"
 
 #include "app_config_store.h"
+#include "sensor_identity.h"
 #include "theme/app_theme.h"
 #include "main_window_state_store.h"
 #include "settings_panel.h"
@@ -17,9 +18,7 @@
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QScreen>
-#include <QStringList>
 #include <QStatusBar>
-#include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -80,12 +79,16 @@ void MainWindow::refreshReadings() {
     // Startup-loaded layout state applies only if chip composition still matches.
     if (!m_loadedChipFingerprint.isEmpty() && m_loadedChipFingerprint != currentFingerprint) {
         m_chipExpanded.clear();
+        m_lastPushedExpanded.clear();
         m_loadedChipFingerprint.clear();
         setStatusMessage(tr("Sensor layout changed: UI config reset"));
     }
 
     m_currentFingerprint = currentFingerprint;
-    m_sensorsPanel->setChipExpandedState(m_chipExpanded);
+    if (m_lastPushedExpanded != m_chipExpanded) {
+        m_sensorsPanel->setChipExpandedState(m_chipExpanded);
+        m_lastPushedExpanded = m_chipExpanded;
+    }
     m_sensorsPanel->setReadings(m_lastReadings, viewportWidth());
     if (structureChanged) {
         updateMinimumWindowWidthConstraint();
@@ -199,17 +202,11 @@ void MainWindow::applyRuntimeConfig() {
 }
 
 void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {
-    if (m_scrollArea == nullptr || m_scrollArea->horizontalScrollBar() == nullptr) {
-        return;
-    }
-
     // Let pending layout updates settle before deciding if horizontal overflow is real.
     m_scrollArea->ensurePolished();
     m_scrollArea->updateGeometry();
-    if (m_contentContainer != nullptr) {
-        m_contentContainer->ensurePolished();
-        m_contentContainer->updateGeometry();
-    }
+    m_contentContainer->ensurePolished();
+    m_contentContainer->updateGeometry();
 
     auto *hBar = m_scrollArea->horizontalScrollBar();
     if (hBar->maximum() <= 0) {
@@ -230,35 +227,19 @@ void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {
 }
 
 void MainWindow::updateMinimumWindowWidthConstraint() {
-    if (m_scrollArea == nullptr || m_sensorsPanel == nullptr || m_settingsPanel == nullptr) {
-        return;
-    }
-
     const int sensorsMin = m_sensorsPanel->minimumRequiredWidth();
     const int settingsMin = (AppTheme::kSectionInset * 2) + m_settingsPanel->minimumRequiredWidth();
     const int requiredContentWidth = std::max(sensorsMin, settingsMin);
 
     m_contentContainer->setMinimumWidth(requiredContentWidth);
 
-    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar() != nullptr ? m_scrollArea->verticalScrollBar()->sizeHint().width() : style()->pixelMetric(QStyle::PM_ScrollBarExtent);
+    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar()->sizeHint().width();
     const int scrollAreaChrome = (m_scrollArea->frameWidth() * 2) + verticalScrollbarReserve;
     const int requiredCentralWidth = requiredContentWidth + scrollAreaChrome;
     m_scrollArea->setMinimumWidth(requiredCentralWidth);
 }
 
 int MainWindow::viewportWidth() const {
-    return (m_scrollArea != nullptr && m_scrollArea->viewport() != nullptr)
-               ? m_scrollArea->viewport()->width()
-               : width();
+    return m_scrollArea->viewport()->width();
 }
 
-QString MainWindow::chipFingerprint(const QVector<SensorReading> &readings) {
-    QStringList chips;
-    chips.reserve(readings.size());
-    for (const SensorReading &r: readings) {
-        chips.push_back(r.chip);
-    }
-    chips.removeDuplicates();
-    chips.sort();
-    return chips.join(QStringLiteral("\n"));
-}

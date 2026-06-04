@@ -41,7 +41,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - `widgets/lcd_display_widget` + `lcd_glyph_atlas`: atlas-based LCD glyph rendering.
 - `theme/app_theme.h`: sizing/spacing/column constants — change layout here, not in widget code.
 
-**`tests/`** — 5 unit test files covering range policy, LCD logic, glyph model, sensor contracts, and settings persistence/migration. Treat failing tests as blockers.
+**`tests/`** — 6 unit test files covering range policy, LCD logic, glyph model, sensor contracts, settings persistence/migration, and sensor identity. Treat failing tests as blockers.
 
 ## Non-Goals
 
@@ -66,7 +66,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 
 ## Key Policies
 
-- **Translation**: any new or changed user-visible string must be reflected in all supported locales (`en`, `de`, `fr`, `es`) before the change is considered complete. CI enforces this via git diff on translation source files. Run `update_translations` target after string changes.
+- **Translation**: any new or changed user-visible string must be reflected in all supported locales (`en` English, `de` German, `fr` French, `es` Spanish, `pt` Portuguese) before the change is considered complete. CI enforces this via git diff on translation source files. Run `update_translations` target after string changes.
 - **CHANGELOG.md**: update in the same commit for any user-visible, behavior-relevant, or release-noteworthy change (Keep a Changelog format).
 - **Structural vs value updates**: `SensorsPanel` intentionally separates layout rebuilds (structure changed) from in-place value patches (same sensors, new readings). Preserve this distinction when modifying the panel.
 - **No silent settings migrations**: schema version bumps must be explicit and visible.
