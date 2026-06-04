@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.80.9] - 2026-06-04
 
+### Added
+- Portuguese (`pt`) translation added.
+
 ### Fixed
 - Chip names containing `/` are now percent-encoded before use as QSettings keys,
   preventing silent group-separator injection that could corrupt the persisted
