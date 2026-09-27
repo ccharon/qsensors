@@ -11,6 +11,9 @@ class QWidget;
 
 /** Layout metrics, LCD colors and style sheets; change the look here, not in widgets. */
 namespace AppTheme {
+    // Window size on first start, before any geometry was saved.
+    inline constexpr int kInitialWindowWidth = 900;
+    inline constexpr int kInitialWindowHeight = 520;
     // Sensor card width range; the column calculation uses the minimum.
     inline constexpr int kCardMinWidth = 150;
     inline constexpr int kCardWidth = 170;

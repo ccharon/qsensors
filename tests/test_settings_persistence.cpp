@@ -86,7 +86,6 @@ void SettingsPersistenceTest::main_window_state_roundtrip() {
     QVERIFY(MainWindowStateStore::save(geometry, fingerprint, expanded));
     const MainWindowState loaded = MainWindowStateStore::load();
 
-    QVERIFY(loaded.hasGeometry);
     QCOMPARE(loaded.geometry, geometry);
     QCOMPARE(loaded.sensorFingerprint, fingerprint);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a")), true);

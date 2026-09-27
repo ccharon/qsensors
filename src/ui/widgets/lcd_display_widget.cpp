@@ -31,7 +31,7 @@ void LcdDisplayWidget::setReading(const SensorReading &reading) {
 }
 
 QSize LcdDisplayWidget::sizeHint() const {
-    return {150, kDisplayHeight};
+    return {AppTheme::kCardMinWidth, kDisplayHeight};
 }
 
 void LcdDisplayWidget::paintEvent(QPaintEvent *event) {

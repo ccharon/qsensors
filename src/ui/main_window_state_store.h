@@ -14,7 +14,6 @@ struct MainWindowState {
     QByteArray geometry;
     QHash<QString, bool> chipExpanded;
     QString sensorFingerprint; // chip set the expand state belongs to
-    bool hasGeometry = false;
 };
 
 /** Reads/writes persisted main-window state via QSettings. */

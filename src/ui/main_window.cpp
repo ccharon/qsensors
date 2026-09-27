@@ -11,10 +11,7 @@
 #include "sensors_panel.h"
 
 #include <QApplication>
-#include <QCoreApplication>
-#include <QGuiApplication>
 #include <QLabel>
-#include <QLayout>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -23,7 +20,6 @@
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
-#include <QWidget>
 #include <QWindow>
 #include <chrono>
 
@@ -35,7 +31,6 @@ MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
       m_scrollArea(nullptr),
       m_contentContainer(nullptr),
-      m_contentLayout(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
       m_statusLabel(nullptr),
@@ -106,9 +101,8 @@ void MainWindow::persistRuntimeConfig() {
 }
 
 void MainWindow::setupUi() {
-    setWindowTitle(QStringLiteral("%1 %2").arg(QCoreApplication::applicationName(),
-                                               QCoreApplication::applicationVersion()));
-    resize(900, 520);
+    setWindowTitle(QStringLiteral("%1 %2").arg(QApplication::applicationName(), QApplication::applicationVersion()));
+    resize(AppTheme::kInitialWindowWidth, AppTheme::kInitialWindowHeight);
 
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
@@ -120,10 +114,10 @@ void MainWindow::setupUi() {
     m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
 
     m_contentContainer = new QWidget(m_scrollArea);
-    m_contentLayout = new QVBoxLayout(m_contentContainer);
-    m_contentLayout->setContentsMargins(0, 0, 0, 0);
-    m_contentLayout->setSpacing(AppTheme::kNarrowGap);
-    m_contentLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
+    auto *contentLayout = new QVBoxLayout(m_contentContainer);
+    contentLayout->setContentsMargins(0, 0, 0, 0);
+    contentLayout->setSpacing(AppTheme::kNarrowGap);
+    contentLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
     m_settingsPanel = new SettingsPanel(m_contentContainer);
@@ -143,8 +137,8 @@ void MainWindow::setupUi() {
     settingsHost->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
     // Settings first, then sensor panels.
-    m_contentLayout->addWidget(settingsHost, 0, Qt::AlignTop);
-    m_contentLayout->addWidget(m_sensorsPanel, 1);
+    contentLayout->addWidget(settingsHost, 0, Qt::AlignTop);
+    contentLayout->addWidget(m_sensorsPanel, 1);
 
     m_scrollArea->setWidget(m_contentContainer);
     layout->addWidget(m_scrollArea);
@@ -204,10 +198,7 @@ void MainWindow::loadSettings() {
     }
     const MainWindowState state = MainWindowStateStore::load();
 
-    m_hasSavedGeometry = state.hasGeometry;
-    if (state.hasGeometry) {
-        restoreGeometry(state.geometry);
-    }
+    m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);
 
     m_sensorsPanel->restoreChipExpandedState(state.chipExpanded, state.sensorFingerprint);
 }
@@ -220,7 +211,6 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
-    // Centralized fan-out point for runtime-tunable behavior.
     m_timer->setInterval(std::chrono::seconds(m_runtimeConfig.pollingIntervalSec));
 }
 
@@ -236,7 +226,7 @@ void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {
         return;
     }
 
-    QScreen *screen = windowHandle() != nullptr ? windowHandle()->screen() : QGuiApplication::primaryScreen();
+    QScreen *screen = windowHandle() != nullptr ? windowHandle()->screen() : QApplication::primaryScreen();
     if (screen == nullptr) {
         return;
     }

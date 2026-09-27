@@ -9,10 +9,8 @@
 #include <QDebug>
 
 namespace {
-    void migrateV0ToV1(QSettings &settings) {
-        // v1 establishes explicit schema versioning.
-        // No key migration required yet.
-        settings.sync();
+    void migrateV0ToV1(QSettings &) {
+        // v1 only introduces the version marker; no keys change.
     }
 
     void migrateV1ToV2(QSettings &settings) {
@@ -20,7 +18,6 @@ namespace {
         if (!settings.contains(SettingsKeys::kTemperatureUnit)) {
             settings.setValue(SettingsKeys::kTemperatureUnit, temperatureUnitToToken(TemperatureUnit::Celsius));
         }
-        settings.sync();
     }
 }
 

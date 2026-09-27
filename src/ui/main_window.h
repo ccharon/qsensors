@@ -3,22 +3,18 @@
 
 #pragma once
 
-#include "sensors_backend.h"
 #include "runtime_config.h"
+#include "sensors_backend.h"
 
 #include <QMainWindow>
 #include <QPalette>
-#include <QHash>
-#include <QString>
 
 class QLabel;
 class QTimer;
 class QScrollArea;
-class QVBoxLayout;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
-class QScreen;
 class SensorsPanel;
 class SettingsPanel;
 
@@ -86,7 +82,6 @@ private:
     SensorsBackend m_backend;
     QScrollArea *m_scrollArea;
     QWidget *m_contentContainer;
-    QVBoxLayout *m_contentLayout;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
     QLabel *m_statusLabel;

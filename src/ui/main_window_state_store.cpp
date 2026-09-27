@@ -27,7 +27,6 @@ MainWindowState MainWindowStateStore::load() {
     SettingsSchema::ensureUpToDate(settings);
 
     state.geometry = settings.value(SettingsKeys::kWindowGeometry).toByteArray();
-    state.hasGeometry = !state.geometry.isEmpty();
 
     settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     const QStringList keys = settings.childKeys();
