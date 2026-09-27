@@ -41,6 +41,7 @@ add_executable(qsensors
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/sensors/sensors_backend.cpp
+        src/sensors/sensor_format.cpp
 )
 target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
 target_include_directories(qsensors PRIVATE
@@ -133,6 +134,7 @@ if (BUILD_TESTING)
 
     add_qsensors_test(test_lcd_logic
             tests/test_lcd_logic.cpp
+            src/sensors/sensor_format.cpp
             src/ui/widgets/lcd_display_widget.cpp
             src/ui/widgets/sensor_value_widget.cpp
             src/ui/widgets/lcd_segment_font.cpp
@@ -153,12 +155,24 @@ if (BUILD_TESTING)
 
     add_qsensors_test(test_sensor_contract
             tests/test_sensor_contract.cpp
+            src/sensors/sensor_format.cpp
             src/ui/widgets/lcd_segment_font.cpp
     )
 
     add_qsensors_test(test_sensor_identity
             tests/test_sensor_identity.cpp
     )
+
+    add_qsensors_test(test_sensors_panel
+            tests/test_sensors_panel.cpp
+            src/sensors/sensor_format.cpp
+            src/ui/panels/sensors_panel.cpp
+            src/ui/theme/app_theme.cpp
+            src/ui/widgets/lcd_display_widget.cpp
+            src/ui/widgets/lcd_segment_font.cpp
+            src/ui/widgets/sensor_value_widget.cpp
+    )
+    set_tests_properties(test_sensors_panel PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 
     add_qsensors_test(test_theme_refresh
             tests/test_theme_refresh.cpp

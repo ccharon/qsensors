@@ -3,6 +3,8 @@
 
 #include "lcd_display_widget.h"
 #include "lcd_segment_font.h"
+#include "sensor_format.h"
+#include "sensors_policy.h"
 #include "theme/app_theme.h"
 
 #include <QLinearGradient>
@@ -44,7 +46,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     // Dark themes get brighter segment colors and a glow (backlit LCD) instead of
     // the offset shadow, which would vanish on a dark backplane.
     const bool dark = hasDarkBase();
-    const bool alert = isAlertState(m_reading);
+    const bool alert = SensorsPolicy::isAlertState(m_reading);
     const QColor lit(dark ? (alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)
                           : (alert ? AppTheme::kLcdAlertRgb : AppTheme::kLcdNormalRgb));
     QColor ghost(dark ? AppTheme::kLcdNormalDarkRgb : AppTheme::kLcdNormalRgb);
@@ -52,7 +54,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const QColor shadow(0, 0, 0, AppTheme::kLcdSegmentShadowAlpha);
 
     // Everything scales with the widget; long readings shrink to fit the width.
-    const QString value = valueDigitsFor(m_reading);
+    const QString value = SensorFormat::valueDigits(m_reading.unit, m_reading.value);
     const QString unit = sensorUnitSymbol(m_reading.unit);
     // Digits fill the area above the range bar graph that runs along the bottom.
     const qreal barTop = height() - AppTheme::kLcdPaddingY - AppTheme::kLcdBarHeight;
@@ -142,21 +144,8 @@ QVector<QPolygonF> LcdDisplayWidget::barGraphSegments(const QRectF &area) {
     return segments;
 }
 
-std::optional<double> LcdDisplayWidget::rangeFraction(const SensorReading &reading) {
-    if (!reading.hasRange() || !std::isfinite(reading.value)) {
-        return std::nullopt;
-    }
-    // Backend provides finalized range policy values; the display only maps them.
-    const double min = reading.minValue.value_or(reading.value);
-    double max = reading.maxValue.value_or(min + 1.0);
-    if (!(max > min)) {
-        max = min + 1.0;
-    }
-    return std::clamp((reading.value - min) / (max - min), 0.0, 1.0);
-}
-
 int LcdDisplayWidget::litBarSegments(const SensorReading &reading, const int segmentCount) {
-    const auto fraction = rangeFraction(reading);
+    const auto fraction = SensorsPolicy::rangeFraction(reading);
     if (!fraction || segmentCount <= 0) {
         return 0;
     }
@@ -197,49 +186,3 @@ void LcdDisplayWidget::paintPanel(QPainter &painter) const {
     painter.drawLine(QPointF(panel.left() + r, panel.bottom() - 1.0), QPointF(panel.right() - r, panel.bottom() - 1.0));
 }
 
-QString LcdDisplayWidget::valueDigitsFor(const SensorReading &reading) {
-    if (reading.unit == SensorUnit::Rpm) {
-        return QStringLiteral("%1").arg(reading.value, 5, 'f', 0, QChar(' '));
-    }
-
-    if (reading.unit == SensorUnit::Celsius || reading.unit == SensorUnit::Fahrenheit) {
-        return QStringLiteral("%1").arg(reading.value, 6, 'f', 1, QChar(' '));
-    }
-
-    if (reading.unit == SensorUnit::Volt) {
-        return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
-    }
-
-    // Milli-units already resolve 1/1000; one decimal keeps negative values
-    // (e.g. a discharging battery at -396.0 mA) within six cells.
-    if (reading.unit == SensorUnit::Milliampere || reading.unit == SensorUnit::Milliwatt) {
-        return QStringLiteral("%1").arg(reading.value, 6, 'f', 1, QChar(' '));
-    }
-
-    return QStringLiteral("%1").arg(reading.value, 6, 'f', 2, QChar(' '));
-}
-
-bool LcdDisplayWidget::isAlertState(const SensorReading &reading) {
-    if (!reading.hasRange()) {
-        return false;
-    }
-
-    if (reading.unit == SensorUnit::Rpm) {
-        return reading.minValue && reading.value < *reading.minValue;
-    }
-
-    if (reading.unit == SensorUnit::Celsius || reading.unit == SensorUnit::Fahrenheit) {
-        return reading.maxValue && reading.value > *reading.maxValue;
-    }
-
-    if (reading.unit == SensorUnit::Volt
-        || reading.unit == SensorUnit::Ampere
-        || reading.unit == SensorUnit::Milliampere
-        || reading.unit == SensorUnit::Watt
-        || reading.unit == SensorUnit::Milliwatt) {
-        return (reading.minValue && reading.value < *reading.minValue) ||
-               (reading.maxValue && reading.value > *reading.maxValue);
-    }
-
-    return false;
-}

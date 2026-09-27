@@ -3,12 +3,11 @@
 
 #pragma once
 
-#include "sensors_backend.h"
+#include "sensor_reading.h"
 
 #include <QPolygonF>
 #include <QVector>
 #include <QWidget>
-#include <optional>
 
 class QPainter;
 
@@ -22,15 +21,6 @@ public:
     void setReading(const SensorReading &reading);
 
     QSize sizeHint() const override;
-
-    /** Formats the numeric part exactly like xsensors for known units. */
-    static QString valueDigitsFor(const SensorReading &reading);
-
-    /** Alarm state decides whether the lit segments use the alert color. */
-    static bool isAlertState(const SensorReading &reading);
-
-    /** Position of the value within its min/max range (0..1), nullopt without range. */
-    static std::optional<double> rangeFraction(const SensorReading &reading);
 
     /** Number of lit bar graph segments out of @p segmentCount. */
     static int litBarSegments(const SensorReading &reading, int segmentCount);

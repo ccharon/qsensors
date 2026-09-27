@@ -4,6 +4,7 @@
 #include "sensor_value_widget.h"
 #include "theme/app_theme.h"
 #include "lcd_display_widget.h"
+#include "sensor_format.h"
 
 #include <QLabel>
 #include <QResizeEvent>
@@ -46,14 +47,7 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
 }
 
 QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
-    const QString unit = sensorUnitSymbol(reading.unit);
-    // Reuse the LCD formatting so tooltip limits match the displayed precision.
-    const auto format = [&](const double v) {
-        SensorReading limit = reading;
-        limit.value = v;
-        const QString digits = LcdDisplayWidget::valueDigitsFor(limit).trimmed();
-        return unit.isEmpty() ? digits : digits + QLatin1Char(' ') + unit;
-    };
+    const auto format = [&reading](const double v) { return SensorFormat::valueWithUnit(reading.unit, v); };
 
     QStringList lines;
     lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());

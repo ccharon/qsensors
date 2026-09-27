@@ -32,6 +32,8 @@ private slots:
     void signed_current_without_limits_mirrors_range();
     void signed_power_with_native_max_only_mirrors_range();
     void negative_voltage_keeps_zero_minimum();
+    void alertState_matches_unit_rules();
+    void rangeFraction_maps_value_into_limits();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
@@ -312,6 +314,55 @@ void SensorsPolicyTest::negative_voltage_keeps_zero_minimum() {
 
     QCOMPARE(*min, 0.0);
     QCOMPARE(*max, 1.0);
+}
+
+void SensorsPolicyTest::alertState_matches_unit_rules() {
+    SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .minValue = 1000.0};
+    QVERIFY(SensorsPolicy::isAlertState(rpm));
+
+    SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .maxValue = 85.0};
+    QVERIFY(SensorsPolicy::isAlertState(temp));
+    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .maxValue = 185.0};
+    QVERIFY(SensorsPolicy::isAlertState(tempF));
+
+    SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .minValue = 1.0, .maxValue = 1.3};
+    QVERIFY(SensorsPolicy::isAlertState(volt));
+
+    SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .minValue = 1.0, .maxValue = 100.0};
+    QVERIFY(!SensorsPolicy::isAlertState(normal));
+
+    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .maxValue = 100.0};
+    QVERIFY(SensorsPolicy::isAlertState(wattOver));
+
+    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .maxValue = 10.0};
+    QVERIFY(SensorsPolicy::isAlertState(ampOver));
+
+    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .minValue = 0.0, .maxValue = 10.0};
+    QVERIFY(!SensorsPolicy::isAlertState(ampNormal));
+
+    SensorReading milliwattOver{.value = 550.0, .unit = SensorUnit::Milliwatt, .maxValue = 500.0};
+    QVERIFY(SensorsPolicy::isAlertState(milliwattOver));
+
+    SensorReading milliampNormal{.value = 300.0, .unit = SensorUnit::Milliampere, .minValue = 0.0, .maxValue = 500.0};
+    QVERIFY(!SensorsPolicy::isAlertState(milliampNormal));
+}
+
+void SensorsPolicyTest::rangeFraction_maps_value_into_limits() {
+    SensorReading noRange{.value = 5.0, .unit = SensorUnit::Volt};
+    QVERIFY(!SensorsPolicy::rangeFraction(noRange).has_value());
+
+    SensorReading half{.value = 50.0, .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    QCOMPARE(*SensorsPolicy::rangeFraction(half), 0.5);
+
+    SensorReading above{.value = 120.0, .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    QCOMPARE(*SensorsPolicy::rangeFraction(above), 1.0);
+
+    SensorReading below{.value = -396.0, .unit = SensorUnit::Milliampere, .minValue = 0.0, .maxValue = 1000.0};
+    QCOMPARE(*SensorsPolicy::rangeFraction(below), 0.0);
+
+    // Degenerate range (max <= min) falls back to a one-unit span instead of dividing by zero.
+    SensorReading degenerate{.value = 3.0, .unit = SensorUnit::Volt, .minValue = 3.0, .maxValue = 3.0};
+    QCOMPARE(*SensorsPolicy::rangeFraction(degenerate), 0.0);
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

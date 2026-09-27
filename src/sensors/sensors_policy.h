@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "sensors_backend.h"
+#include "sensor_reading.h"
 
 #include <algorithm>
 #include <cmath>
@@ -133,5 +133,43 @@ namespace SensorsPolicy {
         if (min.has_value() && max.has_value() && *max <= *min) {
             *max = *min + std::max(1.0, std::abs(*min) * 0.5);
         }
+    }
+
+    /**
+     * True when the reading violates its limits: fans below min, temperatures above
+     * max, electrical values outside [min, max].
+     */
+    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
+        const bool belowMin = reading.minValue && reading.value < *reading.minValue;
+        const bool aboveMax = reading.maxValue && reading.value > *reading.maxValue;
+        switch (reading.unit) {
+            case SensorUnit::Rpm:
+                return belowMin;
+            case SensorUnit::Celsius:
+            case SensorUnit::Fahrenheit:
+                return aboveMax;
+            case SensorUnit::Volt:
+            case SensorUnit::Ampere:
+            case SensorUnit::Milliampere:
+            case SensorUnit::Watt:
+            case SensorUnit::Milliwatt:
+                return belowMin || aboveMax;
+            case SensorUnit::Unknown:
+                break;
+        }
+        return false;
+    }
+
+    /** Position of the value within its limits (0..1); nullopt without limits or value. */
+    [[nodiscard]] inline std::optional<double> rangeFraction(const SensorReading &reading) {
+        if (!reading.hasRange() || !std::isfinite(reading.value)) {
+            return std::nullopt;
+        }
+        const double min = reading.minValue.value_or(reading.value);
+        double max = reading.maxValue.value_or(min + 1.0);
+        if (!(max > min)) {
+            max = min + 1.0;
+        }
+        return std::clamp((reading.value - min) / (max - min), 0.0, 1.0);
     }
 }

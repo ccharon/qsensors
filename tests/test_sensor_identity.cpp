@@ -4,7 +4,7 @@
 
 #include <QtTest/QtTest>
 
-// Verifies chipFingerprint and SensorIdentity::sensorKey correctness.
+// Verifies SensorIdentity::chipFingerprint and SensorIdentity::sensorKey.
 class SensorIdentityTest final : public QObject {
     Q_OBJECT
 
@@ -16,6 +16,7 @@ private slots:
     void sensorKey_different_subfeature_different_key();
     void sensorKey_different_category_different_key();
     void sensorKey_different_chip_different_key();
+    void sensorKey_ignores_unit_and_label();
 };
 
 void SensorIdentityTest::chipFingerprint_deduplicates_chips() {
@@ -24,7 +25,7 @@ void SensorIdentityTest::chipFingerprint_deduplicates_chips() {
     readings.push_back({.chip = QStringLiteral("coretemp-isa-0000")});
     readings.push_back({.chip = QStringLiteral("nct6798d-isa-0290")});
 
-    const QString fp = chipFingerprint(readings);
+    const QString fp = SensorIdentity::chipFingerprint(readings);
     const QStringList lines = fp.split(QStringLiteral("\n"));
     QCOMPARE(lines.size(), 2);
     QVERIFY(lines.contains(QStringLiteral("coretemp-isa-0000")));
@@ -40,11 +41,11 @@ void SensorIdentityTest::chipFingerprint_is_order_independent() {
     order2.push_back({.chip = QStringLiteral("chip-b")});
     order2.push_back({.chip = QStringLiteral("chip-a")});
 
-    QCOMPARE(chipFingerprint(order1), chipFingerprint(order2));
+    QCOMPARE(SensorIdentity::chipFingerprint(order1), SensorIdentity::chipFingerprint(order2));
 }
 
 void SensorIdentityTest::chipFingerprint_empty_readings() {
-    QCOMPARE(chipFingerprint({}), QString());
+    QCOMPARE(SensorIdentity::chipFingerprint({}), QString());
 }
 
 void SensorIdentityTest::sensorKey_same_reading_same_key() {
@@ -102,6 +103,21 @@ void SensorIdentityTest::sensorKey_different_chip_different_key() {
     r.chip = QStringLiteral("chip-b");
     const QString key2 = SensorIdentity::sensorKey(r);
     QVERIFY(key1 != key2);
+}
+
+void SensorIdentityTest::sensorKey_ignores_unit_and_label() {
+    SensorReading r{
+        .chip = QStringLiteral("macsmc_battery-isa-0000"),
+        .category = SensorCategory::Currents,
+        .feature = QStringLiteral("curr1"),
+        .featureNumber = 3,
+        .subfeatureNumber = 7,
+        .unit = SensorUnit::Ampere,
+    };
+    const QString key = SensorIdentity::sensorKey(r);
+    r.unit = SensorUnit::Milliampere;
+    r.feature = QStringLiteral("Battery Current");
+    QCOMPARE(SensorIdentity::sensorKey(r), key);
 }
 
 QTEST_APPLESS_MAIN(SensorIdentityTest)

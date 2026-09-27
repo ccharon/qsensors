@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "sensors_backend.h"
+#include "sensor_reading.h"
 
 #include <QFrame>
 #include <QHash>
@@ -24,8 +24,11 @@ class SensorsPanel final : public QWidget {
 public:
     explicit SensorsPanel(QWidget *parent = nullptr);
 
-    /** Injects externally persisted chip expand/collapse state before rendering. */
+    /** Replaces the expand/collapse state per chip; existing sections follow immediately. */
     void setChipExpandedState(const QHash<QString, bool> &state);
+
+    /** Expand/collapse state per chip name, for persistence. */
+    [[nodiscard]] QHash<QString, bool> chipExpandedState() const;
 
     /** Updates panel data and rebuilds widget tree only when sensor structure changed. */
     void setReadings(const QVector<SensorReading> &readings, int viewportWidth);
@@ -35,9 +38,6 @@ public:
 
     /** Minimum width required so each category can still render at least one sensor column. */
     [[nodiscard]] int minimumRequiredWidth() const;
-
-signals:
-    void chipExpandedStateChanged(const QHash<QString, bool> &state);
 
 private:
     /** One persistent UI section per chip, reused across refresh cycles. */
@@ -94,6 +94,4 @@ private:
     QHash<QString, ChipSection> m_chipSections;
     // Cached grouping reused by minimumRequiredWidth(); avoids recomputing per tick.
     QMap<QString, QMap<SensorCategory, QVector<SensorReading>>> m_groupedCache;
-    // Last emitted expand state; suppresses redundant signals on polling ticks.
-    QHash<QString, bool> m_lastEmittedExpanded;
 };

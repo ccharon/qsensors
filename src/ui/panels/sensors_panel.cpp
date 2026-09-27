@@ -46,6 +46,15 @@ SensorsPanel::SensorsPanel(QWidget *parent) : QWidget(parent), m_layout(new QVBo
 
 void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_chipExpanded = state;
+    for (auto it = m_chipSections.begin(); it != m_chipSections.end(); ++it) {
+        // toggled() updates m_chipExpanded and the section visibility.
+        it->header->setChecked(state.value(it.key(), true));
+        m_chipExpanded.insert(it.key(), it->header->isChecked());
+    }
+}
+
+QHash<QString, bool> SensorsPanel::chipExpandedState() const {
+    return m_chipExpanded;
 }
 
 void SensorsPanel::setReadings(const QVector<SensorReading> &readings, const int viewportWidth) {
@@ -101,10 +110,6 @@ void SensorsPanel::renderReadings(const int viewportWidth) {
     updateVisibleReadings();
     setUpdatesEnabled(true);
     update();
-    if (m_chipExpanded != m_lastEmittedExpanded) {
-        m_lastEmittedExpanded = m_chipExpanded;
-        emit chipExpandedStateChanged(m_chipExpanded);
-    }
 }
 
 QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > SensorsPanel::groupReadingsByChip(const QVector<SensorReading> &readings) {
@@ -231,7 +236,6 @@ SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipNa
         m_chipExpanded[chipName] = expanded;
         liveSection.header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
         liveSection.content->setVisible(expanded);
-        emit chipExpandedStateChanged(m_chipExpanded);
     });
 
     chipLayout->addWidget(section.header);

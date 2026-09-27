@@ -82,22 +82,17 @@ MainWindow::MainWindow(QWidget *parent)
 
 void MainWindow::refreshReadings() {
     m_lastReadings = m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit);
-    const QString currentFingerprint = chipFingerprint(m_lastReadings);
+    const QString currentFingerprint = SensorIdentity::chipFingerprint(m_lastReadings);
     const bool structureChanged = (m_currentFingerprint != currentFingerprint);
 
     // Startup-loaded layout state applies only if chip composition still matches.
     if (!m_loadedChipFingerprint.isEmpty() && m_loadedChipFingerprint != currentFingerprint) {
-        m_chipExpanded.clear();
-        m_lastPushedExpanded.clear();
+        m_sensorsPanel->setChipExpandedState({});
         m_loadedChipFingerprint.clear();
         showNotice(tr("Sensor layout changed: UI config reset"));
     }
 
     m_currentFingerprint = currentFingerprint;
-    if (m_lastPushedExpanded != m_chipExpanded) {
-        m_sensorsPanel->setChipExpandedState(m_chipExpanded);
-        m_lastPushedExpanded = m_chipExpanded;
-    }
     m_sensorsPanel->setReadings(m_lastReadings, viewportWidth());
     if (structureChanged) {
         updateMinimumWindowWidthConstraint();
@@ -146,9 +141,6 @@ void MainWindow::setupUi() {
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
     m_settingsPanel = new SettingsPanel(m_contentContainer);
-    connect(m_sensorsPanel, &SensorsPanel::chipExpandedStateChanged, this, [this](const QHash<QString, bool> &state) {
-        m_chipExpanded = state;
-    });
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
@@ -229,14 +221,14 @@ void MainWindow::loadSettings() {
         restoreGeometry(state.geometry);
     }
 
-    m_chipExpanded = state.chipExpanded;
+    m_sensorsPanel->setChipExpandedState(state.chipExpanded);
     m_loadedChipFingerprint = state.sensorFingerprint;
 }
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
-    (void) MainWindowStateStore::save(saveGeometry(), m_currentFingerprint, m_chipExpanded);
+    (void) MainWindowStateStore::save(saveGeometry(), m_currentFingerprint, m_sensorsPanel->chipExpandedState());
 }
 
 void MainWindow::applyRuntimeConfig() {

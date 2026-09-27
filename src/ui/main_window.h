@@ -90,8 +90,6 @@ private:
     SettingsPanel *m_settingsPanel;
     QLabel *m_statusLabel;
     QTimer *m_timer;
-    QHash<QString, bool> m_chipExpanded;
-    QHash<QString, bool> m_lastPushedExpanded;
     QString m_loadedChipFingerprint;
     QString m_currentFingerprint;
     QVector<SensorReading> m_lastReadings;
