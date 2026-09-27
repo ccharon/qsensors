@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Automatic mA/mW scaling for Current and Power readings below 1 unit.
+  `libsensors` always reports base SI units (A, W), so sub-1 readings (e.g. a
+  laptop's AC input current, often a few mA) used to floor to `0.00` under the
+  fixed 2-decimal format. The scale is derived from the sensor's native
+  min/max limits when available. Sensors without limits switch with wide
+  hysteresis (to milli below 0.1, back to the base unit only from 10), so a
+  reading hovering around 1 W does not flicker between `mW` and `W`.
+- Native `power*_max`/`power*_min` limits (with `power*_cap`/`power*_crit`
+  fallback) are now read for Power sensors; previously only Temperature,
+  Voltage and Fan/Current categories read native firmware limits, and Power
+  tiles always relied on the synthetic default-range policy.
+
+### Fixed
+- Negative current and power readings (e.g. a discharging laptop battery)
+  are no longer shown as alerts when the firmware provides no minimum; the
+  synthetic range now extends below zero for these signed sensor types.
+
 ## [0.80.9] - 2026-06-04
 
 ### Added

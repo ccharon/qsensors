@@ -109,6 +109,16 @@ namespace {
                 range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MIN);
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
                 break;
+            case SENSORS_SUBFEATURE_POWER_INPUT:
+                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MIN);
+                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MAX);
+                if (!range.max) {
+                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_CAP);
+                }
+                if (!range.max) {
+                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_CRIT);
+                }
+                break;
             default:
                 break;
         }
@@ -164,7 +174,8 @@ namespace {
     }
 
     bool appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature,
-                              QVector<SensorReading> &readings, const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
+                              QVector<SensorReading> &readings, const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit,
+                              QHash<QString, bool> &milliScaleLatch) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
 
         if (selected.subfeature == nullptr) {
@@ -187,6 +198,14 @@ namespace {
         };
 
         RangeInfo nativeRange = readRange(chip, feature, selected.type);
+        const QString latchKey = chipName + QLatin1Char(':') + QString::number(feature->number);
+        const auto latchIt = milliScaleLatch.constFind(latchKey);
+        std::optional<bool> latchedMilli = latchIt != milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
+        SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, nativeRange.min, nativeRange.max,
+                                                    &latchedMilli);
+        if (latchedMilli.has_value()) {
+            milliScaleLatch.insert(latchKey, *latchedMilli);
+        }
         SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, nativeRange.min, nativeRange.max, defaultFanMaxRpm);
         applyRangeToReading(reading, nativeRange.min, nativeRange.max);
         applyTemperatureUnitToReading(reading, temperatureUnit);
@@ -203,7 +222,8 @@ namespace {
     }
 
     void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings,
-                            const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
+                            const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit,
+                            QHash<QString, bool> &milliScaleLatch) {
         const QString chipName = chipNameFrom(chip);
         if (chipName.isEmpty()) {
             return;
@@ -212,7 +232,7 @@ namespace {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, chipName, feature, readings, defaultFanMaxRpm, temperatureUnit);
+            appendFeatureReading(chip, chipName, feature, readings, defaultFanMaxRpm, temperatureUnit, milliScaleLatch);
         }
     }
 }
@@ -243,7 +263,7 @@ QString SensorsBackend::lastError() const {
     return m_lastError;
 }
 
-QVector<SensorReading> SensorsBackend::readAll(const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) const {
+QVector<SensorReading> SensorsBackend::readAll(const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
     QVector<SensorReading> readings;
     if (!m_initialized) {
         return readings;
@@ -252,7 +272,7 @@ QVector<SensorReading> SensorsBackend::readAll(const int defaultFanMaxRpm, const
     const sensors_chip_name *chip = nullptr;
     int chipNr = 0;
     while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings, defaultFanMaxRpm, temperatureUnit);
+        appendChipReadings(chip, readings, defaultFanMaxRpm, temperatureUnit, m_milliScaleLatch);
     }
 
     return readings;

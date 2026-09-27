@@ -5,6 +5,7 @@
 
 #include "runtime_config.h"
 
+#include <QHash>
 #include <QString>
 #include <QVector>
 #include <optional>
@@ -24,7 +25,9 @@ enum class SensorUnit {
     Volt,
     Rpm,
     Ampere,
+    Milliampere,
     Watt,
+    Milliwatt,
     Unknown
 };
 
@@ -35,7 +38,9 @@ enum class SensorUnit {
         case SensorUnit::Volt: return QStringLiteral("V");
         case SensorUnit::Rpm: return QStringLiteral("RPM");
         case SensorUnit::Ampere: return QStringLiteral("A");
+        case SensorUnit::Milliampere: return QStringLiteral("mA");
         case SensorUnit::Watt: return QStringLiteral("W");
+        case SensorUnit::Milliwatt: return QStringLiteral("mW");
         case SensorUnit::Unknown: return QString();
     }
     return QString();
@@ -73,10 +78,16 @@ public:
     /** Human-readable backend init error. */
     [[nodiscard]] QString lastError() const;
 
-    /** Snapshot of all supported sensor input values. */
-    [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit) const;
+    /**
+     * Snapshot of all supported sensor input values. Not const: remembers the
+     * milli/base unit chosen per limit-less current/power sensor across polls
+     * (hysteresis, see SensorsPolicy::applyCurrentPowerUnitScaling).
+     */
+    [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit);
 
 private:
     bool m_initialized;
     QString m_lastError;
+    // Current unit scale (true = mA/mW) per "chip:feature" for sensors without native limits.
+    QHash<QString, bool> m_milliScaleLatch;
 };
