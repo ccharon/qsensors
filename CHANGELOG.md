@@ -28,6 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sensor card tooltip with the full sensor name, chip and the min/max limits
   in display units (or a note when the sensor has no limits).
 
+- `cmake --install` now installs the desktop entry and the app icon
+  (256 px PNG and scalable SVG) to the XDG locations, so packages no longer
+  need to copy them separately. The desktop entry gained a Portuguese comment.
+
 ### Changed
 - The LCD value display is now drawn as a vector segment display instead of
   glyphs cut from the xsensors theme bitmap. Digits keep the slanted

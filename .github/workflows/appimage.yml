@@ -58,13 +58,6 @@ jobs:
       - name: Install to AppDir
         run: DESTDIR=AppDir cmake --install build --prefix /usr --config Release --strip
 
-      - name: Add desktop entry and icon
-        run: |
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
-          cp gentoo/sys-apps/qsensors/files/qsensors.desktop AppDir/usr/share/applications/qsensors.desktop
-          cp resources/icons/qsensors.png AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png
-
       - name: Download linuxdeploy tooling
         run: |
           set -euo pipefail

@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=qsensors
+Comment=Hardware sensor monitor using libsensors
+Comment[de]=Hardware-Sensorüberwachung mit libsensors
+Comment[fr]=Moniteur de capteurs matériels utilisant libsensors
+Comment[es]=Monitor de sensores de hardware con libsensors
+Comment[pt]=Monitor de sensores de hardware com libsensors
+Exec=qsensors
+Icon=qsensors
+Terminal=false
+Categories=System;Monitor;

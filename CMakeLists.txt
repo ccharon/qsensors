@@ -64,7 +64,15 @@ else ()
     target_link_libraries(qsensors ${SENSORS_LIBRARY})
 endif ()
 
-install(TARGETS qsensors RUNTIME DESTINATION bin)
+include(GNUInstallDirs)
+install(TARGETS qsensors RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Desktop integration (XDG): menu entry plus bitmap and scalable app icon.
+install(FILES resources/qsensors.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/icons/qsensors.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+install(FILES resources/icons/qsensors.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_QUIET TRUE)
