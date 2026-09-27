@@ -43,6 +43,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   column. Remaining width stretches the sensor cards (150 to 200 px), so rows
   fill the window instead of leaving an empty margin; all cards share one
   width, set by the chip with the least spare width.
+- The window cannot be dragged taller than its content; it is never shrunk
+  automatically when the content gets shorter. Maximized and full-screen
+  windows fill the screen. Without a saved window size the first height fits
+  the content.
+- The vertical scrollbar only appears when the content does not fit; the
+  cards narrow instead of being covered by it.
 - AppImages bundle Qt 6.8 and the Wayland platform plugin, so they run
   natively on Wayland and still on X11. The x86_64 AppImage now needs glibc
   2.28 (was 2.35), which adds RHEL/Alma/Rocky 8 and 9, Debian 11 and Ubuntu

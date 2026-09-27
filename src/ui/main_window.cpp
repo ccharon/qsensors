@@ -10,6 +10,7 @@
 #include "settings_panel.h"
 #include "sensors_panel.h"
 #include "status_line.h"
+#include "window_sizing.h"
 
 #include <QApplication>
 #include <QResizeEvent>
@@ -110,7 +111,7 @@ void MainWindow::setupUi() {
     m_scrollArea = new QScrollArea(central);
     m_scrollArea->setWidgetResizable(true);
     m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
+    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 
     m_contentContainer = new QWidget(m_scrollArea);
     auto *contentLayout = new QVBoxLayout(m_contentContainer);
@@ -144,6 +145,11 @@ void MainWindow::setupUi() {
     layout->addWidget(m_scrollArea);
     setCentralWidget(central);
 
+    // The viewport narrows when the scrollbar appears; the cards follow its width.
+    m_scrollArea->viewport()->installEventFilter(this);
+    // Expanding or collapsing sections changes the content height.
+    m_contentContainer->installEventFilter(this);
+
     // Own status widget instead of QStatusBar::showMessage(), which leaves normal
     // widgets visible when the message is set before the window is shown.
     m_statusLine = new StatusLine(this);
@@ -161,7 +167,43 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    m_sensorsPanel->relayout(viewportWidth());
+    updateHeightLimit();
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
+    if (watched == m_scrollArea->viewport() && event->type() == QEvent::Resize) {
+        m_sensorsPanel->relayout(viewportWidth());
+    } else if (watched == m_contentContainer && event->type() == QEvent::LayoutRequest) {
+        // The layout recomputes its size hint after this event; read it afterwards.
+        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+int MainWindow::contentWindowHeight() const {
+    return height() - m_scrollArea->viewport()->height() + m_contentContainer->layout()->sizeHint().height();
+}
+
+int MainWindow::availableScreenHeight() const {
+    return screen() != nullptr ? screen()->availableGeometry().height() : height();
+}
+
+void MainWindow::updateHeightLimit() {
+    if (isMaximized() || isFullScreen()) {
+        setMaximumHeight(QWIDGETSIZE_MAX);
+        return;
+    }
+    if (m_fitHeightToContent) {
+        m_fitHeightToContent = false;
+        // Raise the limit first; an earlier, smaller limit would clip the resize.
+        const int fitted = std::min(contentWindowHeight(), availableScreenHeight());
+        setMaximumHeight(std::max(fitted, maximumHeight()));
+        resize(width(), fitted);
+    }
+    const int limit = WindowSizing::maximumHeight(contentWindowHeight(), height(), availableScreenHeight());
+    if (limit != maximumHeight()) {
+        setMaximumHeight(limit);
+    }
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
@@ -170,7 +212,11 @@ void MainWindow::showEvent(QShowEvent *event) {
         m_sensorsPanel->relayout(viewportWidth());
         ensureNoHorizontalOverflow(m_hasSavedGeometry ? AppTheme::kRestoredWidthFitPadding : AppTheme::kInitialWidthFitPadding);
         updateMinimumWindowWidthConstraint();
+        // Without saved geometry the first height fits the content; applied once the
+        // layout has computed its size (see updateHeightLimit()).
+        m_fitHeightToContent = !m_hasSavedGeometry;
         m_initialLayoutApplied = true;
+        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
     }
 }
 
@@ -180,6 +226,9 @@ void MainWindow::changeEvent(QEvent *event) {
     // switch arrives here as the resulting PaletteChange (or ThemeChange).
     if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ThemeChange) {
         applyThemeRefresh();
+    } else if (event->type() == QEvent::WindowStateChange) {
+        // Maximized and full-screen windows fill the screen regardless of content.
+        updateHeightLimit();
     }
 }
 

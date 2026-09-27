@@ -34,14 +34,17 @@ protected:
     /** Persists settings and window state before closing. */
     void closeEvent(QCloseEvent *event) override;
 
-    /** Reflows sensor cards to current viewport width while preserving expand state. */
+    /** Re-evaluates the height limit after the user resized the window. */
     void resizeEvent(QResizeEvent *event) override;
 
     /** Applies initial relayout and optional width fit once after first data is shown. */
     void showEvent(QShowEvent *event) override;
 
-    /** Re-applies style sheets when the system switches light/dark mode at runtime. */
+    /** Re-applies style sheets on light/dark switches; lifts the height limit when maximized. */
     void changeEvent(QEvent *event) override;
+
+    /** Relayouts on viewport width changes and tracks content height changes. */
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
     /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
@@ -76,6 +79,15 @@ private:
     /** Persists runtime config, geometry, chip order, expand state and chip fingerprint. */
     void saveSettings() const;
 
+    /** Window height at which the whole content fits without scrolling. */
+    [[nodiscard]] int contentWindowHeight() const;
+
+    /** Available height of the window's screen. */
+    [[nodiscard]] int availableScreenHeight() const;
+
+    /** Keeps the window from being dragged taller than its content (see WindowSizing). */
+    void updateHeightLimit();
+
     /** Width available to the sensor panel inside the scroll area. */
     [[nodiscard]] int viewportWidth() const;
 
@@ -88,6 +100,7 @@ private:
     QTimer *m_timer;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
+    bool m_fitHeightToContent = false; // pending first height fit without saved geometry
     RuntimeConfig m_runtimeConfig;
     // Palette the style sheets were last resolved against; avoids redundant refreshes.
     QPalette m_styledPalette;

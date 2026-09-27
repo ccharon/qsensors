@@ -39,7 +39,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 **`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
-- `main_window`: polling, window sizing, status messages, settings load/save.
+- `main_window`: polling, window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
 - `panels/sensors_panel`: chip-grouped layout; distributes columns per category (most rows first) and stretches all cards to one shared width in the spare space; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
@@ -50,7 +50,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 
 **Build targets**: `qsensors_core` (static library with everything except `main.cpp`, `main_window` and the libsensors backend) is linked by the app and by every test. New sources go into `QSENSORS_CORE_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; both lists are also scanned for translations.
 
-**`tests/`**: 9 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 10 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 
