@@ -8,18 +8,24 @@
 #include <QString>
 #include <QStringList>
 #include <QVector>
+#include <utility>
 
 /** Stable identification of sensors and chips, independent of the UI. */
 namespace SensorIdentity {
-    /** Fingerprint of the chip set; changes when chips appear or disappear. */
+    /** Fingerprint of a chip set; order and duplicates do not matter. */
+    [[nodiscard]] inline QString chipSetFingerprint(QStringList chips) {
+        chips.removeDuplicates();
+        chips.sort();
+        return chips.join(QLatin1Char('\n'));
+    }
+
+    /** Fingerprint of the chips in @p readings; changes when chips appear or disappear. */
     [[nodiscard]] inline QString chipFingerprint(const QVector<SensorReading> &readings) {
         QStringList chips;
         chips.reserve(readings.size());
         for (const SensorReading &r: readings)
             chips.push_back(r.chip);
-        chips.removeDuplicates();
-        chips.sort();
-        return chips.join(QLatin1Char('\n'));
+        return chipSetFingerprint(std::move(chips));
     }
 
     /**

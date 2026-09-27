@@ -56,6 +56,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   immediately replaced by the reading count.
 - Resizing the window no longer recreates every sensor card; sections are only
   rebuilt when their column count changes.
+- The minimum window width is updated when a chip gains or loses a sensor
+  category; previously only added or removed chips were taken into account.
 - Invalid settings values fall back to the documented defaults (and are logged)
   instead of the minimum; out-of-range values are clamped with a log entry.
 - Runtime settings are saved as soon as they change, and a failed write is

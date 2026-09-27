@@ -31,7 +31,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 private slots:
-    /** Polls backend data, applies structure checks and refreshes visible state. */
+    /** Polls the backend and hands the readings to the sensors panel. */
     void refreshReadings();
 
 protected:
@@ -91,9 +91,6 @@ private:
     SettingsPanel *m_settingsPanel;
     QLabel *m_statusLabel;
     QTimer *m_timer;
-    QString m_loadedChipFingerprint;
-    QString m_currentFingerprint;
-    QVector<SensorReading> m_lastReadings;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
     RuntimeConfig m_runtimeConfig;

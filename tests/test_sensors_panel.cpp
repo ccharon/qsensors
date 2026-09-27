@@ -2,10 +2,12 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors_panel.h"
+#include "sensor_identity.h"
 #include "sensor_value_widget.h"
 
 #include <QApplication>
 #include <QPointer>
+#include <QSignalSpy>
 #include <QToolButton>
 #include <QtTest/QtTest>
 
@@ -18,6 +20,10 @@ private slots:
     void relayout_with_same_columns_keeps_widgets();
     void relayout_with_other_columns_rebuilds();
     void expand_state_roundtrip_and_apply();
+    void structure_signal_on_new_category_not_on_values();
+    void restored_state_dropped_for_other_chip_set();
+    void restored_state_kept_for_same_chip_set();
+    void fingerprint_and_count_follow_readings();
 };
 
 namespace {
@@ -100,6 +106,65 @@ void SensorsPanelTest::expand_state_roundtrip_and_apply() {
     // User toggles are reflected as well.
     headerFor(panel, QStringLiteral("chip-a"))->toggle();
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), true);
+}
+
+void SensorsPanelTest::structure_signal_on_new_category_not_on_values() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
+    panel.setReadings(sampleReadings(40.0), 800);
+    QCOMPARE(spy.count(), 1);
+
+    panel.setReadings(sampleReadings(45.0), 800);
+    QCOMPARE(spy.count(), 1);
+
+    // Same chip set, but chip-b grows to three categories (more than chip-a's two).
+    QVector<SensorReading> readings = sampleReadings(45.0);
+    readings.append({.chip = QStringLiteral("chip-b"), .category = SensorCategory::Voltages,
+                     .feature = QStringLiteral("in0"), .featureNumber = 1, .subfeatureNumber = 2,
+                     .value = 12.0, .unit = SensorUnit::Volt, .minValue = 11.0, .maxValue = 13.0});
+    readings.append({.chip = QStringLiteral("chip-b"), .category = SensorCategory::Power,
+                     .feature = QStringLiteral("power1"), .featureNumber = 2, .subfeatureNumber = 3,
+                     .value = 5.0, .unit = SensorUnit::Watt, .maxValue = 60.0});
+    const int widthBefore = panel.minimumRequiredWidth();
+    panel.setReadings(readings, 800);
+    QCOMPARE(spy.count(), 2);
+    QVERIFY(panel.minimumRequiredWidth() > widthBefore);
+}
+
+void SensorsPanelTest::restored_state_dropped_for_other_chip_set() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QStringLiteral("old-chip"));
+    panel.setReadings(sampleReadings(40.0), 800);
+
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), true);
+
+    // The check runs once; later polls do not reset again.
+    panel.setReadings(sampleReadings(41.0), 800);
+    QCOMPARE(spy.count(), 1);
+}
+
+void SensorsPanelTest::restored_state_kept_for_same_chip_set() {
+    const QVector<SensorReading> readings = sampleReadings(40.0);
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, SensorIdentity::chipFingerprint(readings));
+    panel.setReadings(readings, 800);
+
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+}
+
+void SensorsPanelTest::fingerprint_and_count_follow_readings() {
+    const QVector<SensorReading> readings = sampleReadings(40.0);
+    SensorsPanel panel;
+    QCOMPARE(panel.readingCount(), 0);
+    QVERIFY(panel.chipFingerprint().isEmpty());
+
+    panel.setReadings(readings, 800);
+    QCOMPARE(panel.readingCount(), 3);
+    QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(readings));
 }
 
 QTEST_MAIN(SensorsPanelTest)

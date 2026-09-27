@@ -4,7 +4,6 @@
 #include "main_window.h"
 
 #include "app_config_store.h"
-#include "sensor_identity.h"
 #include "theme/app_theme.h"
 #include "main_window_state_store.h"
 #include "settings_schema.h"
@@ -81,31 +80,18 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 void MainWindow::refreshReadings() {
-    m_lastReadings = m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit);
-    const QString currentFingerprint = SensorIdentity::chipFingerprint(m_lastReadings);
-    const bool structureChanged = (m_currentFingerprint != currentFingerprint);
-
-    // Startup-loaded layout state applies only if chip composition still matches.
-    if (!m_loadedChipFingerprint.isEmpty() && m_loadedChipFingerprint != currentFingerprint) {
-        m_sensorsPanel->setChipExpandedState({});
-        m_loadedChipFingerprint.clear();
-        showNotice(tr("Sensor layout changed: UI config reset"));
-    }
-
-    m_currentFingerprint = currentFingerprint;
-    m_sensorsPanel->setReadings(m_lastReadings, viewportWidth());
-    if (structureChanged) {
-        updateMinimumWindowWidthConstraint();
-    }
+    m_sensorsPanel->setReadings(m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit),
+                                viewportWidth());
     updateReadingsStatus();
 }
 
 void MainWindow::updateReadingsStatus() {
-    if (m_lastReadings.isEmpty()) {
+    const int count = m_sensorsPanel->readingCount();
+    if (count == 0) {
         setStatusMessage(tr("No sensors found. Run sensors-detect and check the lm-sensors configuration."));
         return;
     }
-    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
+    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(count).arg(m_runtimeConfig.pollingIntervalSec));
 }
 
 void MainWindow::showNotice(const QString &text) {
@@ -141,6 +127,10 @@ void MainWindow::setupUi() {
 
     m_sensorsPanel = new SensorsPanel(m_contentContainer);
     m_settingsPanel = new SettingsPanel(m_contentContainer);
+    connect(m_sensorsPanel, &SensorsPanel::structureChanged, this, &MainWindow::updateMinimumWindowWidthConstraint);
+    connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
+        showNotice(tr("Sensor layout changed: UI config reset"));
+    });
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
@@ -175,14 +165,12 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    if (!m_lastReadings.isEmpty()) {
-        m_sensorsPanel->relayout(viewportWidth());
-    }
+    m_sensorsPanel->relayout(viewportWidth());
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
-    if (!m_initialLayoutApplied && !m_lastReadings.isEmpty()) {
+    if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
         m_sensorsPanel->relayout(viewportWidth());
         ensureNoHorizontalOverflow(m_hasSavedGeometry ? AppTheme::kRestoredWidthFitPadding : AppTheme::kInitialWidthFitPadding);
         updateMinimumWindowWidthConstraint();
@@ -221,14 +209,14 @@ void MainWindow::loadSettings() {
         restoreGeometry(state.geometry);
     }
 
-    m_sensorsPanel->setChipExpandedState(state.chipExpanded);
-    m_loadedChipFingerprint = state.sensorFingerprint;
+    m_sensorsPanel->restoreChipExpandedState(state.chipExpanded, state.sensorFingerprint);
 }
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
-    (void) MainWindowStateStore::save(saveGeometry(), m_currentFingerprint, m_sensorsPanel->chipExpandedState());
+    (void) MainWindowStateStore::save(saveGeometry(), m_sensorsPanel->chipFingerprint(),
+                                      m_sensorsPanel->chipExpandedState());
 }
 
 void MainWindow::applyRuntimeConfig() {
