@@ -75,6 +75,7 @@ install_build_tools() {
     export PATH="$WORK/venv/bin:$PATH"
 }
 
+# qtdeclarative is only needed because lupdate links Qt6Qml; the app does not use QML.
 install_qt() {
     # CI restores $WORK/qt from its cache.
     if [ -x "$QT_DIR/bin/qmake" ]; then
@@ -82,7 +83,7 @@ install_qt() {
         return
     fi
     aqt install-qt "$QT_HOST" desktop "$QT_VERSION" "$QT_ARCH" \
-        --archives qtbase qtwayland qtsvg qttools qttranslations icu \
+        --archives qtbase qtwayland qtsvg qttools qttranslations qtdeclarative icu \
         --outputdir "$WORK/qt"
 }
 
