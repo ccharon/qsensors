@@ -6,21 +6,23 @@
 #include <QByteArray>
 #include <QHash>
 #include <QString>
+#include <QStringList>
 
+// Persistence of window geometry, chip order and per-chip expand state.
+
+/** Window state as loaded from QSettings. */
 struct MainWindowState {
     QByteArray geometry;
     QHash<QString, bool> chipExpanded;
-    QString sensorFingerprint;
-    bool hasGeometry = false;
+    QStringList chipOrder; // user-arranged order; empty means alphabetical
+    QString sensorFingerprint; // chip set the expand state belongs to
 };
 
 /** Reads/writes persisted main-window state via QSettings. */
 namespace MainWindowStateStore {
+    /** Loads the stored window state; missing entries stay empty. */
     [[nodiscard]] MainWindowState load();
 
-    void save(
-        const QByteArray &geometry,
-        const QString &sensorFingerprint,
-        const QHash<QString, bool> &chipExpanded
-    );
+    /** Writes the window state to disk; returns false (and logs) if it could not be stored. */
+    [[nodiscard]] bool save(const MainWindowState &state);
 }

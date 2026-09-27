@@ -7,7 +7,9 @@
 
 /** Reads/writes persisted runtime configuration via QSettings. */
 namespace AppConfigStore {
+    /** Loads the runtime config; missing or invalid values fall back to defaults and are logged. */
     [[nodiscard]] RuntimeConfig loadRuntimeConfig();
-    void saveRuntimeConfig(const RuntimeConfig &config);
-}
 
+    /** Writes the runtime config to disk; returns false (and logs) if it could not be stored. */
+    [[nodiscard]] bool saveRuntimeConfig(const RuntimeConfig &config);
+}

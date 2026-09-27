@@ -3,19 +3,19 @@
 
 #pragma once
 
+#include "collapsible_section.h"
 #include "runtime_config.h"
-
-#include <QFrame>
 
 class QFormLayout;
 class QSpinBox;
 class QComboBox;
 
-/** Collapsible settings section rendered at the bottom of the main structure. */
-class SettingsPanel final : public QFrame {
+/** Collapsed-by-default section with polling, fan fallback and temperature unit controls. */
+class SettingsPanel final : public CollapsibleSection {
     Q_OBJECT
 
 public:
+    /** Creates the section collapsed; values are set by the owner via the setters. */
     explicit SettingsPanel(QWidget *parent = nullptr);
 
     /** Applies persisted polling interval without re-emitting change signals. */
@@ -29,8 +29,11 @@ public:
     [[nodiscard]] int minimumRequiredWidth() const;
 
 signals:
+    /** User committed a new polling interval in seconds. */
     void pollingIntervalChanged(int seconds);
+    /** User committed a new fallback maximum for fans without firmware limits. */
     void fanDefaultMaxRpmChanged(int rpm);
+    /** User selected a different temperature unit. */
     void temperatureUnitChanged(TemperatureUnit unit);
 
 private:

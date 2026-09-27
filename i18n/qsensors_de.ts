@@ -2,6 +2,13 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="de">
 <context>
+    <name>CollapsibleSection</name>
+    <message>
+        <source>Click to collapse or expand, drag to reorder</source>
+        <translation>Klicken zum Ein- oder Ausklappen, ziehen zum Umsortieren</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>libsensors init failed: %1</source>
@@ -12,8 +19,39 @@
         <translation>Sensorlayout geändert: UI-Konfiguration zurückgesetzt</translation>
     </message>
     <message>
+        <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
+        <translation>Keine Sensoren gefunden. sensors-detect ausführen und die lm-sensors-Konfiguration prüfen.</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Messwerte: %1 | Aktualisierung: %2s</translation>
+    </message>
+    <message>
+        <source>Settings could not be saved</source>
+        <translation>Einstellungen konnten nicht gespeichert werden</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
+        <translation>Die Einstellungen stammen von einer neueren qsensors-Version und werden so weit wie möglich übernommen</translation>
+    </message>
+</context>
+<context>
+    <name>SensorValueWidget</name>
+    <message>
+        <source>Chip: %1</source>
+        <translation>Chip: %1</translation>
+    </message>
+    <message>
+        <source>Min: %1</source>
+        <translation>Min: %1</translation>
+    </message>
+    <message>
+        <source>Max: %1</source>
+        <translation>Max: %1</translation>
+    </message>
+    <message>
+        <source>No limits available</source>
+        <translation>Keine Grenzwerte verfügbar</translation>
     </message>
 </context>
 <context>

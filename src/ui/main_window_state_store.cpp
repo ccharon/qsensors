@@ -2,11 +2,13 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "main_window_state_store.h"
+#include "settings_keys.h"
 #include "settings_schema.h"
 
 #include <QSettings>
 #include <QStringList>
 #include <QUrl>
+#include <QDebug>
 
 namespace {
     // Chip names may contain '/' which QSettings interprets as a group separator.
@@ -24,33 +26,36 @@ MainWindowState MainWindowStateStore::load() {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
 
-    state.geometry = settings.value(QStringLiteral("ui/geometry")).toByteArray();
-    state.hasGeometry = !state.geometry.isEmpty();
+    state.geometry = settings.value(SettingsKeys::kWindowGeometry).toByteArray();
 
-    settings.beginGroup(QStringLiteral("ui/chips"));
+    settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     const QStringList keys = settings.childKeys();
     for (const QString &key: keys) {
         state.chipExpanded.insert(decodeChipKey(key), settings.value(key, true).toBool());
     }
     settings.endGroup();
 
-    state.sensorFingerprint = settings.value(QStringLiteral("sensors/fingerprint")).toString();
+    state.chipOrder = settings.value(SettingsKeys::kChipOrder).toStringList();
+    state.sensorFingerprint = settings.value(SettingsKeys::kSensorFingerprint).toString();
     return state;
 }
 
-void MainWindowStateStore::save(
-    const QByteArray &geometry,
-    const QString &sensorFingerprint,
-    const QHash<QString, bool> &chipExpanded
-) {
+bool MainWindowStateStore::save(const MainWindowState &state) {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
-    settings.setValue(QStringLiteral("ui/geometry"), geometry);
-    settings.setValue(QStringLiteral("sensors/fingerprint"), sensorFingerprint);
-    settings.beginGroup(QStringLiteral("ui/chips"));
+    settings.setValue(SettingsKeys::kWindowGeometry, state.geometry);
+    settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
+    settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);
+    settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     settings.remove(QString());
-    for (auto it = chipExpanded.constBegin(); it != chipExpanded.constEnd(); ++it) {
+    for (auto it = state.chipExpanded.constBegin(); it != state.chipExpanded.constEnd(); ++it) {
         settings.setValue(encodeChipKey(it.key()), it.value());
     }
     settings.endGroup();
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        qWarning("qsensors: could not write window state to %s", qPrintable(settings.fileName()));
+        return false;
+    }
+    return true;
 }

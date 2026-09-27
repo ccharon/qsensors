@@ -29,19 +29,28 @@ cmake --build build --target update_translations
 
 Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` list → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
 
-**`src/sensors/`** — libsensors integration layer. `sensors_backend.{h,cpp}` handles init/cleanup lifecycle, chip enumeration, and produces `SensorReading` structs. `sensors_policy.h` centralizes range normalization for all sensor categories (fills missing min/max with category defaults). Temperature unit conversion happens here, not in the UI.
+**`src/sensors/`**: sensor data, rules and the libsensors integration; no Qt widgets.
+- `sensor_reading.h`: the normalized model (`SensorReading`, `SensorUnit`, `SensorCategory`, unit symbols) used by all layers.
+- `sensors_backend.{h,cpp}`: libsensors init/cleanup lifecycle, chip enumeration, reading limits; produces `SensorReading` lists. Temperature unit conversion happens here.
+- `sensors_policy.h`: rules applied to readings: mA/mW scaling, default ranges when firmware has no limits, alert state and range fraction.
+- `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
+- `sensor_identity.h`: widget keys and the chip fingerprint.
 
-**`src/config/`** — runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1–10 s, default 2 s), and fan RPM fallback bounds (500–9999, default 5000). `app_config_store.{h,cpp}` reads/writes these via QSettings. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
+**`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
 
-**`src/ui/`** — presentation only; no business logic.
-- `main_window`: polling orchestration, window sizing, boots persistence.
-- `panels/sensors_panel`: chip-grouped layout; separates structural rebuilds from value-only patches to avoid layout thrash.
+**`src/ui/`**: presentation only; business rules live in `src/sensors/`.
+- `main_window`: polling, window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
+- `panels/sensors_panel`: chip-grouped layout; distributes columns per category (most rows first) and stretches all cards to one shared width in the spare space; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
-- `widgets/sensor_value_widget`: per-sensor card (title, LCD value, range bar).
-- `widgets/lcd_display_widget` + `lcd_glyph_atlas`: atlas-based LCD glyph rendering.
-- `theme/app_theme.h`: sizing/spacing/column constants — change layout here, not in widget code.
+- `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
+- `widgets/status_line`: status bar text with timed notices on top of the permanent status.
+- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip and limits).
+- `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
+- `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
-**`tests/`** — 6 unit test files covering range policy, LCD logic, glyph model, sensor contracts, settings persistence/migration, and sensor identity. Treat failing tests as blockers.
+**Build targets**: `qsensors_core` (static library with everything except `main.cpp`, `main_window` and the libsensors backend) is linked by the app and by every test. New sources go into `QSENSORS_CORE_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; both lists are also scanned for translations.
+
+**`tests/`**: 10 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 
@@ -54,13 +63,22 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - packaging work beyond currently requested targets
 - silent settings-schema/key migrations
 
+## Branching & Releases
+
+- `develop` is the development branch: all work and pull requests target it. CI (`.github/workflows/ci.yml`) runs the release build (`appimage.yml`: both AppImages, all tests, translation check) on every push to `develop` and on PRs; the AppImages are kept as workflow artifacts for 14 days.
+- `main` holds released states only; `develop` is merged into `main` for a release.
+- A release is cut by tagging a commit on `main` with `vX.Y.Z` (e.g. `v0.80.10`). `.github/workflows/release.yml` then verifies the tag is on `main`, matches `project(qsensors VERSION …)` in `CMakeLists.txt` and has a `## [X.Y.Z]` section in `CHANGELOG.md`, builds both AppImages via the same `appimage.yml` and creates a **draft** GitHub release.
+- AppImages: `packaging/appimage/build.sh` does the whole build (system packages, Qt 6.8.3 via aqtinstall, build, tests, linuxdeploy) inside a container whose glibc is the minimum glibc: `manylinux_2_28` for x86_64 (2.28), `ubuntu:24.04` for arm64 (2.39, official Qt arm64 binaries need 2.38). Both run natively on GitHub runners (`ubuntu-24.04`, `ubuntu-24.04-arm`).
+- Release prep on `develop`: bump the version in `CMakeLists.txt`, turn `[Unreleased]` into `[X.Y.Z] - date` in `CHANGELOG.md`, then merge to `main` and tag.
+- Dependabot (`.github/dependabot.yml`) keeps GitHub Actions up to date via PRs against `develop`.
+
 ## Working Guidelines
 
 - prefer small, isolated commits per change package
 - align briefly before larger refactors or architecture changes
 - run build + tests after functional changes; failing tests are blockers
 - any behavior change should add or update automated tests when feasible
-- explicit, visible error reporting — no silent failure
+- explicit, visible error reporting; no silent failure
 - robust behavior if sensors configuration is missing or invalid
 - avoid overwriting unrelated in-progress worktree changes
 

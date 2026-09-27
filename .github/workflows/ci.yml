@@ -1,0 +1,20 @@
+name: CI
+
+# Every change on develop and every pull request builds, tests and packages
+# both AppImages the same way a release does; the AppImages are kept as
+# workflow artifacts for testing.
+on:
+  push:
+    branches: ["develop"]
+  pull_request:
+    branches: ["main", "develop"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    uses: ./.github/workflows/appimage.yml
+    with:
+      version: dev-${{ github.run_number }}

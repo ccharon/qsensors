@@ -11,59 +11,23 @@
 #include <QSignalBlocker>
 #include <QSpinBox>
 #include <QComboBox>
-#include <QToolButton>
 #include <QVBoxLayout>
-#include <QWidget>
 
 SettingsPanel::SettingsPanel(QWidget *parent)
-    : QFrame(parent), m_pollingSpin(nullptr), m_fanMaxRpmSpin(nullptr), m_temperatureUnitCombo(nullptr) {
-    setObjectName(QStringLiteral("settingsCard"));
-    setStyleSheet(AppTheme::settingsCardStyle());
-
-    auto *settingsLayout = new QVBoxLayout(this);
-    settingsLayout->setContentsMargins(0, 0, 0, 0);
-    settingsLayout->setSpacing(0);
-
-    auto *header = new QToolButton(this);
-    header->setText(tr("Settings"));
-    header->setCheckable(true);
-    header->setChecked(false);
-    header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    header->setArrowType(Qt::RightArrow);
-    header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    header->setStyleSheet(AppTheme::sectionHeaderStyle());
-
-    auto *content = new QWidget(this);
-    auto *contentLayout = new QVBoxLayout(content);
-    contentLayout->setContentsMargins(
-        AppTheme::kSectionInset, AppTheme::kSectionInset,
-        AppTheme::kSectionInset, AppTheme::kSectionInset
-    );
-    contentLayout->setSpacing(AppTheme::kSectionInset);
-    content->setVisible(false);
-
-    // Header controls local collapse state; intentionally not persisted.
-    connect(header, &QToolButton::toggled, this, [header, content](bool expanded) {
-        header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
-        content->setVisible(expanded);
-    });
-
-    settingsLayout->addWidget(header);
-
+    : CollapsibleSection(tr("Settings"), false, parent), m_pollingSpin(nullptr), m_fanMaxRpmSpin(nullptr),
+      m_temperatureUnitCombo(nullptr) {
     auto *formLayout = new QFormLayout();
     formLayout->setContentsMargins(0, 0, 0, 0);
     formLayout->setHorizontalSpacing(AppTheme::kSectionInset);
     formLayout->setVerticalSpacing(AppTheme::kSectionInset);
     formLayout->setFieldGrowthPolicy(QFormLayout::FieldsStayAtSizeHint);
 
-    buildPollingRow(formLayout, content);
-    buildFanRpmRow(formLayout, content);
-    buildTemperatureUnitRow(formLayout, content);
+    buildPollingRow(formLayout, content());
+    buildFanRpmRow(formLayout, content());
+    buildTemperatureUnitRow(formLayout, content());
 
-    contentLayout->addLayout(formLayout);
-    contentLayout->addStretch(1);
-
-    settingsLayout->addWidget(content);
+    contentLayout()->addLayout(formLayout);
+    contentLayout()->addStretch(1);
 }
 
 void SettingsPanel::setPollingInterval(const int seconds) {
@@ -88,29 +52,31 @@ int SettingsPanel::minimumRequiredWidth() const {
     return minimumSizeHint().width();
 }
 
+namespace {
+    // Emits valueChanged only on commit (Enter/focus loss), not per keystroke.
+    QSpinBox *createSpinBox(QWidget *parent, const int min, const int max, const int step) {
+        auto *spin = new QSpinBox(parent);
+        spin->setRange(min, max);
+        spin->setSingleStep(step);
+        spin->setKeyboardTracking(false);
+        spin->setAccelerated(true);
+        spin->setStyleSheet(AppTheme::spinBoxStyle());
+        return spin;
+    }
+}
+
 void SettingsPanel::buildPollingRow(QFormLayout *form, QWidget *parent) {
-    auto *label = new QLabel(tr("Polling Interval (s):"), parent);
-    m_pollingSpin = new QSpinBox(parent);
-    m_pollingSpin->setRange(RuntimeConfigLimits::kMinPollingIntervalSec,
-                            RuntimeConfigLimits::kMaxPollingIntervalSec);
-    m_pollingSpin->setKeyboardTracking(false);
-    m_pollingSpin->setAccelerated(true);
-    m_pollingSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    m_pollingSpin = createSpinBox(parent, RuntimeConfigLimits::kMinPollingIntervalSec,
+                                  RuntimeConfigLimits::kMaxPollingIntervalSec, 1);
     connect(m_pollingSpin, &QSpinBox::valueChanged, this, &SettingsPanel::pollingIntervalChanged);
-    form->addRow(label, m_pollingSpin);
+    form->addRow(new QLabel(tr("Polling Interval (s):"), parent), m_pollingSpin);
 }
 
 void SettingsPanel::buildFanRpmRow(QFormLayout *form, QWidget *parent) {
-    auto *label = new QLabel(tr("Fan Max RPM:"), parent);
-    m_fanMaxRpmSpin = new QSpinBox(parent);
-    m_fanMaxRpmSpin->setRange(RuntimeConfigLimits::kMinFanDefaultMaxRpm,
-                              RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
-    m_fanMaxRpmSpin->setSingleStep(100);
-    m_fanMaxRpmSpin->setKeyboardTracking(false);
-    m_fanMaxRpmSpin->setAccelerated(true);
-    m_fanMaxRpmSpin->setStyleSheet(AppTheme::spinBoxStyle());
+    m_fanMaxRpmSpin = createSpinBox(parent, RuntimeConfigLimits::kMinFanDefaultMaxRpm,
+                                    RuntimeConfigLimits::kMaxFanDefaultMaxRpm, 100);
     connect(m_fanMaxRpmSpin, &QSpinBox::valueChanged, this, &SettingsPanel::fanDefaultMaxRpmChanged);
-    form->addRow(label, m_fanMaxRpmSpin);
+    form->addRow(new QLabel(tr("Fan Max RPM:"), parent), m_fanMaxRpmSpin);
 }
 
 void SettingsPanel::buildTemperatureUnitRow(QFormLayout *form, QWidget *parent) {
@@ -121,7 +87,7 @@ void SettingsPanel::buildTemperatureUnitRow(QFormLayout *form, QWidget *parent) 
     m_temperatureUnitCombo->setStyleSheet(AppTheme::comboBoxStyle());
     connect(m_temperatureUnitCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         const QString token = m_temperatureUnitCombo->itemData(index).toString();
-        emit temperatureUnitChanged(temperatureUnitFromToken(QStringView(token)));
+        emit temperatureUnitChanged(temperatureUnitFromToken(token).value_or(TemperatureUnit::Celsius));
     });
     form->addRow(label, m_temperatureUnitCombo);
 }

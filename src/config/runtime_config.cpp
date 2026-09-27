@@ -6,10 +6,13 @@
 #include <QString>
 #include <QStringView>
 
-TemperatureUnit temperatureUnitFromToken(const QStringView token) {
-    return token.compare(QStringLiteral("F"), Qt::CaseInsensitive) == 0
-               ? TemperatureUnit::Fahrenheit
-               : TemperatureUnit::Celsius;
+std::optional<TemperatureUnit> temperatureUnitFromToken(const QStringView token) {
+    const QStringView trimmed = token.trimmed();
+    if (trimmed.compare(QStringLiteral("F"), Qt::CaseInsensitive) == 0)
+        return TemperatureUnit::Fahrenheit;
+    if (trimmed.compare(QStringLiteral("C"), Qt::CaseInsensitive) == 0)
+        return TemperatureUnit::Celsius;
+    return std::nullopt;
 }
 
 QString temperatureUnitToToken(const TemperatureUnit unit) {

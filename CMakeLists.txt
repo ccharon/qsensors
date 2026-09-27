@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 4.2)
-project(qsensors VERSION 0.80.9)
+project(qsensors VERSION 0.80.10)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_AUTOMOC ON)
@@ -26,45 +26,64 @@ if (NOT SENSORS_FOUND)
     find_library(SENSORS_LIBRARY NAMES sensors REQUIRED)
 endif ()
 
-add_executable(qsensors
-        src/main.cpp
-        resources/resources.qrc
+# Everything except the libsensors backend and the main window; shared by the
+# app and the tests, so it needs no libsensors.
+set(QSENSORS_CORE_SOURCES
         src/config/app_config_store.cpp
         src/config/runtime_config.cpp
         src/config/settings_schema.cpp
-        src/ui/main_window.cpp
+        src/sensors/sensor_format.cpp
         src/ui/main_window_state_store.cpp
         src/ui/theme/app_theme.cpp
         src/ui/panels/settings_panel.cpp
         src/ui/panels/sensors_panel.cpp
-        src/ui/widgets/lcd_glyph_atlas.cpp
+        src/ui/widgets/collapsible_section.cpp
+        src/ui/widgets/lcd_segment_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
+        src/ui/widgets/status_line.cpp
+)
+set(QSENSORS_APP_SOURCES
+        src/main.cpp
+        src/ui/main_window.cpp
         src/sensors/sensors_backend.cpp
 )
-target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
-target_include_directories(qsensors PRIVATE
+
+add_library(qsensors_core STATIC ${QSENSORS_CORE_SOURCES})
+target_include_directories(qsensors_core PUBLIC
         src/config
         src/ui
         src/ui/panels
         src/ui/widgets
         src/sensors
 )
-if (NOT SENSORS_FOUND)
-    target_include_directories(qsensors PRIVATE ${SENSORS_INCLUDE_DIR})
-endif ()
-target_link_libraries(qsensors
+target_link_libraries(qsensors_core PUBLIC
         Qt::Core
         Qt::Gui
         Qt::Widgets
 )
+
+add_executable(qsensors ${QSENSORS_APP_SOURCES} resources/resources.qrc)
+target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
+if (NOT SENSORS_FOUND)
+    target_include_directories(qsensors PRIVATE ${SENSORS_INCLUDE_DIR})
+endif ()
+target_link_libraries(qsensors qsensors_core)
 if (SENSORS_FOUND)
     target_link_libraries(qsensors PkgConfig::SENSORS)
 else ()
     target_link_libraries(qsensors ${SENSORS_LIBRARY})
 endif ()
 
-install(TARGETS qsensors RUNTIME DESTINATION bin)
+include(GNUInstallDirs)
+install(TARGETS qsensors RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+# Desktop integration (XDG): menu entry plus bitmap and scalable app icon.
+install(FILES resources/qsensors.desktop
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
+install(FILES resources/icons/qsensors.png
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/256x256/apps)
+install(FILES resources/icons/qsensors.svg
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 
 include(CheckCXXSourceCompiles)
 set(CMAKE_REQUIRED_QUIET TRUE)
@@ -93,61 +112,32 @@ set(TS_FILES
         i18n/qsensors_pt.ts
 )
 
+# Explicit SOURCES: the translatable UI lives in qsensors_core, not in the app target.
 qt_add_translations(qsensors
         TS_FILES ${TS_FILES}
+        SOURCES ${QSENSORS_CORE_SOURCES} ${QSENSORS_APP_SOURCES}
         RESOURCE_PREFIX "/i18n"
         LUPDATE_OPTIONS -no-obsolete -locations none
 )
 
 include(CTest)
 if (BUILD_TESTING)
-    function(add_qsensors_test target)
-        add_executable(${target} ${ARGN})
-        target_include_directories(${target} PRIVATE
-                src/config
-                src/ui
-                src/ui/panels
-                src/ui/widgets
-                src/sensors
-        )
-        target_link_libraries(${target}
-                Qt::Core
-                Qt::Gui
-                Qt::Widgets
-                Qt::Test
-        )
+    # Tests creating widgets run on the offscreen platform, so CI needs no display.
+    function(add_qsensors_test target source)
+        add_executable(${target} ${source})
+        target_link_libraries(${target} qsensors_core Qt::Test)
         add_test(NAME ${target} COMMAND ${target})
+        set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endfunction()
 
-    add_qsensors_test(test_sensors_policy
-            tests/test_sensors_policy.cpp
-    )
-
-    add_qsensors_test(test_lcd_logic
-            tests/test_lcd_logic.cpp
-            src/ui/widgets/lcd_display_widget.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
-    )
-
-    add_qsensors_test(test_glyph_model
-            tests/test_glyph_model.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
-    )
-
-    add_qsensors_test(test_settings_persistence
-            tests/test_settings_persistence.cpp
-            src/config/app_config_store.cpp
-            src/config/runtime_config.cpp
-            src/config/settings_schema.cpp
-            src/ui/main_window_state_store.cpp
-    )
-
-    add_qsensors_test(test_sensor_contract
-            tests/test_sensor_contract.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
-    )
-
-    add_qsensors_test(test_sensor_identity
-            tests/test_sensor_identity.cpp
-    )
+    add_qsensors_test(test_sensors_policy tests/test_sensors_policy.cpp)
+    add_qsensors_test(test_lcd_logic tests/test_lcd_logic.cpp)
+    add_qsensors_test(test_glyph_model tests/test_glyph_model.cpp)
+    add_qsensors_test(test_settings_persistence tests/test_settings_persistence.cpp)
+    add_qsensors_test(test_sensor_contract tests/test_sensor_contract.cpp)
+    add_qsensors_test(test_sensor_identity tests/test_sensor_identity.cpp)
+    add_qsensors_test(test_sensors_panel tests/test_sensors_panel.cpp)
+    add_qsensors_test(test_theme_refresh tests/test_theme_refresh.cpp)
+    add_qsensors_test(test_status_line tests/test_status_line.cpp)
+    add_qsensors_test(test_window_sizing tests/test_window_sizing.cpp)
 endif ()

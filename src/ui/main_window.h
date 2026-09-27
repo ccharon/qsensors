@@ -3,52 +3,69 @@
 
 #pragma once
 
-#include "sensors_backend.h"
 #include "runtime_config.h"
+#include "sensors_backend.h"
 
 #include <QMainWindow>
-#include <QHash>
-#include <QString>
+#include <QPalette>
 
-class QLabel;
 class QTimer;
 class QScrollArea;
-class QVBoxLayout;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
-class QScreen;
 class SensorsPanel;
 class SettingsPanel;
+class StatusLine;
 
 /** Main application surface: polling, persistence and sensor panel layout. */
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
+    /** Builds the UI, restores settings and starts polling when libsensors is available. */
     explicit MainWindow(QWidget *parent = nullptr);
 
 private slots:
-    /** Polls backend data, applies structure checks and refreshes visible state. */
+    /** Polls the backend and hands the readings to the sensors panel. */
     void refreshReadings();
 
 protected:
+    /** Persists settings and window state before closing. */
     void closeEvent(QCloseEvent *event) override;
 
-    /** Reflows sensor cards to current viewport width while preserving expand state. */
+    /** Re-evaluates the height limit after the user resized the window. */
     void resizeEvent(QResizeEvent *event) override;
 
     /** Applies initial relayout and optional width fit once after first data is shown. */
     void showEvent(QShowEvent *event) override;
 
+    /** Re-applies style sheets on light/dark switches; lifts the height limit when maximized. */
+    void changeEvent(QEvent *event) override;
+
+    /** Relayouts on viewport width changes and tracks content height changes. */
+    bool eventFilter(QObject *watched, QEvent *event) override;
+
 private:
+    /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
+    void applyThemeRefresh();
+
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
-    /** Applies runtime config to backend and polling timer. */
+    /** Applies the polling interval from the runtime config to the timer. */
     void applyRuntimeConfig();
 
-    /** Updates status bar text in one place. */
+    /** Sets the permanent status bar text. */
     void setStatusMessage(const QString &text);
+
+    /** Permanent status: reading count and refresh interval, or a hint when no sensors exist. */
+    void updateReadingsStatus();
+
+    /** Shows @p text for a while instead of the permanent status. */
+    void showNotice(const QString &text);
+
+    /** Saves the runtime config right away and reports a failed write. */
+    void persistRuntimeConfig();
 
     /** Keeps top-level minimum width aligned to widest currently required content. */
     void updateMinimumWindowWidthConstraint();
@@ -56,29 +73,35 @@ private:
     /** Expands window width minimally until horizontal overflow is gone. */
     void ensureNoHorizontalOverflow(int extraPadding);
 
-    /** Loads persisted geometry, expand-state and fingerprint (+ runtime config). */
+    /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
     void loadSettings();
 
-    /** Persists geometry, expand-state and current fingerprint (+ runtime config). */
+    /** Persists runtime config, geometry, chip order, expand state and chip fingerprint. */
     void saveSettings() const;
 
-    /** Current renderable width: scroll viewport when available, else window width. */
+    /** Window height at which the whole content fits without scrolling. */
+    [[nodiscard]] int contentWindowHeight() const;
+
+    /** Available height of the window's screen. */
+    [[nodiscard]] int availableScreenHeight() const;
+
+    /** Keeps the window from being dragged taller than its content (see WindowSizing). */
+    void updateHeightLimit();
+
+    /** Width available to the sensor panel inside the scroll area. */
     [[nodiscard]] int viewportWidth() const;
 
     SensorsBackend m_backend;
     QScrollArea *m_scrollArea;
     QWidget *m_contentContainer;
-    QVBoxLayout *m_contentLayout;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
-    QLabel *m_statusLabel;
+    StatusLine *m_statusLine;
     QTimer *m_timer;
-    QHash<QString, bool> m_chipExpanded;
-    QHash<QString, bool> m_lastPushedExpanded;
-    QString m_loadedChipFingerprint;
-    QString m_currentFingerprint;
-    QVector<SensorReading> m_lastReadings;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
+    bool m_fitHeightToContent = false; // pending first height fit without saved geometry
     RuntimeConfig m_runtimeConfig;
+    // Palette the style sheets were last resolved against; avoids redundant refreshes.
+    QPalette m_styledPalette;
 };

@@ -3,26 +3,35 @@
 
 #pragma once
 
-#include "sensors_backend.h"
+#include "sensor_reading.h"
 
 #include <QWidget>
 
 class LcdDisplayWidget;
-class QProgressBar;
-class QGroupBox;
+class QLabel;
 
-/** Composed sensor tile: framed title, LCD display and min/max progress bar. */
+/** Composed sensor tile: title label above an LCD panel with value and range bar graph. */
 class SensorValueWidget final : public QWidget {
     Q_OBJECT
 
 public:
+    /** Creates the card for @p reading with fixed height and theme width limits. */
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Refreshes title, LCD and range bar using xsensors-like limit semantics. */
+    /** Refreshes title, details tooltip and LCD (value and range bar graph). */
     void setReading(const SensorReading &reading);
 
+    /** Tooltip with full sensor name, chip and the min/max limits in display units. */
+    [[nodiscard]] static QString detailsToolTip(const SensorReading &reading);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
-    QGroupBox *m_groupBox;
+    /** Long sensor names are elided; the full name is shown in the details tooltip. */
+    void updateElidedTitle();
+
+    QLabel *m_title;
     LcdDisplayWidget *m_lcdValue;
-    QProgressBar *m_rangeBar;
+    QString m_fullTitle;
 };

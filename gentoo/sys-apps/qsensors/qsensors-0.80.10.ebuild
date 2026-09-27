@@ -3,15 +3,15 @@
 
 EAPI=8
 
-inherit cmake desktop xdg
+inherit cmake xdg
 
 DESCRIPTION="Qt6/Wayland-oriented sensor monitor with xsensors-inspired UI"
 HOMEPAGE="https://github.com/ccharon/qsensors"
-SRC_URI="https://github.com/ccharon/qsensors/archive/refs/tags/${PV}.tar.gz -> ${P}.tar.gz"
+SRC_URI="https://github.com/ccharon/qsensors/archive/refs/tags/v${PV}.tar.gz -> ${P}.tar.gz"
 
 LICENSE="GPL-2+"
 SLOT="0"
-KEYWORDS="~amd64"
+KEYWORDS="~amd64 ~arm64"
 IUSE=""
 RESTRICT="mirror"
 
@@ -25,13 +25,6 @@ BDEPEND="
 	dev-qt/qttools:6[linguist]
 	virtual/pkgconfig
 "
-
-src_install() {
-	cmake_src_install
-
-	newicon -s 256 resources/icons/xsensors.png qsensors.png
-	domenu "${FILESDIR}"/qsensors.desktop
-}
 
 pkg_postinst() {
 	xdg_pkg_postinst

@@ -2,39 +2,69 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "app_config_store.h"
+#include "settings_keys.h"
 #include "settings_schema.h"
 
 #include <QSettings>
+#include <QDebug>
 #include <algorithm>
 
+namespace {
+    int readBoundedInt(const QSettings &settings, const QString &key, const int fallback, const int min, const int max) {
+        const QVariant raw = settings.value(key);
+        if (!raw.isValid())
+            return fallback;
+        bool ok = false;
+        const int value = raw.toInt(&ok);
+        if (!ok) {
+            qWarning("qsensors: invalid setting %s=%s, using default %d",
+                     qPrintable(key), qPrintable(raw.toString()), fallback);
+            return fallback;
+        }
+        if (value < min || value > max)
+            qWarning("qsensors: setting %s=%d out of range [%d, %d], clamping", qPrintable(key), value, min, max);
+        return std::clamp(value, min, max);
+    }
+}
+
 RuntimeConfig AppConfigStore::loadRuntimeConfig() {
-    RuntimeConfig config;
     QSettings settings;
+    if (settings.status() != QSettings::NoError)
+        qWarning("qsensors: settings file %s is unreadable, using defaults", qPrintable(settings.fileName()));
     SettingsSchema::ensureUpToDate(settings);
 
-    config.pollingIntervalSec = std::clamp(
-        settings.value(QStringLiteral("runtime/polling_interval_sec"), RuntimeConfigLimits::kDefaultPollingIntervalSec).toInt(),
-        RuntimeConfigLimits::kMinPollingIntervalSec,
-        RuntimeConfigLimits::kMaxPollingIntervalSec
-    );
+    RuntimeConfig config;
+    config.pollingIntervalSec = readBoundedInt(settings, SettingsKeys::kPollingIntervalSec,
+                                               RuntimeConfigLimits::kDefaultPollingIntervalSec,
+                                               RuntimeConfigLimits::kMinPollingIntervalSec,
+                                               RuntimeConfigLimits::kMaxPollingIntervalSec);
+    config.fanDefaultMaxRpm = readBoundedInt(settings, SettingsKeys::kFanDefaultMaxRpm,
+                                             RuntimeConfigLimits::kDefaultFanDefaultMaxRpm,
+                                             RuntimeConfigLimits::kMinFanDefaultMaxRpm,
+                                             RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
 
-    config.fanDefaultMaxRpm = std::clamp(
-        settings.value(QStringLiteral("runtime/fan_default_max_rpm"), RuntimeConfigLimits::kDefaultFanDefaultMaxRpm).toInt(),
-        RuntimeConfigLimits::kMinFanDefaultMaxRpm,
-        RuntimeConfigLimits::kMaxFanDefaultMaxRpm
-    );
-
-    const QString temperatureUnitRaw = settings.value(QStringLiteral("runtime/temperature_unit"),QStringLiteral("C")).toString().trimmed().toUpper();
-    config.temperatureUnit = temperatureUnitFromToken(QStringView(temperatureUnitRaw));
-
+    const QVariant rawUnit = settings.value(SettingsKeys::kTemperatureUnit);
+    if (rawUnit.isValid()) {
+        const QString token = rawUnit.toString();
+        if (const auto unit = temperatureUnitFromToken(token)) {
+            config.temperatureUnit = *unit;
+        } else {
+            qWarning("qsensors: invalid setting %s=%s, using Celsius", qPrintable(SettingsKeys::kTemperatureUnit), qPrintable(token));
+        }
+    }
     return config;
 }
 
-void AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
+bool AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
     QSettings settings;
-
     SettingsSchema::ensureUpToDate(settings);
-    settings.setValue(QStringLiteral("runtime/polling_interval_sec"), config.pollingIntervalSec);
-    settings.setValue(QStringLiteral("runtime/fan_default_max_rpm"), config.fanDefaultMaxRpm);
-    settings.setValue(QStringLiteral("runtime/temperature_unit"),temperatureUnitToToken(config.temperatureUnit));
+    settings.setValue(SettingsKeys::kPollingIntervalSec, config.pollingIntervalSec);
+    settings.setValue(SettingsKeys::kFanDefaultMaxRpm, config.fanDefaultMaxRpm);
+    settings.setValue(SettingsKeys::kTemperatureUnit, temperatureUnitToToken(config.temperatureUnit));
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        qWarning("qsensors: could not write settings to %s", qPrintable(settings.fileName()));
+        return false;
+    }
+    return true;
 }

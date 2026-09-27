@@ -4,63 +4,20 @@
 #pragma once
 
 #include "runtime_config.h"
+#include "sensor_reading.h"
 
+#include <QHash>
+#include <QSet>
 #include <QString>
 #include <QVector>
-#include <optional>
 
-enum class SensorCategory {
-    Voltages = 0,
-    Temperatures = 1,
-    Fans = 2,
-    Currents = 10,
-    Power = 11,
-    Other = 12,
-};
-
-enum class SensorUnit {
-    Celsius,
-    Fahrenheit,
-    Volt,
-    Rpm,
-    Ampere,
-    Watt,
-    Unknown
-};
-
-[[nodiscard]] inline QString sensorUnitSymbol(const SensorUnit unit) {
-    switch (unit) {
-        case SensorUnit::Celsius: return QStringLiteral("°C");
-        case SensorUnit::Fahrenheit: return QStringLiteral("°F");
-        case SensorUnit::Volt: return QStringLiteral("V");
-        case SensorUnit::Rpm: return QStringLiteral("RPM");
-        case SensorUnit::Ampere: return QStringLiteral("A");
-        case SensorUnit::Watt: return QStringLiteral("W");
-        case SensorUnit::Unknown: return QString();
-    }
-    return QString();
-}
-
-/** Normalized sensor sample used by the UI layer. */
-struct SensorReading {
-    QString chip;
-    SensorCategory category = SensorCategory::Other;
-    QString feature;
-    int featureNumber = -1;
-    int subfeatureNumber = -1;
-    double value = 0.0;
-    SensorUnit unit = SensorUnit::Unknown;
-    std::optional<double> minValue;
-    std::optional<double> maxValue;
-
-    [[nodiscard]] bool hasRange() const { return minValue.has_value() || maxValue.has_value(); }
-};
-
-/** Thin wrapper around libsensors discovery/readout. */
+/** libsensors wrapper: initializes the library and reads all chips into SensorReadings. */
 class SensorsBackend {
 public:
+    /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
     SensorsBackend();
 
+    /** Releases libsensors if this instance initialized it. */
     ~SensorsBackend();
 
     SensorsBackend(const SensorsBackend &) = delete;
@@ -73,10 +30,14 @@ public:
     /** Human-readable backend init error. */
     [[nodiscard]] QString lastError() const;
 
-    /** Snapshot of all supported sensor input values. */
-    [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit) const;
+    /** All readable sensors; keeps per-sensor unit scale state between calls. */
+    [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit);
 
 private:
     bool m_initialized;
     QString m_lastError;
+    // Current unit scale (true = mA/mW) per "chip:feature" for sensors without native limits.
+    QHash<QString, bool> m_milliScaleLatch;
+    // Problems already logged, so a failing sensor does not flood the log every poll.
+    QSet<QString> m_reportedProblems;
 };
