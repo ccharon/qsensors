@@ -15,6 +15,10 @@ KEYWORDS="~amd64"
 IUSE=""
 RESTRICT="mirror"
 
+DEPEND="
+	dev-qt/qtbase:6[gui,widgets]
+	sys-apps/lm-sensors
+"
 RDEPEND="${DEPEND}"
 BDEPEND="
 	dev-build/cmake
