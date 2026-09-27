@@ -11,6 +11,8 @@ class LcdLogicTest final : public QObject {
 private slots:
     void valueDigits_formats_by_unit();
     void alertState_matches_unit_rules();
+    void rangeFraction_maps_value_into_limits();
+    void barGraph_lights_proportional_segments();
 };
 
 void LcdLogicTest::valueDigits_formats_by_unit() {
@@ -18,11 +20,17 @@ void LcdLogicTest::valueDigits_formats_by_unit() {
     SensorReading celsius{.value = 38.25, .unit = SensorUnit::Celsius};
     SensorReading fahrenheit{.value = 100.75, .unit = SensorUnit::Fahrenheit};
     SensorReading volt{.value = 1.234, .unit = SensorUnit::Volt};
+    SensorReading milliamp{.value = 301.0, .unit = SensorUnit::Milliampere};
+    SensorReading milliwatt{.value = 3.61, .unit = SensorUnit::Milliwatt};
+    SensorReading dischargingBattery{.value = -396.0, .unit = SensorUnit::Milliampere};
 
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(rpm), QStringLiteral(" 1534"));
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(celsius), QStringLiteral("  38.3"));
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(fahrenheit), QStringLiteral(" 100.8"));
     QCOMPARE(LcdDisplayWidget::valueDigitsFor(volt), QStringLiteral("  1.23"));
+    QCOMPARE(LcdDisplayWidget::valueDigitsFor(milliamp), QStringLiteral(" 301.0"));
+    QCOMPARE(LcdDisplayWidget::valueDigitsFor(milliwatt), QStringLiteral("   3.6"));
+    QCOMPARE(LcdDisplayWidget::valueDigitsFor(dischargingBattery), QStringLiteral("-396.0"));
 }
 
 void LcdLogicTest::alertState_matches_unit_rules() {
@@ -48,6 +56,46 @@ void LcdLogicTest::alertState_matches_unit_rules() {
 
     SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .minValue = 0.0, .maxValue = 10.0};
     QVERIFY(!LcdDisplayWidget::isAlertState(ampNormal));
+
+    SensorReading milliwattOver{.value = 550.0, .unit = SensorUnit::Milliwatt, .maxValue = 500.0};
+    QVERIFY(LcdDisplayWidget::isAlertState(milliwattOver));
+
+    SensorReading milliampNormal{.value = 300.0, .unit = SensorUnit::Milliampere, .minValue = 0.0, .maxValue = 500.0};
+    QVERIFY(!LcdDisplayWidget::isAlertState(milliampNormal));
+}
+
+void LcdLogicTest::rangeFraction_maps_value_into_limits() {
+    SensorReading noRange{.value = 5.0, .unit = SensorUnit::Volt};
+    QVERIFY(!LcdDisplayWidget::rangeFraction(noRange).has_value());
+
+    SensorReading half{.value = 50.0, .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    QCOMPARE(*LcdDisplayWidget::rangeFraction(half), 0.5);
+
+    SensorReading above{.value = 120.0, .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    QCOMPARE(*LcdDisplayWidget::rangeFraction(above), 1.0);
+
+    SensorReading below{.value = -396.0, .unit = SensorUnit::Milliampere, .minValue = 0.0, .maxValue = 1000.0};
+    QCOMPARE(*LcdDisplayWidget::rangeFraction(below), 0.0);
+
+    // Degenerate range (max <= min) falls back to a one-unit span instead of dividing by zero.
+    SensorReading degenerate{.value = 3.0, .unit = SensorUnit::Volt, .minValue = 3.0, .maxValue = 3.0};
+    QCOMPARE(*LcdDisplayWidget::rangeFraction(degenerate), 0.0);
+}
+
+void LcdLogicTest::barGraph_lights_proportional_segments() {
+    SensorReading quarter{.value = 25.0, .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    QCOMPARE(LcdDisplayWidget::litBarSegments(quarter, 20), 5);
+    QCOMPARE(LcdDisplayWidget::litBarSegments(quarter, 0), 0);
+
+    SensorReading noRange{.value = 25.0, .unit = SensorUnit::Celsius};
+    QCOMPARE(LcdDisplayWidget::litBarSegments(noRange, 20), 0);
+
+    const auto segments = LcdDisplayWidget::barGraphSegments(QRectF(4, 30, 142, 4));
+    QVERIFY(segments.size() >= 20);
+    for (qsizetype i = 1; i < segments.size(); ++i) {
+        QVERIFY(segments.at(i).boundingRect().left() > segments.at(i - 1).boundingRect().left());
+    }
+    QVERIFY(segments.last().boundingRect().right() <= 4 + 142 + 1e-6);
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

@@ -3,6 +3,8 @@
 
 #include "app_theme.h"
 
+#include <QWidget>
+
 namespace AppTheme {
     namespace {
         QString cardStyle(const char *selector) {
@@ -37,33 +39,6 @@ namespace AppTheme {
         return cardStyle("#settingsCard");
     }
 
-    QString sensorGroupStyle(const QPalette &palette) {
-        // In dark mode palette(mid) often lacks contrast against dark backgrounds;
-        // use a fixed light grey there instead of the palette color.
-        const QString borderColor = palette.color(QPalette::Window).lightness() > 140
-                                        ? QStringLiteral("palette(mid)")
-                                        : QStringLiteral("rgb(230,230,230)");
-        return QStringLiteral(
-            "QGroupBox {"
-            "  border: 1px solid %1;"
-            "  margin-top: 8px;"
-            "  padding-top: 0px;"
-            "  padding-bottom: 0px;"
-            "  background: palette(window);"
-            "  color: palette(window-text);"
-            "}"
-            "QGroupBox::title {"
-            "  subcontrol-origin: margin;"
-            "  left: 4px;"
-            "  top: -2px;"
-            "  padding: 0 2px;"
-            "  font-size: 11px;"
-            "  background: palette(window);"
-            "  color: palette(window-text);"
-            "}"
-        ).arg(borderColor);
-    }
-
     QString spinBoxStyle() {
         return QStringLiteral(
             "QAbstractSpinBox {"
@@ -80,15 +55,18 @@ namespace AppTheme {
         );
     }
 
-    QString progressBarStyle(const bool hasRange) {
-        return QStringLiteral(
-            "QProgressBar {"
-            "  border: none;"
-            "  background: palette(midlight);"
-            "}"
-            "QProgressBar::chunk {"
-            "  background: %1;"
-            "}"
-        ).arg(hasRange ? QStringLiteral("palette(highlight)") : QStringLiteral("transparent"));
+    void refreshStyleSheets(QWidget *root) {
+        if (!root)
+            return;
+        QList<QWidget *> widgets = root->findChildren<QWidget *>();
+        widgets.prepend(root);
+        for (QWidget *widget: widgets) {
+            const QString sheet = widget->styleSheet();
+            if (sheet.isEmpty())
+                continue;
+            // Clearing first forces a full unpolish/polish, dropping cached palette colors.
+            widget->setStyleSheet(QString());
+            widget->setStyleSheet(sheet);
+        }
     }
 }

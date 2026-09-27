@@ -37,7 +37,7 @@ add_executable(qsensors
         src/ui/theme/app_theme.cpp
         src/ui/panels/settings_panel.cpp
         src/ui/panels/sensors_panel.cpp
-        src/ui/widgets/lcd_glyph_atlas.cpp
+        src/ui/widgets/lcd_segment_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/sensors/sensors_backend.cpp
@@ -126,12 +126,12 @@ if (BUILD_TESTING)
     add_qsensors_test(test_lcd_logic
             tests/test_lcd_logic.cpp
             src/ui/widgets/lcd_display_widget.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
+            src/ui/widgets/lcd_segment_font.cpp
     )
 
     add_qsensors_test(test_glyph_model
             tests/test_glyph_model.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
+            src/ui/widgets/lcd_segment_font.cpp
     )
 
     add_qsensors_test(test_settings_persistence
@@ -144,10 +144,17 @@ if (BUILD_TESTING)
 
     add_qsensors_test(test_sensor_contract
             tests/test_sensor_contract.cpp
-            src/ui/widgets/lcd_glyph_atlas.cpp
+            src/ui/widgets/lcd_segment_font.cpp
     )
 
     add_qsensors_test(test_sensor_identity
             tests/test_sensor_identity.cpp
     )
+
+    add_qsensors_test(test_theme_refresh
+            tests/test_theme_refresh.cpp
+            src/ui/theme/app_theme.cpp
+    )
+    # Needs a QApplication; run headless so CI does not require a display.
+    set_tests_properties(test_theme_refresh PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif ()

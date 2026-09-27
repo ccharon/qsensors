@@ -2,7 +2,6 @@
 
 This project includes an asset derived from the `Mystro256/xsensors` project:
 
-- `resources/themes/xsensors-theme.png` (copied from `xdg/theme.png`)
 - `resources/icons/xsensors.png` (copied from `xdg/icons/128x128/xsensors.png`)
 
 Upstream repository:
@@ -17,5 +16,5 @@ License:
 
 Notes:
 
-- The included theme image is used for LCD-style glyph rendering compatibility.
+- The LCD display style is inspired by xsensors; it is drawn procedurally and no longer uses the xsensors theme image.
 - Upstream copyright notices and license terms are preserved.

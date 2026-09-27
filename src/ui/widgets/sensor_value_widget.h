@@ -8,21 +8,26 @@
 #include <QWidget>
 
 class LcdDisplayWidget;
-class QProgressBar;
-class QGroupBox;
+class QLabel;
 
-/** Composed sensor tile: framed title, LCD display and min/max progress bar. */
+/** Composed sensor tile: title label above an LCD panel with value and range bar graph. */
 class SensorValueWidget final : public QWidget {
     Q_OBJECT
 
 public:
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Refreshes title, LCD and range bar using xsensors-like limit semantics. */
+    /** Refreshes title and LCD (value and range bar graph). */
     void setReading(const SensorReading &reading);
 
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
 private:
-    QGroupBox *m_groupBox;
+    /** Long sensor names are elided; the full name is available as tooltip. */
+    void updateElidedTitle();
+
+    QLabel *m_title;
     LcdDisplayWidget *m_lcdValue;
-    QProgressBar *m_rangeBar;
+    QString m_fullTitle;
 };

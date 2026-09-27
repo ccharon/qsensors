@@ -5,73 +5,49 @@
 #include "theme/app_theme.h"
 #include "lcd_display_widget.h"
 
-#include <QGroupBox>
-#include <QProgressBar>
+#include <QLabel>
+#include <QResizeEvent>
 #include <QVBoxLayout>
-#include <algorithm>
-#include <cmath>
-#include <limits>
 
 SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *parent)
-    : QWidget(parent), m_groupBox(new QGroupBox(this)), m_lcdValue(new LcdDisplayWidget(reading, this)), m_rangeBar(new QProgressBar(this)) {
+    : QWidget(parent), m_title(new QLabel(this)), m_lcdValue(new LcdDisplayWidget(reading, this)) {
     setMinimumWidth(AppTheme::kCardMinWidth);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
     setMaximumWidth(AppTheme::kCardWidth);
 
+    // The LCD panel is the card; the title is plain theme text above it.
+    QFont titleFont = m_title->font();
+    titleFont.setPointSizeF(titleFont.pointSizeF() * AppTheme::kCardTitleFontScale);
+    m_title->setFont(titleFont);
+    m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
+    m_title->setContentsMargins(AppTheme::kCardTitleInset, 0, 0, 0);
+
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
-    layout->setSpacing(0);
-
-    // Title must be set before stylesheet/margins so QGroupBox measures the title area correctly.
-    m_groupBox->setTitle(reading.feature + QStringLiteral(":"));
-    m_groupBox->setStyleSheet(AppTheme::sensorGroupStyle(palette()));
-    m_groupBox->setContentsMargins(0,12,0,0);
-
-    auto *groupLayout = new QVBoxLayout(m_groupBox);
-    groupLayout->setContentsMargins(AppTheme::kCardBorderPadding, 3, AppTheme::kCardBorderPadding, 3);
-    groupLayout->setSpacing(0);
+    layout->setSpacing(AppTheme::kCardTitleSpacing);
+    layout->addWidget(m_title);
+    layout->addWidget(m_lcdValue);
 
     setReading(reading);
-
-    groupLayout->addWidget(m_lcdValue);
-    groupLayout->addWidget(m_rangeBar);
-    layout->addWidget(m_groupBox);
-
-    setLayout(layout);
     setFixedHeight(layout->sizeHint().height());
 }
 
 void SensorValueWidget::setReading(const SensorReading &reading) {
     const QString newTitle = reading.feature + QStringLiteral(":");
-    if (m_groupBox->title() != newTitle)
-        m_groupBox->setTitle(newTitle);
-    m_lcdValue->setReading(reading);
-
-    m_rangeBar->setFixedHeight(AppTheme::kRangeBarHeight);
-    m_rangeBar->setTextVisible(false);
-
-    // Keep bar behavior aligned with xsensors-style limit semantics.
-    if (reading.hasRange()) {
-        constexpr int scale = 1000;
-        // Backend provides finalized range policy values; widget only renders.
-        double min = reading.minValue.value_or(reading.value);
-        double max = reading.maxValue.value_or(min + 1.0);
-        if (max <= min) {
-            max = min + 1.0;
-        }
-        const double clampedValue = std::clamp(reading.value, min, max);
-        // Clamp before cast to prevent silent int overflow for extreme sensor values.
-        constexpr double kIntMin = static_cast<double>(std::numeric_limits<int>::min());
-        constexpr double kIntMax = static_cast<double>(std::numeric_limits<int>::max());
-        const auto toScaled = [&](const double v) {
-            return static_cast<int>(std::clamp(v * scale, kIntMin, kIntMax));
-        };
-        m_rangeBar->setRange(toScaled(min), toScaled(max));
-        m_rangeBar->setValue(toScaled(clampedValue));
-        m_rangeBar->setStyleSheet(AppTheme::progressBarStyle(true));
-    } else {
-        m_rangeBar->setRange(0, 1000);
-        m_rangeBar->setValue(0);
-        m_rangeBar->setStyleSheet(AppTheme::progressBarStyle(false));
+    if (m_fullTitle != newTitle) {
+        m_fullTitle = newTitle;
+        m_title->setToolTip(reading.feature);
+        updateElidedTitle();
     }
+    m_lcdValue->setReading(reading);
+}
+
+void SensorValueWidget::resizeEvent(QResizeEvent *event) {
+    QWidget::resizeEvent(event);
+    updateElidedTitle();
+}
+
+void SensorValueWidget::updateElidedTitle() {
+    const int available = m_title->width() - m_title->contentsMargins().left();
+    m_title->setText(m_title->fontMetrics().elidedText(m_fullTitle, Qt::ElideRight, std::max(available, 0)));
 }

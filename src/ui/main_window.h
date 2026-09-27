@@ -7,6 +7,7 @@
 #include "runtime_config.h"
 
 #include <QMainWindow>
+#include <QPalette>
 #include <QHash>
 #include <QString>
 
@@ -40,6 +41,13 @@ protected:
 
     /** Applies initial relayout and optional width fit once after first data is shown. */
     void showEvent(QShowEvent *event) override;
+
+    /** Re-applies style sheets when the system switches light/dark mode at runtime. */
+    void changeEvent(QEvent *event) override;
+
+private:
+    /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
+    void applyThemeRefresh();
 
 private:
     /** Builds static widget hierarchy and signal wiring. */
@@ -81,4 +89,6 @@ private:
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
     RuntimeConfig m_runtimeConfig;
+    // Palette the style sheets were last resolved against; avoids redundant refreshes.
+    QPalette m_styledPalette;
 };

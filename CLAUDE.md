@@ -37,11 +37,11 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - `main_window`: polling orchestration, window sizing, boots persistence.
 - `panels/sensors_panel`: chip-grouped layout; separates structural rebuilds from value-only patches to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
-- `widgets/sensor_value_widget`: per-sensor card (title, LCD value, range bar).
-- `widgets/lcd_display_widget` + `lcd_glyph_atlas`: atlas-based LCD glyph rendering.
+- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; the LCD draws value, unit and range bar graph).
+- `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (character → segment mask, geometry, value/unit layout).
 - `theme/app_theme.h`: sizing/spacing/column constants — change layout here, not in widget code.
 
-**`tests/`** — 6 unit test files covering range policy, LCD logic, glyph model, sensor contracts, settings persistence/migration, and sensor identity. Treat failing tests as blockers.
+**`tests/`** — 7 unit test files covering range policy, LCD logic, segment glyph model, sensor contracts, settings persistence/migration, sensor identity, and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 

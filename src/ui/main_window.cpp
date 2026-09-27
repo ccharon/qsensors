@@ -10,6 +10,7 @@
 #include "settings_panel.h"
 #include "sensors_panel.h"
 
+#include <QApplication>
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QLabel>
@@ -34,6 +35,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_statusLabel(nullptr),
       m_timer(new QTimer(this)) {
     setupUi();
+    m_styledPalette = QApplication::palette();
     loadSettings();
 
     m_settingsPanel->setPollingInterval(m_runtimeConfig.pollingIntervalSec);
@@ -170,6 +172,24 @@ void MainWindow::showEvent(QShowEvent *event) {
         updateMinimumWindowWidthConstraint();
         m_initialLayoutApplied = true;
     }
+}
+
+void MainWindow::changeEvent(QEvent *event) {
+    QMainWindow::changeEvent(event);
+    // ApplicationPaletteChange is not forwarded to changeEvent(); a system light/dark
+    // switch arrives here as the resulting PaletteChange (or ThemeChange).
+    if (event->type() == QEvent::PaletteChange || event->type() == QEvent::ThemeChange) {
+        applyThemeRefresh();
+    }
+}
+
+void MainWindow::applyThemeRefresh() {
+    const QPalette current = QApplication::palette();
+    if (current == m_styledPalette) {
+        return;
+    }
+    m_styledPalette = current;
+    AppTheme::refreshStyleSheets(this);
 }
 
 void MainWindow::loadSettings() {

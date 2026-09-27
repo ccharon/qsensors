@@ -3,12 +3,16 @@
 
 #pragma once
 
-#include "lcd_glyph_atlas.h"
 #include "sensors_backend.h"
 
+#include <QPolygonF>
+#include <QVector>
 #include <QWidget>
+#include <optional>
 
-/** Paints xsensors-style LCD digits using the imported theme sprite. */
+class QPainter;
+
+/** Paints an xsensors-inspired segment LCD: value, unit and a range bar graph. */
 class LcdDisplayWidget final : public QWidget {
     Q_OBJECT
 
@@ -22,12 +26,27 @@ public:
     /** Formats the numeric part exactly like xsensors for known units. */
     static QString valueDigitsFor(const SensorReading &reading);
 
-    /** Alarm state decides which sprite row is used for rendering. */
+    /** Alarm state decides whether the lit segments use the alert color. */
     static bool isAlertState(const SensorReading &reading);
+
+    /** Position of the value within its min/max range (0..1), nullopt without range. */
+    static std::optional<double> rangeFraction(const SensorReading &reading);
+
+    /** Number of lit bar graph segments out of @p segmentCount. */
+    static int litBarSegments(const SensorReading &reading, int segmentCount);
+
+    /** Slanted bar graph cells filling @p area; count follows the available width. */
+    static QVector<QPolygonF> barGraphSegments(const QRectF &area);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
+    /** Recessed, slightly tinted LCD backplane behind the segments. */
+    void paintPanel(QPainter &painter) const;
+
+    /** True when the palette base is dark; selects backlit colors and glow. */
+    [[nodiscard]] bool hasDarkBase() const;
+
     SensorReading m_reading;
 };

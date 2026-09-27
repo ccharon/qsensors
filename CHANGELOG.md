@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Unit symbols for Ampere (`A`, `mA`) and Watt (`W`, `mW`) on the LCD;
+  previously Current/Power tiles rendered digits with no unit suffix at all,
+  since the xsensors theme sprite never included them.
 - Automatic mA/mW scaling for Current and Power readings below 1 unit.
   `libsensors` always reports base SI units (A, W), so sub-1 readings (e.g. a
   laptop's AC input current, often a few mA) used to floor to `0.00` under the
@@ -15,15 +18,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   min/max limits when available. Sensors without limits switch with wide
   hysteresis (to milli below 0.1, back to the base unit only from 10), so a
   reading hovering around 1 W does not flicker between `mW` and `W`.
+  Milli-unit values are shown with one decimal so negative readings (e.g. a
+  discharging battery at `-396.0 mA`) still fit the display.
 - Native `power*_max`/`power*_min` limits (with `power*_cap`/`power*_crit`
   fallback) are now read for Power sensors; previously only Temperature,
   Voltage and Fan/Current categories read native firmware limits, and Power
   tiles always relied on the synthetic default-range policy.
 
+### Changed
+- The LCD value display is now drawn as a vector segment display instead of
+  glyphs cut from the xsensors theme bitmap. Digits keep the slanted
+  xsensors look on a recessed, slightly green-tinted backplane where lit
+  segments cast a faint shadow (dark themes use brighter, softly glowing
+  "backlit" segments instead); unlit segments are shown faintly like on a
+  real LCD, units are rendered smaller on the digit baseline, and the display
+  stays sharp on HiDPI screens. The display keeps a small inner margin and
+  shrinks unusually long readings to fit instead of clipping them. New unit
+  symbols no longer require editing a sprite sheet.
+- Sensor cards are simplified: the name is a plain theme-styled label above
+  the LCD (long names are elided, full name as tooltip) instead of a framed
+  group box, and the min/max range is shown as a segment bar graph inside the
+  LCD panel instead of a separate theme-colored progress bar.
+
 ### Fixed
 - Negative current and power readings (e.g. a discharging laptop battery)
   are no longer shown as alerts when the firmware provides no minimum; the
   synthetic range now extends below zero for these signed sensor types.
+- Switching the desktop between light and dark mode now restyles the whole
+  window immediately; previously cards, headers and borders kept the old
+  colors until qsensors was restarted, because style sheet `palette(...)`
+  references were only resolved once at startup.
+
+### Removed
+- Bundled xsensors theme bitmap (`resources/themes/xsensors-theme.png`),
+  no longer needed for LCD rendering.
 
 ## [0.80.9] - 2026-06-04
 
