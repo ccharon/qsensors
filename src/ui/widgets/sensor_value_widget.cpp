@@ -14,7 +14,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     : QWidget(parent), m_title(new QLabel(this)), m_lcdValue(new LcdDisplayWidget(reading, this)) {
     setMinimumWidth(AppTheme::kCardMinWidth);
     setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-    setMaximumWidth(AppTheme::kCardWidth);
+    setMaximumWidth(AppTheme::kCardMaxWidth);
 
     // The LCD panel is the card; the title is plain theme text above it.
     QFont titleFont = m_title->font();

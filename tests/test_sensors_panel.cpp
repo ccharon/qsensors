@@ -5,6 +5,7 @@
 #include "collapsible_section.h"
 #include "sensor_identity.h"
 #include "sensor_value_widget.h"
+#include "theme/app_theme.h"
 
 #include <QApplication>
 #include <algorithm>
@@ -31,6 +32,10 @@ private slots:
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
     void header_click_still_toggles_when_draggable();
+    void columns_go_to_category_with_most_rows();
+    void columns_only_added_when_they_save_a_row();
+    void card_width_spreads_spare_width_up_to_maximum();
+    void cards_fill_width_without_rebuild();
 };
 
 namespace {
@@ -240,6 +245,58 @@ void SensorsPanelTest::header_click_still_toggles_when_draggable() {
     QTest::mouseClick(header, Qt::LeftButton);
     QVERIFY(!header->isChecked());
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+}
+
+void SensorsPanelTest::columns_go_to_category_with_most_rows() {
+    const int base = SensorsPanel::categoriesWidth({1, 1, 1, 1});
+    const int pitch = AppTheme::kCardMinWidth + AppTheme::kUnifiedHorizontalSpacing;
+    const QVector<int> counts{1, 4, 2, 3};
+
+    QCOMPARE(SensorsPanel::columnsForCategories(counts, base), (QVector<int>{1, 1, 1, 1}));
+    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + pitch - 1), (QVector<int>{1, 1, 1, 1}));
+    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + pitch), (QVector<int>{1, 2, 1, 1}));
+    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + 2 * pitch), (QVector<int>{1, 2, 1, 2}));
+    // Ties go to the first category with the most rows.
+    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + 3 * pitch), (QVector<int>{1, 2, 2, 2}));
+    QCOMPARE(SensorsPanel::categoriesWidth({1, 2, 2, 2}), base + 3 * pitch);
+}
+
+void SensorsPanelTest::columns_only_added_when_they_save_a_row() {
+    // 5 sensors: 3 columns give 2 rows; a 4th column would not save a row.
+    QCOMPARE(SensorsPanel::columnsForCategories({5}, 10000), (QVector<int>{3}));
+    QCOMPARE(SensorsPanel::columnsForCategories({1}, 10000), (QVector<int>{1}));
+    QCOMPARE(SensorsPanel::columnsForCategories({40}, 10000), (QVector<int>{AppTheme::kMaxColumnsPerCategory}));
+}
+
+void SensorsPanelTest::card_width_spreads_spare_width_up_to_maximum() {
+    const QVector<int> columns{1, 2};
+    const int base = SensorsPanel::categoriesWidth(columns);
+    QCOMPARE(SensorsPanel::cardWidthFor(columns, base), AppTheme::kCardMinWidth);
+    QCOMPARE(SensorsPanel::cardWidthFor(columns, base - 50), AppTheme::kCardMinWidth);
+    // 3 cards share 31 px: each gets 10, the remainder stays unused.
+    QCOMPARE(SensorsPanel::cardWidthFor(columns, base + 31), AppTheme::kCardMinWidth + 10);
+    QCOMPARE(SensorsPanel::cardWidthFor(columns, base + 10000), AppTheme::kCardMaxWidth);
+    QCOMPARE(SensorsPanel::cardWidthFor({}, 1000), AppTheme::kCardMinWidth);
+}
+
+void SensorsPanelTest::cards_fill_width_without_rebuild() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0), 360);
+    const QList<SensorValueWidget *> before = cards(panel);
+    const int chrome = panel.minimumRequiredWidth() - SensorsPanel::categoriesWidth({1, 1});
+
+    const int width = 380;
+    panel.relayout(width);
+    QCOMPARE(cards(panel), before);
+
+    // chip-b alone could use the maximum; chip-a has less spare width and sets the
+    // shared width for all cards.
+    const int chipAWidth = SensorsPanel::cardWidthFor({1, 1}, width - chrome);
+    QCOMPARE(SensorsPanel::cardWidthFor({1}, width - chrome), AppTheme::kCardMaxWidth);
+    QVERIFY(chipAWidth > AppTheme::kCardMinWidth && chipAWidth < AppTheme::kCardMaxWidth);
+    for (SensorValueWidget *card: cards(panel)) {
+        QCOMPARE(card->width(), chipAWidth);
+    }
 }
 
 QTEST_MAIN(SensorsPanelTest)

@@ -38,6 +38,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - The settings section moved from the top to the bottom of the window.
+- Wider windows add sensor columns one at a time, first to the category with
+  the most rows, instead of only when every category of a chip fits another
+  column. Remaining width stretches the sensor cards (150 to 200 px), so rows
+  fill the window instead of leaving an empty margin; all cards share one
+  width, set by the chip with the least spare width.
 - AppImages bundle Qt 6.8 and the Wayland platform plugin, so they run
   natively on Wayland and still on X11. The x86_64 AppImage now needs glibc
   2.28 (was 2.35), which adds RHEL/Alma/Rocky 8 and 9, Debian 11 and Ubuntu

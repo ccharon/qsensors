@@ -4,6 +4,7 @@
 #pragma once
 
 #include "sensor_reading.h"
+#include "theme/app_theme.h"
 
 #include <QHash>
 #include <QMap>
@@ -69,6 +70,22 @@ public:
     /** Minimum width required so each category can still render at least one sensor column. */
     [[nodiscard]] int minimumRequiredWidth() const;
 
+    /**
+     * Columns per category for @p sensorCounts within @p availableWidth. Every category
+     * gets one column; each further column goes to the category with the most rows, as
+     * long as it saves a row and fits.
+     */
+    [[nodiscard]] static QVector<int> columnsForCategories(const QVector<int> &sensorCounts, int availableWidth);
+
+    /** Width of categories laid out with @p columns at minimum card width, including the gaps. */
+    [[nodiscard]] static int categoriesWidth(const QVector<int> &columns);
+
+    /**
+     * Card width that spreads the width left over by @p columns within @p availableWidth
+     * evenly over all cards, between kCardMinWidth and kCardMaxWidth.
+     */
+    [[nodiscard]] static int cardWidthFor(const QVector<int> &columns, int availableWidth);
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;
@@ -92,8 +109,12 @@ private:
         QHBoxLayout *categoryRow = nullptr;
         /** Sensor keys currently rendered; a change requires a rebuild. */
         QString structureFingerprint;
-        /** Grid columns per category the section was built with. */
-        int columnsPerCategory = 0;
+        /** Grid columns per category (in category order) the section was built with. */
+        QVector<int> columns;
+        /** One container per category, in category order; sized by applyCardWidth(). */
+        QVector<QWidget *> categoryContainers;
+        /** Card width currently applied. */
+        int cardWidth = 0;
         /** Cards by sensor key, for value-only updates. */
         QHash<QString, SensorValueWidget *> widgets;
     };
@@ -107,17 +128,21 @@ private:
     /** Deletes sections of chips that are no longer present; returns true if any was removed. */
     bool removeStaleChipSections();
 
-    /** Creates, rebuilds or updates one section; returns true if its sensors changed. */
-    bool reconcileChipSection(const QString &chipName, const CategoryGroups &categories, int viewportWidth);
+    /** Creates, rebuilds or updates one section with the given layout; returns true if its sensors changed. */
+    bool reconcileChipSection(const QString &chipName, const CategoryGroups &categories, const QVector<int> &columns,
+                              int cardWidth);
 
     /** Creates and wires one reusable chip section container. */
     [[nodiscard]] ChipSection *createChipSection(const QString &chipName);
 
     /** Rebuilds one chip section's category/widget subtree. */
-    void rebuildChipSection(ChipSection &section, const CategoryGroups &categories, int columnsPerCategory);
+    void rebuildChipSection(ChipSection &section, const CategoryGroups &categories, const QVector<int> &columns);
 
     /** Present chips in display order: preferred order first, then the rest alphabetically. */
     [[nodiscard]] QStringList displayOrder() const;
+
+    /** Sizes all cards and category containers of @p section for @p cardWidth. */
+    static void applyCardWidth(ChipSection &section, int cardWidth);
 
     /** Puts the chip cards into the layout in displayOrder() when it differs. */
     void applyChipOrder();
@@ -133,8 +158,11 @@ private:
 
     [[nodiscard]] static ChipGroups groupReadingsByChip(const QVector<SensorReading> &readings);
     [[nodiscard]] static QString chipStructureFingerprint(const CategoryGroups &categories);
-    [[nodiscard]] static int columnsPerCategoryFor(int categoryCount, int viewportWidth);
-    [[nodiscard]] static int widthForColumns(int columns);
+    [[nodiscard]] static QVector<int> sensorCounts(const CategoryGroups &categories);
+    [[nodiscard]] static int widthForColumns(int columns, int cardWidth = AppTheme::kCardMinWidth);
+
+    /** Width around the categories of a chip: panel margins, card frame and chip content margins. */
+    [[nodiscard]] int chipChromeWidth() const;
 
     QVBoxLayout *m_layout;
     ChipGroups m_groups;

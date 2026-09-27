@@ -155,9 +155,7 @@ int SensorsPanel::minimumRequiredWidth() const {
     }
 
     // Each category needs at least one card column.
-    const int panelHorizontalMargins = m_layout->contentsMargins().left() + m_layout->contentsMargins().right();
-    return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins
-           + widthForColumns(maxCategoryCount);
+    return chipChromeWidth() + categoriesWidth(QVector<int>(maxCategoryCount, 1));
 }
 
 void SensorsPanel::checkRestoredState() {
@@ -176,8 +174,19 @@ bool SensorsPanel::render(const int viewportWidth) {
     // Batch updates avoid flicker while chip sections are reconciled/reordered.
     setUpdatesEnabled(false);
     bool structureChanged = removeStaleChipSections();
+
+    // Columns are planned per chip; the card width is shared, so the chip with the
+    // least spare width sets it for all cards.
+    const int available = viewportWidth - chipChromeWidth();
+    QHash<QString, QVector<int>> columnsByChip;
+    int cardWidth = AppTheme::kCardMaxWidth;
     for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
-        structureChanged |= reconcileChipSection(it.key(), it.value(), viewportWidth);
+        const QVector<int> columns = columnsForCategories(sensorCounts(it.value()), available);
+        columnsByChip.insert(it.key(), columns);
+        cardWidth = std::min(cardWidth, cardWidthFor(columns, available));
+    }
+    for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
+        structureChanged |= reconcileChipSection(it.key(), it.value(), columnsByChip.value(it.key()), cardWidth);
     }
     applyChipOrder();
     setUpdatesEnabled(true);
@@ -199,20 +208,23 @@ bool SensorsPanel::removeStaleChipSections() {
     return removed;
 }
 
-bool SensorsPanel::reconcileChipSection(const QString &chipName, const CategoryGroups &categories, const int viewportWidth) {
-    const int columnsPerCategory = columnsPerCategoryFor(static_cast<int>(categories.size()), viewportWidth);
-
+bool SensorsPanel::reconcileChipSection(const QString &chipName, const CategoryGroups &categories,
+                                        const QVector<int> &columns, const int cardWidth) {
     auto it = m_chipSections.find(chipName);
     ChipSection *section = it != m_chipSections.end() ? &it.value() : createChipSection(chipName);
 
-    // Rebuild only when sensors or the column count changed; resizes within the same
-    // column count keep the existing widgets.
     const QString structure = chipStructureFingerprint(categories);
     const bool sensorsChanged = section->structureFingerprint != structure;
-    if (sensorsChanged || section->columnsPerCategory != columnsPerCategory) {
-        rebuildChipSection(*section, categories, columnsPerCategory);
+    // Rebuild only when sensors or column counts change; a new card width while
+    // resizing just resizes the existing widgets.
+    const bool rebuild = sensorsChanged || section->columns != columns;
+    if (rebuild) {
+        rebuildChipSection(*section, categories, columns);
         section->structureFingerprint = structure;
-        section->columnsPerCategory = columnsPerCategory;
+        section->columns = columns;
+    }
+    if (rebuild || section->cardWidth != cardWidth) {
+        applyCardWidth(*section, cardWidth);
     }
 
     for (const QVector<SensorReading> &readings: categories) {
@@ -258,7 +270,7 @@ SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipNa
 }
 
 void SensorsPanel::rebuildChipSection(ChipSection &section, const CategoryGroups &categories,
-                                      const int columnsPerCategory) {
+                                      const QVector<int> &columns) {
     // Replace only this chip's subtree; keep the outer chip card/header instance alive.
     while (QLayoutItem *item = section.categoryRow->takeAt(0)) {
         if (item->widget() != nullptr) {
@@ -267,15 +279,16 @@ void SensorsPanel::rebuildChipSection(ChipSection &section, const CategoryGroups
         delete item;
     }
     section.widgets.clear();
+    section.categoryContainers.clear();
 
-    for (auto categoryIt = categories.cbegin(); categoryIt != categories.cend(); ++categoryIt) {
+    int categoryIndex = 0;
+    for (auto categoryIt = categories.cbegin(); categoryIt != categories.cend(); ++categoryIt, ++categoryIndex) {
         const SensorCategory categoryName = categoryIt.key();
         const QVector<SensorReading> &categoryReadings = categoryIt.value();
-        const int usedColumns = std::max(1, std::min(columnsPerCategory, static_cast<int>(categoryReadings.size())));
-        const int categoryWidth = widthForColumns(usedColumns);
+        const int columnsPerCategory = columns.value(categoryIndex, 1);
 
         auto *categoryContainer = new QWidget(section.card->content());
-        categoryContainer->setFixedWidth(categoryWidth);
+        section.categoryContainers.append(categoryContainer);
         auto *categoryContainerLayout = new QVBoxLayout(categoryContainer);
         categoryContainerLayout->setContentsMargins(0, 0, 0, 0);
         categoryContainerLayout->setSpacing(AppTheme::kCategoryBlockSpacing);
@@ -328,23 +341,73 @@ QString SensorsPanel::chipStructureFingerprint(const CategoryGroups &categories)
     return entries.join(QLatin1Char('\n'));
 }
 
-int SensorsPanel::columnsPerCategoryFor(const int categoryCount, const int viewportWidth) {
-    // Lower bound keeps the calculation stable while the viewport is not laid out yet.
-    const int stableWidth = std::max(AppTheme::kMinStableViewportWidth, viewportWidth);
-    const int categories = std::max(1, categoryCount);
-    const int perCategoryWidth = std::max(
-        AppTheme::kCardMinWidth,
-        (stableWidth - kChipContentHorizontalMargins - ((categories - 1) * AppTheme::kUnifiedHorizontalSpacing)) / categories
-    );
-    return std::clamp(
-        (perCategoryWidth + AppTheme::kUnifiedHorizontalSpacing) / (AppTheme::kCardMinWidth + AppTheme::kUnifiedHorizontalSpacing),
-        1,
-        AppTheme::kMaxColumnsPerCategory
-    );
+QVector<int> SensorsPanel::sensorCounts(const CategoryGroups &categories) {
+    QVector<int> counts;
+    counts.reserve(categories.size());
+    for (const QVector<SensorReading> &readings: categories)
+        counts.append(static_cast<int>(readings.size()));
+    return counts;
 }
 
-int SensorsPanel::widthForColumns(const int columns) {
-    return (columns * AppTheme::kCardMinWidth) + ((columns - 1) * AppTheme::kUnifiedHorizontalSpacing);
+QVector<int> SensorsPanel::columnsForCategories(const QVector<int> &sensorCounts, const int availableWidth) {
+    QVector<int> columns(sensorCounts.size(), 1);
+    const int pitch = AppTheme::kCardMinWidth + AppTheme::kUnifiedHorizontalSpacing;
+    int used = categoriesWidth(columns);
+    const auto rows = [](const int count, const int cols) { return (count + cols - 1) / cols; };
+
+    while (used + pitch <= availableWidth) {
+        int best = -1;
+        int bestRows = 0;
+        for (int i = 0; i < sensorCounts.size(); ++i) {
+            const int count = std::max(1, sensorCounts.at(i));
+            const bool savesRow = rows(count, columns.at(i) + 1) < rows(count, columns.at(i));
+            if (savesRow && columns.at(i) < AppTheme::kMaxColumnsPerCategory && rows(count, columns.at(i)) > bestRows) {
+                best = i;
+                bestRows = rows(count, columns.at(i));
+            }
+        }
+        if (best < 0)
+            break;
+        ++columns[best];
+        used += pitch;
+    }
+    return columns;
+}
+
+int SensorsPanel::categoriesWidth(const QVector<int> &columns) {
+    int width = 0;
+    for (const int cols: columns)
+        width += widthForColumns(cols);
+    return width + std::max<int>(0, static_cast<int>(columns.size()) - 1) * AppTheme::kUnifiedHorizontalSpacing;
+}
+
+int SensorsPanel::chipChromeWidth() const {
+    const int panelHorizontalMargins = m_layout->contentsMargins().left() + m_layout->contentsMargins().right();
+    return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins;
+}
+
+int SensorsPanel::widthForColumns(const int columns, const int cardWidth) {
+    return (columns * cardWidth) + ((columns - 1) * AppTheme::kUnifiedHorizontalSpacing);
+}
+
+int SensorsPanel::cardWidthFor(const QVector<int> &columns, const int availableWidth) {
+    int totalColumns = 0;
+    for (const int cols: columns)
+        totalColumns += cols;
+    const int spare = availableWidth - categoriesWidth(columns);
+    if (totalColumns == 0 || spare <= 0)
+        return AppTheme::kCardMinWidth;
+    return std::min(AppTheme::kCardMinWidth + spare / totalColumns, AppTheme::kCardMaxWidth);
+}
+
+void SensorsPanel::applyCardWidth(ChipSection &section, const int cardWidth) {
+    for (int i = 0; i < section.categoryContainers.size(); ++i) {
+        section.categoryContainers.at(i)->setFixedWidth(widthForColumns(section.columns.value(i, 1), cardWidth));
+    }
+    for (SensorValueWidget *card: std::as_const(section.widgets)) {
+        card->setFixedWidth(cardWidth);
+    }
+    section.cardWidth = cardWidth;
 }
 
 void SensorsPanel::startChipDrag(const QString &chip) {

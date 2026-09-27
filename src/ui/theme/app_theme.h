@@ -14,9 +14,10 @@ namespace AppTheme {
     // Window size on first start, before any geometry was saved.
     inline constexpr int kInitialWindowWidth = 900;
     inline constexpr int kInitialWindowHeight = 520;
-    // Sensor card width range; the column calculation uses the minimum.
+    // Sensor card width range: columns are planned at the minimum, spare width
+    // stretches the cards up to the maximum.
     inline constexpr int kCardMinWidth = 150;
-    inline constexpr int kCardWidth = 170;
+    inline constexpr int kCardMaxWidth = 200;
     // Sensor card title: slightly smaller theme font, aligned with the LCD panel edge.
     inline constexpr qreal kCardTitleFontScale = 0.9;
     inline constexpr int kCardTitleInset = 2;
@@ -34,8 +35,6 @@ namespace AppTheme {
     inline constexpr int kMaxColumnsPerCategory = 6;
     inline constexpr int kSectionInset = 8;
     inline constexpr int kNarrowGap = 2;
-    // Lower bound for stable column calculation; prevents layout collapse at zero width.
-    inline constexpr int kMinStableViewportWidth = 200;
     // Segment LCD colors (xsensors palette); ghost alpha applies to unlit segments.
     inline constexpr QRgb kLcdNormalRgb = 0x4a7c46;
     inline constexpr QRgb kLcdAlertRgb = 0xc14433;
