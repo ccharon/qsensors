@@ -7,6 +7,7 @@
 #include "sensor_identity.h"
 #include "theme/app_theme.h"
 #include "main_window_state_store.h"
+#include "settings_schema.h"
 #include "settings_panel.h"
 #include "sensors_panel.h"
 
@@ -18,12 +19,18 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QWindow>
+#include <chrono>
+
+namespace {
+    constexpr int kNoticeTimeoutMs = 10000;
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
@@ -44,20 +51,20 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
         m_runtimeConfig.pollingIntervalSec = value;
-        // Apply immediately so the next tick uses the new cadence without restart.
         applyRuntimeConfig();
-        setStatusMessage(
-            tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec)
-        );
+        persistRuntimeConfig();
+        updateReadingsStatus();
     });
 
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
+        persistRuntimeConfig();
         refreshReadings();
     });
 
     connect(m_settingsPanel, &SettingsPanel::temperatureUnitChanged, this, [this](const TemperatureUnit unit) {
         m_runtimeConfig.temperatureUnit = unit;
+        persistRuntimeConfig();
         refreshReadings();
     });
 
@@ -65,10 +72,10 @@ MainWindow::MainWindow(QWidget *parent)
         setStatusMessage(tr("libsensors init failed: %1").arg(m_backend.lastError()));
         return;
     }
-    applyRuntimeConfig();
 
     connect(m_timer, &QTimer::timeout, this, &MainWindow::refreshReadings);
-    m_timer->start(m_runtimeConfig.pollingIntervalSec * 1000);
+    applyRuntimeConfig();
+    m_timer->start();
     // Intentional first immediate sample for fast startup feedback.
     refreshReadings();
 }
@@ -83,7 +90,7 @@ void MainWindow::refreshReadings() {
         m_chipExpanded.clear();
         m_lastPushedExpanded.clear();
         m_loadedChipFingerprint.clear();
-        setStatusMessage(tr("Sensor layout changed: UI config reset"));
+        showNotice(tr("Sensor layout changed: UI config reset"));
     }
 
     m_currentFingerprint = currentFingerprint;
@@ -95,9 +102,26 @@ void MainWindow::refreshReadings() {
     if (structureChanged) {
         updateMinimumWindowWidthConstraint();
     }
+    updateReadingsStatus();
+}
 
-    setStatusMessage(
-        tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
+void MainWindow::updateReadingsStatus() {
+    if (m_lastReadings.isEmpty()) {
+        setStatusMessage(tr("No sensors found. Run sensors-detect and check the lm-sensors configuration."));
+        return;
+    }
+    setStatusMessage(tr("Readings: %1 | Refresh: %2s").arg(m_lastReadings.size()).arg(m_runtimeConfig.pollingIntervalSec));
+}
+
+void MainWindow::showNotice(const QString &text) {
+    // Temporary message: the readings label stays in place underneath.
+    statusBar()->showMessage(text, kNoticeTimeoutMs);
+}
+
+void MainWindow::persistRuntimeConfig() {
+    if (!AppConfigStore::saveRuntimeConfig(m_runtimeConfig)) {
+        showNotice(tr("Settings could not be saved"));
+    }
 }
 
 void MainWindow::setupUi() {
@@ -195,6 +219,9 @@ void MainWindow::applyThemeRefresh() {
 void MainWindow::loadSettings() {
     // Runtime config and UI layout state are intentionally persisted independently.
     m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
+    if (QSettings settings; SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
+        showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
+    }
     const MainWindowState state = MainWindowStateStore::load();
 
     m_hasSavedGeometry = state.hasGeometry;
@@ -207,18 +234,14 @@ void MainWindow::loadSettings() {
 }
 
 void MainWindow::saveSettings() const {
-    AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
-
-    MainWindowStateStore::save(
-        saveGeometry(),
-        m_currentFingerprint,
-        m_chipExpanded
-    );
+    // Runs on close, when no UI feedback is possible; the stores log failures.
+    (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
+    (void) MainWindowStateStore::save(saveGeometry(), m_currentFingerprint, m_chipExpanded);
 }
 
 void MainWindow::applyRuntimeConfig() {
     // Centralized fan-out point for runtime-tunable behavior.
-    m_timer->setInterval(m_runtimeConfig.pollingIntervalSec * 1000);
+    m_timer->setInterval(std::chrono::seconds(m_runtimeConfig.pollingIntervalSec));
 }
 
 void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {

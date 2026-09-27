@@ -50,7 +50,7 @@ void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
 
 void SensorsPanel::setReadings(const QVector<SensorReading> &readings, const int viewportWidth) {
     m_readings = readings;
-    renderReadings(viewportWidth, false);
+    renderReadings(viewportWidth);
 }
 
 void SensorsPanel::relayout(const int viewportWidth) {
@@ -58,7 +58,7 @@ void SensorsPanel::relayout(const int viewportWidth) {
         return;
     }
 
-    renderReadings(viewportWidth, true);
+    renderReadings(viewportWidth);
 }
 
 int SensorsPanel::minimumRequiredWidth() const {
@@ -74,7 +74,7 @@ int SensorsPanel::minimumRequiredWidth() const {
     return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + chipContentHorizontalMargins + categoriesWidth;
 }
 
-void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebuild) {
+void SensorsPanel::renderReadings(const int viewportWidth) {
     m_groupedCache = groupReadingsByChip(m_readings);
     const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped = m_groupedCache;
     const int stableViewportWidth = computeStableViewportWidth(viewportWidth);
@@ -87,7 +87,7 @@ void SensorsPanel::renderReadings(const int viewportWidth, const bool forceRebui
 
     for (const QString &chipName: orderedChips) {
         const QMap<SensorCategory, QVector<SensorReading> > &categories = grouped.value(chipName);
-        reconcileChipSection(chipName, categories, stableViewportWidth, forceRebuild);
+        reconcileChipSection(chipName, categories, stableViewportWidth);
     }
 
     applyChipOrder(orderedChips);
@@ -140,8 +140,7 @@ int SensorsPanel::widthForColumns(const int columns) {
 void SensorsPanel::reconcileChipSection(
     const QString &chipName,
     const QMap<SensorCategory, QVector<SensorReading> > &categories,
-    const int stableViewportWidth,
-    const bool forceRebuild
+    const int stableViewportWidth
 ) {
     constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
     const int categoryCount = std::max(1, static_cast<int>(categories.size()));
@@ -158,10 +157,13 @@ void SensorsPanel::reconcileChipSection(
     auto it = m_chipSections.find(chipName);
     ChipSection *section = it != m_chipSections.end() ? &it.value() : createChipSection(chipName);
 
+    // Rebuild only when sensors or the column count changed; resizes within the same
+    // column count keep the existing widgets.
     const QString structure = chipStructureFingerprint(categories);
-    if (forceRebuild || section->structureFingerprint != structure) {
+    if (section->structureFingerprint != structure || section->columnsPerCategory != columnsPerCategory) {
         rebuildChipSection(*section, categories, columnsPerCategory);
         section->structureFingerprint = structure;
+        section->columnsPerCategory = columnsPerCategory;
     }
 }
 

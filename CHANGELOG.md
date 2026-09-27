@@ -52,6 +52,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   256 px PNG (`resources/icons/qsensors.{svg,png}`).
 
 ### Fixed
+- The "Sensor layout changed" notice is now actually visible; it was
+  immediately replaced by the reading count.
+- Resizing the window no longer recreates every sensor card; sections are only
+  rebuilt when their column count changes.
+- Invalid settings values fall back to the documented defaults (and are logged)
+  instead of the minimum; out-of-range values are clamped with a log entry.
+- Runtime settings are saved as soon as they change, and a failed write is
+  shown in the status bar; previously they were only written on exit.
+- Settings written by a newer qsensors version keep their schema version
+  instead of being silently downgraded; a notice is shown.
+- When libsensors reports no sensors at all, the status bar explains how to
+  fix the configuration instead of showing an empty window.
+- Unreadable sensors and chips with unusable names are logged once instead of
+  being dropped silently; truncated chip names are detected.
 - Negative current and power readings (e.g. a discharging laptop battery)
   are no longer shown as alerts when the firmware provides no minimum; the
   synthetic range now extends below zero for these signed sensor types.

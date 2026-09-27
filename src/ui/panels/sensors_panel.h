@@ -30,7 +30,7 @@ public:
     /** Updates panel data and rebuilds widget tree only when sensor structure changed. */
     void setReadings(const QVector<SensorReading> &readings, int viewportWidth);
 
-    /** Forces a layout rebuild for viewport width changes without changing values. */
+    /** Re-evaluates the column layout for a new viewport width; unchanged sections are kept. */
     void relayout(int viewportWidth);
 
     /** Minimum width required so each category can still render at least one sensor column. */
@@ -48,12 +48,14 @@ private:
         QHBoxLayout *categoryRow = nullptr;
         /** Fingerprint of category/feature layout currently rendered in this section. */
         QString structureFingerprint;
+        /** Grid columns per category the section was built with. */
+        int columnsPerCategory = 0;
         /** Widget map for fast value-only updates without rebuilding chip content. */
         QHash<QString, SensorValueWidget *> widgets;
     };
 
     /** Reconciles chip sections and rebuilds only changed chip/category trees. */
-    void renderReadings(int viewportWidth, bool forceRebuild);
+    void renderReadings(int viewportWidth);
 
     [[nodiscard]] static QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > groupReadingsByChip(
         const QVector<SensorReading> &readings
@@ -67,8 +69,7 @@ private:
     void reconcileChipSection(
         const QString &chipName,
         const QMap<SensorCategory, QVector<SensorReading> > &categories,
-        int stableViewportWidth,
-        bool forceRebuild
+        int stableViewportWidth
     );
 
     /** Creates and wires one reusable chip section container. */

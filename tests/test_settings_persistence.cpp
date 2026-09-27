@@ -2,6 +2,7 @@
 
 #include "app_config_store.h"
 #include "main_window_state_store.h"
+#include "settings_schema.h"
 
 #include <QtTest/QtTest>
 #include <QCoreApplication>
@@ -23,6 +24,10 @@ private slots:
     void main_window_state_roundtrip();
     void main_window_state_chip_name_with_slash_roundtrip();
     void schema_version_is_written();
+    void runtime_config_non_numeric_values_use_defaults();
+    void runtime_config_out_of_range_values_are_clamped();
+    void newer_schema_version_is_not_downgraded();
+    void temperatureUnit_token_parsing_rejects_unknown();
 };
 
 void SettingsPersistenceTest::init() {
@@ -41,7 +46,7 @@ void SettingsPersistenceTest::runtime_config_roundtrip() {
     written.pollingIntervalSec = 7;
     written.fanDefaultMaxRpm = 6400;
     written.temperatureUnit = TemperatureUnit::Fahrenheit;
-    AppConfigStore::saveRuntimeConfig(written);
+    QVERIFY(AppConfigStore::saveRuntimeConfig(written));
 
     const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
     QCOMPARE(loaded.pollingIntervalSec, 7);
@@ -52,13 +57,13 @@ void SettingsPersistenceTest::runtime_config_roundtrip() {
 void SettingsPersistenceTest::runtime_config_temperatureUnit_token_roundtrip() {
     RuntimeConfig written;
     written.temperatureUnit = TemperatureUnit::Fahrenheit;
-    AppConfigStore::saveRuntimeConfig(written);
+    QVERIFY(AppConfigStore::saveRuntimeConfig(written));
 
     QSettings s;
     QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("F"));
 
     written.temperatureUnit = TemperatureUnit::Celsius;
-    AppConfigStore::saveRuntimeConfig(written);
+    QVERIFY(AppConfigStore::saveRuntimeConfig(written));
     QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
 }
 
@@ -77,7 +82,7 @@ void SettingsPersistenceTest::main_window_state_roundtrip() {
     expanded.insert(QStringLiteral("chip-a"), true);
     expanded.insert(QStringLiteral("chip-b"), false);
 
-    MainWindowStateStore::save(geometry, fingerprint, expanded);
+    QVERIFY(MainWindowStateStore::save(geometry, fingerprint, expanded));
     const MainWindowState loaded = MainWindowStateStore::load();
 
     QVERIFY(loaded.hasGeometry);
@@ -94,7 +99,7 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
     expanded.insert(QStringLiteral("pci/slot/2"), false);
     expanded.insert(QStringLiteral("normal-chip-isa-0000"), true);
 
-    MainWindowStateStore::save(QByteArray(), QString(), expanded);
+    QVERIFY(MainWindowStateStore::save(QByteArray(), QString(), expanded));
     const MainWindowState loaded = MainWindowStateStore::load();
 
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("bus/0")), true);
@@ -111,6 +116,47 @@ void SettingsPersistenceTest::schema_version_is_written() {
 
     QSettings s;
     QCOMPARE(s.value(QStringLiteral("meta/schema_version")).toInt(), 2);
+}
+
+void SettingsPersistenceTest::runtime_config_non_numeric_values_use_defaults() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), QStringLiteral("fast"));
+    s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), QStringLiteral(""));
+    s.sync();
+
+    const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(loaded.pollingIntervalSec, RuntimeConfigLimits::kDefaultPollingIntervalSec);
+    QCOMPARE(loaded.fanDefaultMaxRpm, RuntimeConfigLimits::kDefaultFanDefaultMaxRpm);
+}
+
+void SettingsPersistenceTest::runtime_config_out_of_range_values_are_clamped() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), 99);
+    s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), 10);
+    s.sync();
+
+    const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(loaded.pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
+    QCOMPARE(loaded.fanDefaultMaxRpm, RuntimeConfigLimits::kMinFanDefaultMaxRpm);
+}
+
+void SettingsPersistenceTest::newer_schema_version_is_not_downgraded() {
+    QSettings s;
+    s.setValue(QStringLiteral("meta/schema_version"), SettingsSchema::kCurrentVersion + 1);
+    s.sync();
+
+    (void) AppConfigStore::loadRuntimeConfig();
+    QVERIFY(AppConfigStore::saveRuntimeConfig(RuntimeConfig{}));
+
+    QSettings reread;
+    QCOMPARE(SettingsSchema::storedVersion(reread), SettingsSchema::kCurrentVersion + 1);
+}
+
+void SettingsPersistenceTest::temperatureUnit_token_parsing_rejects_unknown() {
+    QCOMPARE(temperatureUnitFromToken(u" f "), std::optional(TemperatureUnit::Fahrenheit));
+    QCOMPARE(temperatureUnitFromToken(u"c"), std::optional(TemperatureUnit::Celsius));
+    QVERIFY(!temperatureUnitFromToken(u"X").has_value());
+    QVERIFY(!temperatureUnitFromToken(u"").has_value());
 }
 
 QTEST_APPLESS_MAIN(SettingsPersistenceTest)

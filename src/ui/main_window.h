@@ -58,6 +58,15 @@ private:
     /** Updates status bar text in one place. */
     void setStatusMessage(const QString &text);
 
+    /** Permanent status: reading count and refresh interval, or a hint when no sensors exist. */
+    void updateReadingsStatus();
+
+    /** Shows @p text temporarily on top of the permanent status. */
+    void showNotice(const QString &text);
+
+    /** Saves the runtime config right away and reports a failed write. */
+    void persistRuntimeConfig();
+
     /** Keeps top-level minimum width aligned to widest currently required content. */
     void updateMinimumWindowWidthConstraint();
 

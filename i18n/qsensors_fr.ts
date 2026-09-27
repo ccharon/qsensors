@@ -12,8 +12,20 @@
         <translation>Disposition des capteurs modifiée : configuration UI réinitialisée</translation>
     </message>
     <message>
+        <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
+        <translation>Aucun capteur trouvé. Exécutez sensors-detect et vérifiez la configuration de lm-sensors.</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Mesures : %1 | Actualisation : %2s</translation>
+    </message>
+    <message>
+        <source>Settings could not be saved</source>
+        <translation>Impossible d&apos;enregistrer les paramètres</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
+        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors et sont utilisés dans la mesure du possible</translation>
     </message>
 </context>
 <context>

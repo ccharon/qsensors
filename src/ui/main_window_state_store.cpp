@@ -7,6 +7,7 @@
 #include <QSettings>
 #include <QStringList>
 #include <QUrl>
+#include <QDebug>
 
 namespace {
     // Chip names may contain '/' which QSettings interprets as a group separator.
@@ -38,7 +39,7 @@ MainWindowState MainWindowStateStore::load() {
     return state;
 }
 
-void MainWindowStateStore::save(
+bool MainWindowStateStore::save(
     const QByteArray &geometry,
     const QString &sensorFingerprint,
     const QHash<QString, bool> &chipExpanded
@@ -53,4 +54,10 @@ void MainWindowStateStore::save(
         settings.setValue(encodeChipKey(it.key()), it.value());
     }
     settings.endGroup();
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        qWarning("qsensors: could not write window state to %s", qPrintable(settings.fileName()));
+        return false;
+    }
+    return true;
 }

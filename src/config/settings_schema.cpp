@@ -4,6 +4,7 @@
 #include "settings_schema.h"
 
 #include <QSettings>
+#include <QDebug>
 
 namespace {
     void migrateV0ToV1(QSettings &settings) {
@@ -21,8 +22,17 @@ namespace {
     }
 }
 
+int SettingsSchema::storedVersion(const QSettings &settings) {
+    return settings.value(QStringLiteral("meta/schema_version"), 0).toInt();
+}
+
 void SettingsSchema::ensureUpToDate(QSettings &settings) {
-    const int version = settings.value(QStringLiteral("meta/schema_version"), 0).toInt();
+    const int version = storedVersion(settings);
+    if (version > kCurrentVersion) {
+        qWarning("qsensors: settings schema v%d is newer than supported v%d; keeping it unchanged",
+                 version, kCurrentVersion);
+        return;
+    }
 
     if (version < 1) {
         migrateV0ToV1(settings);

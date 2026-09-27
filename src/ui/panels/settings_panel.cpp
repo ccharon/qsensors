@@ -121,7 +121,7 @@ void SettingsPanel::buildTemperatureUnitRow(QFormLayout *form, QWidget *parent) 
     m_temperatureUnitCombo->setStyleSheet(AppTheme::comboBoxStyle());
     connect(m_temperatureUnitCombo, &QComboBox::currentIndexChanged, this, [this](int index) {
         const QString token = m_temperatureUnitCombo->itemData(index).toString();
-        emit temperatureUnitChanged(temperatureUnitFromToken(QStringView(token)));
+        emit temperatureUnitChanged(temperatureUnitFromToken(token).value_or(TemperatureUnit::Celsius));
     });
     form->addRow(label, m_temperatureUnitCombo);
 }

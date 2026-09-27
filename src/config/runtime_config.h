@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include <optional>
+
 class QString;
 class QStringView;
 
@@ -11,7 +13,7 @@ enum class TemperatureUnit {
     Fahrenheit = 'F'
 };
 
-[[nodiscard]] TemperatureUnit temperatureUnitFromToken(QStringView token);
+[[nodiscard]] std::optional<TemperatureUnit> temperatureUnitFromToken(QStringView token);
 [[nodiscard]] QString temperatureUnitToToken(TemperatureUnit unit);
 
 namespace RuntimeConfigLimits {

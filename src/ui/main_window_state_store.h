@@ -18,7 +18,8 @@ struct MainWindowState {
 namespace MainWindowStateStore {
     [[nodiscard]] MainWindowState load();
 
-    void save(
+    /** Writes the window state to disk; returns false (and logs) if it could not be stored. */
+    [[nodiscard]] bool save(
         const QByteArray &geometry,
         const QString &sensorFingerprint,
         const QHash<QString, bool> &chipExpanded

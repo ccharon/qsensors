@@ -6,6 +6,7 @@
 #include "runtime_config.h"
 
 #include <QHash>
+#include <QSet>
 #include <QString>
 #include <QVector>
 #include <optional>
@@ -90,4 +91,6 @@ private:
     QString m_lastError;
     // Current unit scale (true = mA/mW) per "chip:feature" for sensors without native limits.
     QHash<QString, bool> m_milliScaleLatch;
+    // Problems already logged, so a failing sensor does not flood the log every poll.
+    QSet<QString> m_reportedProblems;
 };

@@ -12,8 +12,20 @@
         <translation>Layout dos sensores alterado: configuração de UI redefinida</translation>
     </message>
     <message>
+        <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
+        <translation>Nenhum sensor encontrado. Execute sensors-detect e verifique a configuração do lm-sensors.</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Leituras: %1 | Atualização: %2s</translation>
+    </message>
+    <message>
+        <source>Settings could not be saved</source>
+        <translation>Não foi possível salvar as configurações</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
+        <translation>As configurações vêm de uma versão mais recente do qsensors e são usadas na medida do possível</translation>
     </message>
 </context>
 <context>

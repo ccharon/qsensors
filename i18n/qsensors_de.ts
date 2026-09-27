@@ -12,8 +12,20 @@
         <translation>Sensorlayout geändert: UI-Konfiguration zurückgesetzt</translation>
     </message>
     <message>
+        <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
+        <translation>Keine Sensoren gefunden. sensors-detect ausführen und die lm-sensors-Konfiguration prüfen.</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Messwerte: %1 | Aktualisierung: %2s</translation>
+    </message>
+    <message>
+        <source>Settings could not be saved</source>
+        <translation>Einstellungen konnten nicht gespeichert werden</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
+        <translation>Die Einstellungen stammen von einer neueren qsensors-Version und werden so weit wie möglich übernommen</translation>
     </message>
 </context>
 <context>
