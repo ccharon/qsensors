@@ -76,6 +76,11 @@ install_build_tools() {
 }
 
 install_qt() {
+    # CI restores $WORK/qt from its cache.
+    if [ -x "$QT_DIR/bin/qmake" ]; then
+        echo "using cached Qt in $QT_DIR"
+        return
+    fi
     aqt install-qt "$QT_HOST" desktop "$QT_VERSION" "$QT_ARCH" \
         --archives qtbase qtwayland qtsvg qttools qttranslations icu \
         --outputdir "$WORK/qt"

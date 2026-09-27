@@ -1,0 +1,68 @@
+name: AppImage
+
+# Reusable build of both AppImages; called by ci.yml for every change and by
+# release.yml for tags, so CI exercises exactly the release path.
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version used in the AppImage file names
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The container's glibc is the AppImage's minimum glibc.
+          - arch: x86_64
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux_2_28_x86_64 # AlmaLinux 8, glibc 2.28
+          # Official Qt arm64 binaries need glibc 2.38, so an older base gains nothing.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: ubuntu:24.04 # glibc 2.39
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install git
+        if: matrix.image == 'ubuntu:24.04'
+        run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Qt
+        uses: actions/cache@v4
+        with:
+          path: .appimage-work/qt
+          key: qt-${{ matrix.arch }}-${{ hashFiles('packaging/appimage/build.sh') }}
+
+      - name: Build and test AppImage
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bash packaging/appimage/build.sh
+
+      - name: Verify translations are up to date
+        if: matrix.arch == 'x86_64'
+        run: |
+          export PATH="$PWD/.appimage-work/venv/bin:$PATH"
+          cmake --build .appimage-work/build --target update_translations
+          if ! git diff --quiet -- i18n/qsensors_*.ts; then
+            echo "::error::Translation sources are outdated. Run: cmake --build build --target update_translations"
+            git --no-pager diff -- i18n/qsensors_*.ts
+            exit 1
+          fi
+
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: dist/qsensors-*.AppImage
+          if-no-files-found: error
+          retention-days: 14
