@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.80.10] - 2026-09-27
+
 ### Added
 - Unit symbols for Ampere (`A`, `mA`) and Watt (`W`, `mW`) on the LCD;
   previously Current/Power tiles rendered digits with no unit suffix at all,
@@ -37,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and restored on the next start. New chips appear at the end.
 
 ### Changed
+- Gentoo ebuild: fetches the `v`-prefixed release tag, relies on `cmake --install`
+  for the desktop entry and icons (no `files/` directory anymore) and adds the
+  `~arm64` keyword.
 - The settings section moved from the top to the bottom of the window.
 - Wider windows add sensor columns one at a time, first to the category with
   the most rows, instead of only when every category of a chip fits another
@@ -178,7 +183,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed translation entries for new temperature unit UI strings in `en/de/fr/es`.
 - Gentoo packaging README now explicitly requires copying `files/qsensors.desktop`.
 
-[Unreleased]: https://github.com/ccharon/qsensors/compare/0.80.9...develop
+[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.10...develop
+[0.80.10]: https://github.com/ccharon/qsensors/compare/0.80.9...v0.80.10
 [0.80.9]: https://github.com/ccharon/qsensors/compare/0.80.8...0.80.9
 [0.80.8]: https://github.com/ccharon/qsensors/compare/0.80.7...0.80.8
 [0.80.7]: https://github.com/ccharon/qsensors/releases/tag/0.80.7
