@@ -33,8 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   need to copy them separately. The desktop entry gained a Portuguese comment.
 
 - arm64 (aarch64) AppImage for releases, alongside the x86_64 one.
+- Chip panels can be reordered by dragging their header; the order is saved
+  and restored on the next start. New chips appear at the end.
 
 ### Changed
+- The settings section moved from the top to the bottom of the window.
 - AppImages bundle Qt 6.8 and the Wayland platform plugin, so they run
   natively on Wayland and still on X11. The x86_64 AppImage now needs glibc
   2.28 (was 2.35), which adds RHEL/Alma/Rocky 8 and 9, Debian 11 and Ubuntu

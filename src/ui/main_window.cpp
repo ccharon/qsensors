@@ -127,17 +127,18 @@ void MainWindow::setupUi() {
 
     auto *settingsHost = new QWidget(m_contentContainer);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
-    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, AppTheme::kSectionInset + AppTheme::kNarrowGap, AppTheme::kSectionInset, 0);
+    settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset,
+                                           AppTheme::kSectionInset + AppTheme::kNarrowGap);
     settingsHostLayout->setSpacing(0);
-    settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignTop);
+    settingsHostLayout->addWidget(m_settingsPanel, 0, Qt::AlignBottom);
 
     // Settings section should keep its natural height and never consume spare vertical space.
     m_settingsPanel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
     settingsHost->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Maximum);
 
-    // Settings first, then sensor panels.
-    contentLayout->addWidget(settingsHost, 0, Qt::AlignTop);
+    // Sensor panels take the spare height, so the settings sit at the bottom.
     contentLayout->addWidget(m_sensorsPanel, 1);
+    contentLayout->addWidget(settingsHost, 0, Qt::AlignBottom);
 
     m_scrollArea->setWidget(m_contentContainer);
     layout->addWidget(m_scrollArea);
@@ -202,13 +203,18 @@ void MainWindow::loadSettings() {
     m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);
 
     m_sensorsPanel->restoreChipExpandedState(state.chipExpanded, state.sensorFingerprint);
+    m_sensorsPanel->setChipOrder(state.chipOrder);
 }
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
-    (void) MainWindowStateStore::save(saveGeometry(), m_sensorsPanel->chipFingerprint(),
-                                      m_sensorsPanel->chipExpandedState());
+    (void) MainWindowStateStore::save({
+        .geometry = saveGeometry(),
+        .chipExpanded = m_sensorsPanel->chipExpandedState(),
+        .chipOrder = m_sensorsPanel->chipOrder(),
+        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
+    });
 }
 
 void MainWindow::applyRuntimeConfig() {

@@ -35,22 +35,20 @@ MainWindowState MainWindowStateStore::load() {
     }
     settings.endGroup();
 
+    state.chipOrder = settings.value(SettingsKeys::kChipOrder).toStringList();
     state.sensorFingerprint = settings.value(SettingsKeys::kSensorFingerprint).toString();
     return state;
 }
 
-bool MainWindowStateStore::save(
-    const QByteArray &geometry,
-    const QString &sensorFingerprint,
-    const QHash<QString, bool> &chipExpanded
-) {
+bool MainWindowStateStore::save(const MainWindowState &state) {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
-    settings.setValue(SettingsKeys::kWindowGeometry, geometry);
-    settings.setValue(SettingsKeys::kSensorFingerprint, sensorFingerprint);
+    settings.setValue(SettingsKeys::kWindowGeometry, state.geometry);
+    settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
+    settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);
     settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     settings.remove(QString());
-    for (auto it = chipExpanded.constBegin(); it != chipExpanded.constEnd(); ++it) {
+    for (auto it = state.chipExpanded.constBegin(); it != state.chipExpanded.constEnd(); ++it) {
         settings.setValue(encodeChipKey(it.key()), it.value());
     }
     settings.endGroup();

@@ -13,6 +13,10 @@
 #include <QWidget>
 
 class CollapsibleSection;
+class QDragEnterEvent;
+class QDragLeaveEvent;
+class QDragMoveEvent;
+class QDropEvent;
 class QHBoxLayout;
 class QVBoxLayout;
 class SensorValueWidget;
@@ -38,6 +42,18 @@ public:
     /** Expand/collapse state per chip name, for persistence. */
     [[nodiscard]] QHash<QString, bool> chipExpandedState() const;
 
+    /**
+     * Preferred chip order, e.g. restored from settings. Listed chips come first in
+     * this order; chips not listed follow alphabetically.
+     */
+    void setChipOrder(const QStringList &order);
+
+    /** Current chip order for persistence; includes preferred chips not present right now. */
+    [[nodiscard]] QStringList chipOrder() const;
+
+    /** Moves @p chip to position @p targetIndex among the shown chips (insert position before the move). */
+    void moveChip(const QString &chip, int targetIndex);
+
     /** Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). */
     [[nodiscard]] QString chipFingerprint() const;
 
@@ -52,6 +68,12 @@ public:
 
     /** Minimum width required so each category can still render at least one sensor column. */
     [[nodiscard]] int minimumRequiredWidth() const;
+
+protected:
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dragLeaveEvent(QDragLeaveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 signals:
     /** Chips or categories changed, so minimumRequiredWidth() may have changed. */
@@ -94,8 +116,20 @@ private:
     /** Rebuilds one chip section's category/widget subtree. */
     void rebuildChipSection(ChipSection &section, const CategoryGroups &categories, int columnsPerCategory);
 
-    /** Puts the chip cards into the layout in m_groups order when it differs. */
+    /** Present chips in display order: preferred order first, then the rest alphabetically. */
+    [[nodiscard]] QStringList displayOrder() const;
+
+    /** Puts the chip cards into the layout in displayOrder() when it differs. */
     void applyChipOrder();
+
+    /** Starts dragging the card of @p chip; the drop reorders via moveChip(). */
+    void startChipDrag(const QString &chip);
+
+    /** Insert position among the shown chips for a drop at @p y. */
+    [[nodiscard]] int dropIndexAt(int y) const;
+
+    /** Shows the insert line before position @p index. */
+    void showDropIndicator(int index);
 
     [[nodiscard]] static ChipGroups groupReadingsByChip(const QVector<SensorReading> &readings);
     [[nodiscard]] static QString chipStructureFingerprint(const CategoryGroups &categories);
@@ -105,7 +139,9 @@ private:
     QVBoxLayout *m_layout;
     ChipGroups m_groups;
     QHash<QString, ChipSection> m_chipSections;
-    QStringList m_chipOrder;
+    QStringList m_chipOrder; // order currently in the layout
+    QStringList m_preferredOrder;
+    QWidget *m_dropIndicator;
     QHash<QString, bool> m_chipExpanded;
     // Set by restoreChipExpandedState() until the first readings confirm or reject it.
     QString m_restoredFingerprint;

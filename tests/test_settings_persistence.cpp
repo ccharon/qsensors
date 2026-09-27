@@ -83,13 +83,16 @@ void SettingsPersistenceTest::main_window_state_roundtrip() {
     expanded.insert(QStringLiteral("chip-a"), true);
     expanded.insert(QStringLiteral("chip-b"), false);
 
-    QVERIFY(MainWindowStateStore::save(geometry, fingerprint, expanded));
+    const QStringList order{QStringLiteral("chip-b"), QStringLiteral("chip-a")};
+    QVERIFY(MainWindowStateStore::save({.geometry = geometry, .chipExpanded = expanded, .chipOrder = order,
+                                        .sensorFingerprint = fingerprint}));
     const MainWindowState loaded = MainWindowStateStore::load();
 
     QCOMPARE(loaded.geometry, geometry);
     QCOMPARE(loaded.sensorFingerprint, fingerprint);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a")), true);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-b")), false);
+    QCOMPARE(loaded.chipOrder, order);
 }
 
 void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip() {
@@ -99,7 +102,7 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
     expanded.insert(QStringLiteral("pci/slot/2"), false);
     expanded.insert(QStringLiteral("normal-chip-isa-0000"), true);
 
-    QVERIFY(MainWindowStateStore::save(QByteArray(), QString(), expanded));
+    QVERIFY(MainWindowStateStore::save({.chipExpanded = expanded}));
     const MainWindowState loaded = MainWindowStateStore::load();
 
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("bus/0")), true);

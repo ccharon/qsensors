@@ -13,5 +13,6 @@ namespace SettingsKeys {
     inline constexpr QLatin1String kTemperatureUnit("runtime/temperature_unit");
     inline constexpr QLatin1String kWindowGeometry("ui/geometry");
     inline constexpr QLatin1String kChipExpandedGroup("ui/chips");
+    inline constexpr QLatin1String kChipOrder("ui/chip_order");
     inline constexpr QLatin1String kSensorFingerprint("sensors/fingerprint");
 }

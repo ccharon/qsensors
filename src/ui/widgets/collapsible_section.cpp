@@ -4,6 +4,8 @@
 #include "collapsible_section.h"
 #include "theme/app_theme.h"
 
+#include <QApplication>
+#include <QMouseEvent>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -53,4 +55,46 @@ bool CollapsibleSection::isExpanded() const {
 
 void CollapsibleSection::setExpanded(const bool expanded) {
     m_header->setChecked(expanded);
+}
+
+void CollapsibleSection::setDraggable(const bool draggable) {
+    if (draggable == m_draggable)
+        return;
+    m_draggable = draggable;
+    if (draggable) {
+        m_header->installEventFilter(this);
+        m_header->setCursor(Qt::OpenHandCursor);
+        m_header->setToolTip(tr("Click to collapse or expand, drag to reorder"));
+    } else {
+        m_header->removeEventFilter(this);
+        m_header->unsetCursor();
+        m_header->setToolTip(QString());
+    }
+}
+
+bool CollapsibleSection::eventFilter(QObject *watched, QEvent *event) {
+    if (watched != m_header)
+        return QFrame::eventFilter(watched, event);
+
+    if (event->type() == QEvent::MouseButtonPress) {
+        const auto *mouse = static_cast<QMouseEvent *>(event);
+        m_swallowRelease = false;
+        if (mouse->button() == Qt::LeftButton)
+            m_pressPos = mouse->position().toPoint();
+    } else if (event->type() == QEvent::MouseButtonRelease && m_swallowRelease) {
+        // Some platforms deliver the release after a drag; it must not toggle the section.
+        m_swallowRelease = false;
+        return true;
+    } else if (event->type() == QEvent::MouseMove) {
+        const auto *mouse = static_cast<QMouseEvent *>(event);
+        if ((mouse->buttons() & Qt::LeftButton)
+            && (mouse->position().toPoint() - m_pressPos).manhattanLength() >= QApplication::startDragDistance()) {
+            // The drag's event loop swallows the release, so the header must not stay pressed.
+            m_header->setDown(false);
+            m_swallowRelease = true;
+            emit dragRequested();
+            return true;
+        }
+    }
+    return QFrame::eventFilter(watched, event);
 }

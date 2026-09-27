@@ -2,6 +2,13 @@
 <!DOCTYPE TS>
 <TS version="2.1" language="en">
 <context>
+    <name>CollapsibleSection</name>
+    <message>
+        <source>Click to collapse or expand, drag to reorder</source>
+        <translation>Click to collapse or expand, drag to reorder</translation>
+    </message>
+</context>
+<context>
     <name>MainWindow</name>
     <message>
         <source>libsensors init failed: %1</source>

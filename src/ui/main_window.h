@@ -70,10 +70,10 @@ private:
     /** Expands window width minimally until horizontal overflow is gone. */
     void ensureNoHorizontalOverflow(int extraPadding);
 
-    /** Loads runtime config, geometry, expand state and chip fingerprint. */
+    /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
     void loadSettings();
 
-    /** Persists runtime config, geometry, expand state and chip fingerprint. */
+    /** Persists runtime config, geometry, chip order, expand state and chip fingerprint. */
     void saveSettings() const;
 
     /** Width available to the sensor panel inside the scroll area. */

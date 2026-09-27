@@ -2,10 +2,13 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors_panel.h"
+#include "collapsible_section.h"
 #include "sensor_identity.h"
 #include "sensor_value_widget.h"
 
 #include <QApplication>
+#include <algorithm>
+#include <QLayout>
 #include <QPointer>
 #include <QSignalSpy>
 #include <QToolButton>
@@ -24,6 +27,10 @@ private slots:
     void restored_state_dropped_for_other_chip_set();
     void restored_state_kept_for_same_chip_set();
     void fingerprint_and_count_follow_readings();
+    void default_order_is_alphabetical();
+    void move_chip_reorders_cards();
+    void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
+    void header_click_still_toggles_when_draggable();
 };
 
 namespace {
@@ -40,6 +47,19 @@ namespace {
 
     QList<SensorValueWidget *> cards(const SensorsPanel &panel) {
         return panel.findChildren<SensorValueWidget *>();
+    }
+
+    // Chip names of the cards from top to bottom, as laid out.
+    QStringList cardOrder(SensorsPanel &panel) {
+        panel.resize(900, 900);
+        panel.layout()->activate();
+        QList<CollapsibleSection *> sections = panel.findChildren<CollapsibleSection *>();
+        std::sort(sections.begin(), sections.end(),
+                  [](const QWidget *a, const QWidget *b) { return a->y() < b->y(); });
+        QStringList names;
+        for (const CollapsibleSection *section: sections)
+            names << section->findChild<QToolButton *>()->text();
+        return names;
     }
 
     QToolButton *headerFor(const SensorsPanel &panel, const QString &chip) {
@@ -165,6 +185,61 @@ void SensorsPanelTest::fingerprint_and_count_follow_readings() {
     panel.setReadings(readings, 800);
     QCOMPARE(panel.readingCount(), 3);
     QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(readings));
+}
+
+void SensorsPanelTest::default_order_is_alphabetical() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0), 800);
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
+    QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
+}
+
+void SensorsPanelTest::move_chip_reorders_cards() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0), 800);
+
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+    QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+
+    // Target is the insert position before the move: 2 means "after the last card".
+    panel.moveChip(QStringLiteral("chip-b"), 2);
+    QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
+
+    // The order survives value updates.
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    panel.setReadings(sampleReadings(45.0), 800);
+    QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+
+    panel.moveChip(QStringLiteral("unknown"), 0);
+    QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+}
+
+void SensorsPanelTest::preferred_order_puts_new_chips_last_and_keeps_absent_ones() {
+    QVector<SensorReading> readings = sampleReadings(40.0);
+    readings.append({.chip = QStringLiteral("chip-c"), .category = SensorCategory::Fans, .feature = QStringLiteral("fan1"),
+                     .featureNumber = 0, .subfeatureNumber = 1, .value = 900.0, .unit = SensorUnit::Rpm});
+    SensorsPanel panel;
+    panel.setChipOrder({QStringLiteral("gone"), QStringLiteral("chip-b")});
+    panel.setReadings(readings, 800);
+
+    QCOMPARE(cardOrder(panel),
+             (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
+    // A chip that is currently missing keeps its saved preference.
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"),
+                                             QStringLiteral("chip-c"), QStringLiteral("gone")}));
+}
+
+void SensorsPanelTest::header_click_still_toggles_when_draggable() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0), 800);
+    QToolButton *header = headerFor(panel, QStringLiteral("chip-a"));
+    QCOMPARE(header->cursor().shape(), Qt::OpenHandCursor);
+    QVERIFY(header->isChecked());
+
+    QTest::mouseClick(header, Qt::LeftButton);
+    QVERIFY(!header->isChecked());
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
 }
 
 QTEST_MAIN(SensorsPanelTest)

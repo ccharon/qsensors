@@ -40,9 +40,9 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
 - `main_window`: polling, window sizing, status messages, settings load/save.
-- `panels/sensors_panel`: chip-grouped layout; owns the chip expand state; separates structural rebuilds from value-only updates to avoid layout thrash.
+- `panels/sensors_panel`: chip-grouped layout; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
-- `widgets/collapsible_section`: framed card with toggle header, used by both panels.
+- `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
 - `widgets/status_line`: status bar text with timed notices on top of the permanent status.
 - `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip and limits).
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
