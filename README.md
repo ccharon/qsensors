@@ -51,4 +51,4 @@ The backend returns normalized readings intended for direct rendering:
 This project is licensed under **GPL-2.0-or-later**.
 
 - Full text: `LICENSE`
-- Third-party notices: `THIRD_PARTY.md`
+- The LCD display style is inspired by [xsensors](https://github.com/Mystro256/xsensors); no xsensors assets are bundled.
