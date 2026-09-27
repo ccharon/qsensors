@@ -51,4 +51,4 @@ The backend returns normalized readings intended for direct rendering:
 This project is licensed under **GPL-2.0-or-later**.
 
 - Full text: `LICENSE`
-- Third-party notices: `THIRD_PARTY.md` and `third_party/xsensors/NOTICE.md`
+- Third-party notices: `THIRD_PARTY.md`

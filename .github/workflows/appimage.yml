@@ -63,7 +63,7 @@ jobs:
           mkdir -p AppDir/usr/share/applications
           mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
           cp gentoo/sys-apps/qsensors/files/qsensors.desktop AppDir/usr/share/applications/qsensors.desktop
-          cp resources/icons/xsensors.png AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png
+          cp resources/icons/qsensors.png AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png
 
       - name: Download linuxdeploy tooling
         run: |

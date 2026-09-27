@@ -43,6 +43,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group box, and the min/max range is shown as a segment bar graph inside the
   LCD panel instead of a separate theme-colored progress bar.
 
+- New application icon showing the segment LCD (digits, degree unit and bar
+  graph), generated from the app's own segment font; available as SVG and
+  256 px PNG (`resources/icons/qsensors.{svg,png}`).
+
 ### Fixed
 - Negative current and power readings (e.g. a discharging laptop battery)
   are no longer shown as alerts when the firmware provides no minimum; the
@@ -55,6 +59,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Bundled xsensors theme bitmap (`resources/themes/xsensors-theme.png`),
   no longer needed for LCD rendering.
+- Bundled xsensors application icon and the accompanying third-party notice;
+  qsensors no longer ships any xsensors assets.
 
 ## [0.80.9] - 2026-06-04
 

@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
         app.installTranslator(&translatorLocale);
     }
 
-    const QIcon appIcon(QStringLiteral(":/icons/xsensors.png"));
+    const QIcon appIcon(QStringLiteral(":/icons/qsensors.png"));
     app.setWindowIcon(appIcon);
     MainWindow window;
     window.setWindowIcon(appIcon);
