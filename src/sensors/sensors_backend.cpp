@@ -114,7 +114,10 @@ namespace {
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
                 break;
             case SENSORS_SUBFEATURE_POWER_INPUT:
+#if SENSORS_API_VERSION >= 0x510
+                // power*_min is missing in older libsensors (API 0x440, lm-sensors 3.4 on EL8).
                 range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MIN);
+#endif
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MAX);
                 if (!range.max) {
                     range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_CAP);

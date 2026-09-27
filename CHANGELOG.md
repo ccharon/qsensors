@@ -23,7 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Milli-unit values are shown with one decimal so negative readings (e.g. a
   discharging battery at `-396.0 mA`) still fit the display.
 - Native `power*_max`/`power*_min` limits (with `power*_cap`/`power*_crit`
-  fallback) are now read for Power sensors; previously only Temperature,
+  fallback) are now read for Power sensors (`power*_min` needs a libsensors
+  that knows it, so not in the x86_64 AppImage built against lm-sensors 3.4); previously only Temperature,
   Voltage and Fan/Current categories read native firmware limits, and Power
   tiles always relied on the synthetic default-range policy.
 
