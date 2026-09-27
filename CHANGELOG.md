@@ -32,7 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (256 px PNG and scalable SVG) to the XDG locations, so packages no longer
   need to copy them separately. The desktop entry gained a Portuguese comment.
 
+- arm64 (aarch64) AppImage for releases, alongside the x86_64 one.
+
 ### Changed
+- AppImages bundle Qt 6.8 and the Wayland platform plugin, so they run
+  natively on Wayland and still on X11. The x86_64 AppImage now needs glibc
+  2.28 (was 2.35), which adds RHEL/Alma/Rocky 8 and 9, Debian 11 and Ubuntu
+  20.04; the new arm64 AppImage needs glibc 2.39.
 - The LCD value display is now drawn as a vector segment display instead of
   glyphs cut from the xsensors theme bitmap. Digits keep the slanted
   xsensors look on a recessed, slightly green-tinted backplane where lit

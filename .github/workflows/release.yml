@@ -1,19 +1,20 @@
 name: Release
 
 # Releases are cut by pushing a tag vX.Y.Z that points to a commit on main.
-# The workflow builds and tests, packages the AppImage and creates a draft
-# GitHub release; publishing the draft stays a manual step.
+# Both AppImages are built and tested, then attached to a draft GitHub release;
+# publishing the draft stays a manual step.
 on:
   push:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
-    runs-on: ubuntu-22.04
-
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.tag.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,112 +46,62 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            ninja-build \
-            pkg-config \
-            libsensors-dev \
-            libgl1-mesa-dev \
-            libopengl-dev \
-            libxkbcommon-dev \
-            libvulkan-dev \
-            desktop-file-utils \
-            patchelf \
-            libfuse2 \
-            python3-pip \
-            qt6-base-dev \
-            qt6-tools-dev \
-            qt6-tools-dev-tools \
-            linguist-qt6 \
-            qt6-l10n-tools
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
 
-      - name: Install CMake >= 4.2
-        run: |
-          python3 -m pip install --user "cmake>=4.2,<4.3"
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+  appimage:
+    needs: validate
+    strategy:
+      matrix:
+        include:
+          # The container's glibc is the AppImage's minimum glibc.
+          - arch: x86_64
+            runner: ubuntu-24.04
+            image: quay.io/pypa/manylinux_2_28_x86_64 # AlmaLinux 8, glibc 2.28
+          # Official Qt arm64 binaries need glibc 2.38, so an older base gains nothing.
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            image: ubuntu:24.04 # glibc 2.39
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=ON
-
-      - name: Verify translations are up to date
-        run: |
-          cmake --build build --target update_translations -j"$(nproc)"
-          if ! git diff --quiet -- i18n/qsensors_*.ts; then
-            echo "Translation sources are outdated. Run: cmake --build build --target update_translations"
-            git --no-pager diff -- i18n/qsensors_*.ts
-            exit 1
-          fi
-
-      - name: Build
-        run: cmake --build build -j"$(nproc)"
-
-      - name: Test
-        run: ctest --test-dir build --output-on-failure
-
-      - name: Install to AppDir
-        run: DESTDIR=AppDir cmake --install build --prefix /usr --config Release --strip
-
-      - name: Download linuxdeploy tooling
-        run: |
-          set -euo pipefail
-          LINUXDEPLOY_VERSION=1-alpha-20251107-1
-          LINUXDEPLOY_PLUGIN_QT_VERSION=1-alpha-20250213-1
-          LINUXDEPLOY_PLUGIN_APPIMAGE_VERSION=1-alpha-20250213-1
-
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
-            -o linuxdeploy-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-x86_64.AppImage
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
-            -o linuxdeploy-plugin-qt-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/${LINUXDEPLOY_PLUGIN_QT_VERSION}/linuxdeploy-plugin-qt-x86_64.AppImage
-          curl --fail --location --silent --show-error --retry 3 --retry-delay 2 \
-            -o linuxdeploy-plugin-appimage-x86_64.AppImage \
-            https://github.com/linuxdeploy/linuxdeploy-plugin-appimage/releases/download/${LINUXDEPLOY_PLUGIN_APPIMAGE_VERSION}/linuxdeploy-plugin-appimage-x86_64.AppImage
-
-          cat > linuxdeploy-checksums.txt << 'EOF'
-          c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  linuxdeploy-x86_64.AppImage
-          15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724  linuxdeploy-plugin-qt-x86_64.AppImage
-          992d502a248e14ab185448ddf6f6e7d25558cb84d4623c354c3af350c25fccb3  linuxdeploy-plugin-appimage-x86_64.AppImage
-          EOF
-
-          sha256sum -c linuxdeploy-checksums.txt
-          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage linuxdeploy-plugin-appimage-x86_64.AppImage
-
-      - name: Build AppImage
+      - name: Build and test AppImage
         env:
-          ARCH: x86_64
-          # linuxdeploy names the output qsensors-<VERSION>-x86_64.AppImage
-          VERSION: ${{ steps.tag.outputs.version }}
-        run: |
-          export QMAKE="$(command -v qmake6 || true)"
-          if [ -z "${QMAKE}" ]; then
-            echo "qmake6 not found in PATH"
-            exit 1
-          fi
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: bash packaging/appimage/build.sh
 
-          ./linuxdeploy-x86_64.AppImage \
-            --appdir AppDir \
-            --desktop-file AppDir/usr/share/applications/qsensors.desktop \
-            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/qsensors.png \
-            --plugin qt \
-            --output appimage
+      - name: Upload AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-${{ matrix.arch }}
+          path: dist/qsensors-*.AppImage
+          if-no-files-found: error
 
-      - name: Verify libsensors bundled
-        run: |
-          if ! find AppDir -type f -name 'libsensors.so*' | grep -q . ; then
-            echo "libsensors was not bundled into AppDir"
-            exit 1
-          fi
+  release:
+    needs: [validate, appimage]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download AppImages and notes
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" ./qsensors*.AppImage \
+          gh release create "$GITHUB_REF_NAME" artifacts/appimage-*/qsensors-*.AppImage \
+            --repo "$GITHUB_REPOSITORY" \
             --draft \
             --verify-tag \
-            --title "qsensors ${{ steps.tag.outputs.version }}" \
-            --notes-file release-notes.md
+            --title "qsensors $VERSION" \
+            --notes-file artifacts/release-notes/release-notes.md

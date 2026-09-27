@@ -28,9 +28,18 @@ cmake --build build -j
 ## Releases
 
 Development happens on `develop`; `main` only contains released states.
-Releases are tagged `vX.Y.Z` on `main`, which builds the AppImage and creates
+Releases are tagged `vX.Y.Z` on `main`, which builds both AppImages and creates
 a GitHub release draft. Prebuilt AppImages are attached to the
-[GitHub releases](https://github.com/ccharon/qsensors/releases).
+[GitHub releases](https://github.com/ccharon/qsensors/releases). They bundle
+Qt 6.8 with the Wayland and X11 platform plugins; Qt picks one at startup.
+
+| AppImage | Architecture | Minimum glibc | Examples |
+|---|---|---|---|
+| `qsensors-X.Y.Z-x86_64.AppImage` | x86_64 | 2.28 | RHEL/Alma/Rocky 8+, Debian 11+, Ubuntu 20.04+ |
+| `qsensors-X.Y.Z-aarch64.AppImage` | arm64 | 2.39 | Ubuntu 24.04+, Debian 13+, Fedora 40+ |
+
+Build an AppImage locally inside the matching container, e.g. for arm64:
+`docker run --rm -v "$PWD":/src -w /src -e VERSION=0.80.10 ubuntu:24.04 bash packaging/appimage/build.sh`
 
 ## Configuration
 

@@ -1,0 +1,9 @@
+# Build output
+/build/
+/cmake-build-*/
+/build-icon/
+# AppImage builds (packaging/appimage/build.sh)
+/.appimage-work/
+/dist/
+# IDE
+/.idea/
