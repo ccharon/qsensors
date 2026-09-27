@@ -3,16 +3,15 @@
 
 #pragma once
 
+#include "collapsible_section.h"
 #include "runtime_config.h"
-
-#include <QFrame>
 
 class QFormLayout;
 class QSpinBox;
 class QComboBox;
 
 /** Collapsible settings section rendered at the bottom of the main structure. */
-class SettingsPanel final : public QFrame {
+class SettingsPanel final : public CollapsibleSection {
     Q_OBJECT
 
 public:

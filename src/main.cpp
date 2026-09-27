@@ -26,10 +26,8 @@ int main(int argc, char *argv[]) {
         app.installTranslator(&translatorLocale);
     }
 
-    const QIcon appIcon(QStringLiteral(":/icons/qsensors.png"));
-    app.setWindowIcon(appIcon);
+    app.setWindowIcon(QIcon(QStringLiteral(":/icons/qsensors.png")));
     MainWindow window;
-    window.setWindowIcon(appIcon);
     window.show();
     return QApplication::exec();
 }

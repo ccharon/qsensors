@@ -6,6 +6,7 @@
 #include "sensor_identity.h"
 #include "theme/app_theme.h"
 #include "sensor_value_widget.h"
+#include "collapsible_section.h"
 
 #include <QCoreApplication>
 #include <QFrame>
@@ -14,11 +15,12 @@
 #include <QLabel>
 #include <QMap>
 #include <QStringList>
-#include <QToolButton>
 #include <QVBoxLayout>
 #include <algorithm>
 
 namespace {
+    constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
+
     QString translatedCategoryName(const SensorCategory category) {
         switch (category) {
             case SensorCategory::Voltages:
@@ -47,9 +49,8 @@ SensorsPanel::SensorsPanel(QWidget *parent) : QWidget(parent), m_layout(new QVBo
 void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_chipExpanded = state;
     for (auto it = m_chipSections.begin(); it != m_chipSections.end(); ++it) {
-        // toggled() updates m_chipExpanded and the section visibility.
-        it->header->setChecked(state.value(it.key(), true));
-        m_chipExpanded.insert(it.key(), it->header->isChecked());
+        it->card->setExpanded(state.value(it.key(), true));
+        m_chipExpanded.insert(it.key(), it->card->isExpanded());
     }
 }
 
@@ -71,16 +72,15 @@ void SensorsPanel::relayout(const int viewportWidth) {
 }
 
 int SensorsPanel::minimumRequiredWidth() const {
-    const QMap<QString, QMap<SensorCategory, QVector<SensorReading> > > &grouped = m_groupedCache;
     int maxCategoryCount = 1;
-    for (auto chipIt = grouped.cbegin(); chipIt != grouped.cend(); ++chipIt) {
+    for (auto chipIt = m_groupedCache.cbegin(); chipIt != m_groupedCache.cend(); ++chipIt) {
         maxCategoryCount = std::max(maxCategoryCount, static_cast<int>(chipIt.value().size()));
     }
 
+    // Each category needs at least one card column.
     const int panelHorizontalMargins = m_layout->contentsMargins().left() + m_layout->contentsMargins().right();
-    const int chipContentHorizontalMargins = AppTheme::kSectionInset * 2;
-    const int categoriesWidth = (maxCategoryCount * AppTheme::kCardMinWidth) + ((maxCategoryCount - 1) * AppTheme::kUnifiedHorizontalSpacing);
-    return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + chipContentHorizontalMargins + categoriesWidth;
+    return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins
+           + widthForColumns(maxCategoryCount);
 }
 
 void SensorsPanel::renderReadings(const int viewportWidth) {
@@ -147,7 +147,6 @@ void SensorsPanel::reconcileChipSection(
     const QMap<SensorCategory, QVector<SensorReading> > &categories,
     const int stableViewportWidth
 ) {
-    constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
     const int categoryCount = std::max(1, static_cast<int>(categories.size()));
     const int perCategoryWidth = std::max(
         AppTheme::kCardMinWidth,
@@ -196,51 +195,17 @@ void SensorsPanel::applyChipOrder(const QStringList &orderedChips) {
 
 SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipName) {
     ChipSection section{};
-    section.card = new QFrame(this);
-    section.card->setObjectName(QStringLiteral("chipCard"));
-    section.card->setStyleSheet(AppTheme::chipCardStyle());
+    section.card = new CollapsibleSection(chipName, m_chipExpanded.value(chipName, true), this);
     section.card->setProperty("chipName", chipName);
-
-    auto *chipLayout = new QVBoxLayout(section.card);
-    chipLayout->setContentsMargins(0, 0, 0, 0);
-    chipLayout->setSpacing(0);
-
-    section.header = new QToolButton(section.card);
-    section.header->setText(chipName);
-    section.header->setCheckable(true);
-    section.header->setChecked(m_chipExpanded.value(chipName, true));
-    section.header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    section.header->setArrowType(section.header->isChecked() ? Qt::DownArrow : Qt::RightArrow);
-    section.header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
-    section.header->setStyleSheet(AppTheme::sectionHeaderStyle());
-
-    section.content = new QWidget(section.card);
-    auto *chipContentLayout = new QVBoxLayout(section.content);
-    chipContentLayout->setContentsMargins(
-        AppTheme::kSectionInset, AppTheme::kSectionInset,
-        AppTheme::kSectionInset, AppTheme::kSectionInset
-    );
-
-    chipContentLayout->setSpacing(AppTheme::kSectionInset);
     section.categoryRow = new QHBoxLayout();
     section.categoryRow->setSpacing(AppTheme::kUnifiedHorizontalSpacing);
-    chipContentLayout->addLayout(section.categoryRow);
+    section.card->contentLayout()->addLayout(section.categoryRow);
 
-    section.content->setVisible(section.header->isChecked());
-    connect(section.header, &QToolButton::toggled, this, [this, chipName](bool expanded) {
-        auto it = m_chipSections.find(chipName);
-        if (it == m_chipSections.end()) {
-            return;
-        }
-        ChipSection &liveSection = it.value();
+    connect(section.card, &CollapsibleSection::expandedChanged, this, [this, chipName](const bool expanded) {
         m_chipExpanded[chipName] = expanded;
-        liveSection.header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
-        liveSection.content->setVisible(expanded);
     });
 
-    chipLayout->addWidget(section.header);
-    chipLayout->addWidget(section.content);
-    m_chipExpanded.insert(chipName, section.header->isChecked());
+    m_chipExpanded.insert(chipName, section.card->isExpanded());
     m_chipSections.insert(chipName, section);
     return &m_chipSections[chipName];
 }
@@ -264,7 +229,7 @@ void SensorsPanel::rebuildChipSection(
         const int usedColumns = std::max(1, std::min(columnsPerCategory, static_cast<int>(categoryReadings.size())));
         const int categoryWidth = widthForColumns(usedColumns);
 
-        auto *categoryContainer = new QWidget(section.content);
+        auto *categoryContainer = new QWidget(section.card->content());
         categoryContainer->setFixedWidth(categoryWidth);
         auto *categoryContainerLayout = new QVBoxLayout(categoryContainer);
         categoryContainerLayout->setContentsMargins(0, 0, 0, 0);

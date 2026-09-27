@@ -6,20 +6,14 @@
 #include <QWidget>
 
 namespace AppTheme {
-    namespace {
-        QString cardStyle(const char *selector) {
-            return QStringLiteral(
-                "%1 {"
-                "  border: 1px solid palette(mid);"
-                "  background: palette(window);"
-                "  color: palette(window-text);"
-                "}"
-            ).arg(QLatin1String(selector));
-        }
-    }
-
-    QString chipCardStyle() {
-        return cardStyle("#chipCard");
+    QString sectionCardStyle() {
+        return QStringLiteral(
+            "#sectionCard {"
+            "  border: 1px solid palette(mid);"
+            "  background: palette(window);"
+            "  color: palette(window-text);"
+            "}"
+        );
     }
 
     QString sectionHeaderStyle() {
@@ -33,10 +27,6 @@ namespace AppTheme {
             "  color: palette(button-text);"
             "}"
         );
-    }
-
-    QString settingsCardStyle() {
-        return cardStyle("#settingsCard");
     }
 
     QString spinBoxStyle() {

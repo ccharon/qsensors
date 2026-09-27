@@ -52,11 +52,9 @@ namespace AppTheme {
     inline constexpr qreal kLcdBarSegmentWidth = 3.5;
     inline constexpr qreal kLcdBarSegmentSpacing = 1.5;
 
-    [[nodiscard]] QString chipCardStyle();
+    [[nodiscard]] QString sectionCardStyle();
 
     [[nodiscard]] QString sectionHeaderStyle();
-
-    [[nodiscard]] QString settingsCardStyle();
 
     [[nodiscard]] QString spinBoxStyle();
 

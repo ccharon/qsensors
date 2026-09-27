@@ -12,8 +12,8 @@
 #include <QVector>
 #include <QWidget>
 
+class CollapsibleSection;
 class QHBoxLayout;
-class QToolButton;
 class QVBoxLayout;
 class SensorValueWidget;
 
@@ -42,9 +42,7 @@ public:
 private:
     /** One persistent UI section per chip, reused across refresh cycles. */
     struct ChipSection {
-        QFrame *card = nullptr;
-        QToolButton *header = nullptr;
-        QWidget *content = nullptr;
+        CollapsibleSection *card = nullptr;
         QHBoxLayout *categoryRow = nullptr;
         /** Fingerprint of category/feature layout currently rendered in this section. */
         QString structureFingerprint;

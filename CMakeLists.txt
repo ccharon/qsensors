@@ -37,6 +37,7 @@ add_executable(qsensors
         src/ui/theme/app_theme.cpp
         src/ui/panels/settings_panel.cpp
         src/ui/panels/sensors_panel.cpp
+        src/ui/widgets/collapsible_section.cpp
         src/ui/widgets/lcd_segment_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
@@ -168,6 +169,7 @@ if (BUILD_TESTING)
             src/sensors/sensor_format.cpp
             src/ui/panels/sensors_panel.cpp
             src/ui/theme/app_theme.cpp
+            src/ui/widgets/collapsible_section.cpp
             src/ui/widgets/lcd_display_widget.cpp
             src/ui/widgets/lcd_segment_font.cpp
             src/ui/widgets/sensor_value_widget.cpp

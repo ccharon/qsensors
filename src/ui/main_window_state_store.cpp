@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "main_window_state_store.h"
+#include "settings_keys.h"
 #include "settings_schema.h"
 
 #include <QSettings>
@@ -25,17 +26,17 @@ MainWindowState MainWindowStateStore::load() {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
 
-    state.geometry = settings.value(QStringLiteral("ui/geometry")).toByteArray();
+    state.geometry = settings.value(SettingsKeys::kWindowGeometry).toByteArray();
     state.hasGeometry = !state.geometry.isEmpty();
 
-    settings.beginGroup(QStringLiteral("ui/chips"));
+    settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     const QStringList keys = settings.childKeys();
     for (const QString &key: keys) {
         state.chipExpanded.insert(decodeChipKey(key), settings.value(key, true).toBool());
     }
     settings.endGroup();
 
-    state.sensorFingerprint = settings.value(QStringLiteral("sensors/fingerprint")).toString();
+    state.sensorFingerprint = settings.value(SettingsKeys::kSensorFingerprint).toString();
     return state;
 }
 
@@ -46,9 +47,9 @@ bool MainWindowStateStore::save(
 ) {
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
-    settings.setValue(QStringLiteral("ui/geometry"), geometry);
-    settings.setValue(QStringLiteral("sensors/fingerprint"), sensorFingerprint);
-    settings.beginGroup(QStringLiteral("ui/chips"));
+    settings.setValue(SettingsKeys::kWindowGeometry, geometry);
+    settings.setValue(SettingsKeys::kSensorFingerprint, sensorFingerprint);
+    settings.beginGroup(SettingsKeys::kChipExpandedGroup);
     settings.remove(QString());
     for (auto it = chipExpanded.constBegin(); it != chipExpanded.constEnd(); ++it) {
         settings.setValue(encodeChipKey(it.key()), it.value());
