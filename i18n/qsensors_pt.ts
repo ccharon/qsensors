@@ -17,6 +17,25 @@
     </message>
 </context>
 <context>
+    <name>SensorValueWidget</name>
+    <message>
+        <source>Chip: %1</source>
+        <translation>Chip: %1</translation>
+    </message>
+    <message>
+        <source>Min: %1</source>
+        <translation>Mín.: %1</translation>
+    </message>
+    <message>
+        <source>Max: %1</source>
+        <translation>Máx.: %1</translation>
+    </message>
+    <message>
+        <source>No limits available</source>
+        <translation>Nenhum limite disponível</translation>
+    </message>
+</context>
+<context>
     <name>SensorsPanel</name>
     <message>
         <source>Voltages</source>

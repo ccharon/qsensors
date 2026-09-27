@@ -126,6 +126,7 @@ if (BUILD_TESTING)
     add_qsensors_test(test_lcd_logic
             tests/test_lcd_logic.cpp
             src/ui/widgets/lcd_display_widget.cpp
+            src/ui/widgets/sensor_value_widget.cpp
             src/ui/widgets/lcd_segment_font.cpp
     )
 

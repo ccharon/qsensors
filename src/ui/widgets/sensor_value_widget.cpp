@@ -36,10 +36,35 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
     const QString newTitle = reading.feature + QStringLiteral(":");
     if (m_fullTitle != newTitle) {
         m_fullTitle = newTitle;
-        m_title->setToolTip(reading.feature);
         updateElidedTitle();
     }
+    // Set on the card itself so hovering title or LCD shows the same details.
+    const QString details = detailsToolTip(reading);
+    if (toolTip() != details)
+        setToolTip(details);
     m_lcdValue->setReading(reading);
+}
+
+QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
+    const QString unit = sensorUnitSymbol(reading.unit);
+    // Reuse the LCD formatting so tooltip limits match the displayed precision.
+    const auto format = [&](const double v) {
+        SensorReading limit = reading;
+        limit.value = v;
+        const QString digits = LcdDisplayWidget::valueDigitsFor(limit).trimmed();
+        return unit.isEmpty() ? digits : digits + QLatin1Char(' ') + unit;
+    };
+
+    QStringList lines;
+    lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());
+    lines << tr("Chip: %1").arg(reading.chip.toHtmlEscaped());
+    if (reading.minValue)
+        lines << tr("Min: %1").arg(format(*reading.minValue).toHtmlEscaped());
+    if (reading.maxValue)
+        lines << tr("Max: %1").arg(format(*reading.maxValue).toHtmlEscaped());
+    if (!reading.hasRange())
+        lines << tr("No limits available");
+    return lines.join(QStringLiteral("<br>"));
 }
 
 void SensorValueWidget::resizeEvent(QResizeEvent *event) {

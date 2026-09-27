@@ -17,14 +17,17 @@ class SensorValueWidget final : public QWidget {
 public:
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Refreshes title and LCD (value and range bar graph). */
+    /** Refreshes title, details tooltip and LCD (value and range bar graph). */
     void setReading(const SensorReading &reading);
+
+    /** Tooltip with full sensor name, chip and the min/max limits in display units. */
+    [[nodiscard]] static QString detailsToolTip(const SensorReading &reading);
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    /** Long sensor names are elided; the full name is available as tooltip. */
+    /** Long sensor names are elided; the full name is shown in the details tooltip. */
     void updateElidedTitle();
 
     QLabel *m_title;

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include "lcd_display_widget.h"
+#include "sensor_value_widget.h"
 
 #include <QtTest/QtTest>
 
@@ -13,6 +14,7 @@ private slots:
     void alertState_matches_unit_rules();
     void rangeFraction_maps_value_into_limits();
     void barGraph_lights_proportional_segments();
+    void detailsToolTip_lists_chip_and_limits_in_display_units();
 };
 
 void LcdLogicTest::valueDigits_formats_by_unit() {
@@ -96,6 +98,24 @@ void LcdLogicTest::barGraph_lights_proportional_segments() {
         QVERIFY(segments.at(i).boundingRect().left() > segments.at(i - 1).boundingRect().left());
     }
     QVERIFY(segments.last().boundingRect().right() <= 4 + 142 + 1e-6);
+}
+
+void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
+    SensorReading battery{.chip = QStringLiteral("macsmc_battery-isa-0000"), .feature = QStringLiteral("in0"),
+                          .value = 11.9, .unit = SensorUnit::Volt, .minValue = 9.888, .maxValue = 13.325};
+    const QString tip = SensorValueWidget::detailsToolTip(battery);
+    QVERIFY(tip.contains(QStringLiteral("<b>in0</b>")));
+    QVERIFY(tip.contains(QStringLiteral("macsmc_battery-isa-0000")));
+    QVERIFY(tip.contains(QStringLiteral("9.89 V")));
+    QVERIFY(tip.contains(QStringLiteral("13.32 V")) || tip.contains(QStringLiteral("13.33 V")));
+    QVERIFY(!tip.contains(QStringLiteral("No limits")));
+
+    // Names are escaped: sensors.conf labels are free text.
+    SensorReading odd{.chip = QStringLiteral("c"), .feature = QStringLiteral("<CPU & SoC>"),
+                      .value = 1.0, .unit = SensorUnit::Watt};
+    const QString oddTip = SensorValueWidget::detailsToolTip(odd);
+    QVERIFY(oddTip.contains(QStringLiteral("&lt;CPU &amp; SoC&gt;")));
+    QVERIFY(oddTip.contains(QStringLiteral("No limits available")));
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

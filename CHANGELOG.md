@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Voltage and Fan/Current categories read native firmware limits, and Power
   tiles always relied on the synthetic default-range policy.
 
+- Sensor card tooltip with the full sensor name, chip and the min/max limits
+  in display units (or a note when the sensor has no limits).
+
 ### Changed
 - The LCD value display is now drawn as a vector segment display instead of
   glyphs cut from the xsensors theme bitmap. Digits keep the slanted
@@ -36,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shrinks unusually long readings to fit instead of clipping them. New unit
   symbols no longer require editing a sprite sheet.
 - Sensor cards are simplified: the name is a plain theme-styled label above
-  the LCD (long names are elided, full name as tooltip) instead of a framed
+  the LCD (long names are elided, see tooltip) instead of a framed
   group box, and the min/max range is shown as a segment bar graph inside the
   LCD panel instead of a separate theme-colored progress bar.
 
