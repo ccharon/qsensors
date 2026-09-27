@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # C++/CMake/Qt dependencies come from system packages, which Dependabot does
+  # not cover; keep the GitHub Actions used by the workflows up to date.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "ci"

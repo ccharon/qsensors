@@ -54,6 +54,14 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - packaging work beyond currently requested targets
 - silent settings-schema/key migrations
 
+## Branching & Releases
+
+- `develop` is the development branch: all work and pull requests target it. CI (`.github/workflows/ci.yml`) builds, tests and checks translations on every push to `develop` and on PRs.
+- `main` holds released states only; `develop` is merged into `main` for a release.
+- A release is cut by tagging a commit on `main` with `vX.Y.Z` (e.g. `v0.80.10`). `.github/workflows/release.yml` then verifies the tag is on `main`, matches `project(qsensors VERSION …)` in `CMakeLists.txt` and has a `## [X.Y.Z]` section in `CHANGELOG.md`, builds and tests, packages the AppImage and creates a **draft** GitHub release.
+- Release prep on `develop`: bump the version in `CMakeLists.txt`, turn `[Unreleased]` into `[X.Y.Z] - date` in `CHANGELOG.md`, then merge to `main` and tag.
+- Dependabot (`.github/dependabot.yml`) keeps GitHub Actions up to date via PRs against `develop`.
+
 ## Working Guidelines
 
 - prefer small, isolated commits per change package

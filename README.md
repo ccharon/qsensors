@@ -25,6 +25,13 @@ cmake --build build -j
 ./build/qsensors
 ```
 
+## Releases
+
+Development happens on `develop`; `main` only contains released states.
+Releases are tagged `vX.Y.Z` on `main`, which builds the AppImage and creates
+a GitHub release draft. Prebuilt AppImages are attached to the
+[GitHub releases](https://github.com/ccharon/qsensors/releases).
+
 ## Configuration
 
 `QSettings` on Linux, typically:

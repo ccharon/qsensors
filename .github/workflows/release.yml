@@ -1,17 +1,49 @@
-name: AppImage CI
+name: Release
 
+# Releases are cut by pushing a tag vX.Y.Z that points to a commit on main.
+# The workflow builds and tests, packages the AppImage and creates a draft
+# GitHub release; publishing the draft stays a manual step.
 on:
   push:
-    branches: ["master"]
-  workflow_dispatch:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+permissions:
+  contents: write
 
 jobs:
-  build-appimage:
+  release:
     runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate tag
+        id: tag
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME does not point to a commit on main"
+            exit 1
+          fi
+          CMAKE_VERSION="$(sed -nE 's/^project\(qsensors VERSION ([0-9.]+)\)/\1/p' CMakeLists.txt)"
+          if [ "$CMAKE_VERSION" != "$VERSION" ]; then
+            echo "::error::Tag version $VERSION does not match CMakeLists.txt version $CMAKE_VERSION"
+            exit 1
+          fi
+          awk -v ver="$VERSION" '
+            index($0, "## [" ver "]") == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if ! grep -q '[^[:space:]]' release-notes.md; then
+            echo "::error::CHANGELOG.md has no section for [$VERSION]"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
         run: |
@@ -41,7 +73,7 @@ jobs:
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr -DBUILD_TESTING=ON
 
       - name: Verify translations are up to date
         run: |
@@ -54,6 +86,9 @@ jobs:
 
       - name: Build
         run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
 
       - name: Install to AppDir
         run: DESTDIR=AppDir cmake --install build --prefix /usr --config Release --strip
@@ -87,6 +122,8 @@ jobs:
       - name: Build AppImage
         env:
           ARCH: x86_64
+          # linuxdeploy names the output qsensors-<VERSION>-x86_64.AppImage
+          VERSION: ${{ steps.tag.outputs.version }}
         run: |
           export QMAKE="$(command -v qmake6 || true)"
           if [ -z "${QMAKE}" ]; then
@@ -108,10 +145,12 @@ jobs:
             exit 1
           fi
 
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: qsensors-appimage-${{ github.sha }}
-          path: ./qsensors*.AppImage
-          if-no-files-found: error
-          retention-days: 14
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" ./qsensors*.AppImage \
+            --draft \
+            --verify-tag \
+            --title "qsensors ${{ steps.tag.outputs.version }}" \
+            --notes-file release-notes.md

@@ -1,0 +1,63 @@
+name: CI
+
+# Build, test and translation check for day-to-day development on develop
+# and for pull requests. Release packaging lives in release.yml.
+on:
+  push:
+    branches: ["develop"]
+  pull_request:
+    branches: ["main", "develop"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            ninja-build \
+            pkg-config \
+            libsensors-dev \
+            libgl1-mesa-dev \
+            libopengl-dev \
+            libxkbcommon-dev \
+            libvulkan-dev \
+            python3-pip \
+            qt6-base-dev \
+            qt6-tools-dev \
+            qt6-tools-dev-tools \
+            linguist-qt6 \
+            qt6-l10n-tools
+
+      - name: Install CMake >= 4.2
+        run: |
+          python3 -m pip install --user "cmake>=4.2,<4.3"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Verify translations are up to date
+        run: |
+          cmake --build build --target update_translations -j"$(nproc)"
+          if ! git diff --quiet -- i18n/qsensors_*.ts; then
+            echo "Translation sources are outdated. Run: cmake --build build --target update_translations"
+            git --no-pager diff -- i18n/qsensors_*.ts
+            exit 1
+          fi
+
+      - name: Build
+        run: cmake --build build -j"$(nproc)"
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
