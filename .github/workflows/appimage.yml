@@ -51,6 +51,9 @@ jobs:
       - name: Verify translations are up to date
         if: matrix.arch == 'x86_64'
         run: |
+          # The workspace belongs to another user inside the container; without this
+          # git treats it as untrusted and does not see the repository.
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           export PATH="$PWD/.appimage-work/venv/bin:$PATH"
           cmake --build .appimage-work/build --target update_translations
           if ! git diff --quiet -- i18n/qsensors_*.ts; then
