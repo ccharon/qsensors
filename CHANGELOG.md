@@ -52,8 +52,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   256 px PNG (`resources/icons/qsensors.{svg,png}`).
 
 ### Fixed
-- The "Sensor layout changed" notice is now actually visible; it was
-  immediately replaced by the reading count.
+- Status bar notices (e.g. "Sensor layout changed", "Settings could not be
+  saved") are shown in bold on their own for 10 seconds; previously the
+  reading count replaced them immediately or was drawn on top of them when the
+  notice appeared during startup.
 - Resizing the window no longer recreates every sensor card; sections are only
   rebuilt when their column count changes.
 - The minimum window width is updated when a chip gains or loses a sensor

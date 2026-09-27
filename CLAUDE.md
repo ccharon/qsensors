@@ -43,13 +43,14 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - `panels/sensors_panel`: chip-grouped layout; owns the chip expand state; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/collapsible_section`: framed card with toggle header, used by both panels.
+- `widgets/status_line`: status bar text with timed notices on top of the permanent status.
 - `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip and limits).
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
 **Build targets**: `qsensors_core` (static library with everything except `main.cpp`, `main_window` and the libsensors backend) is linked by the app and by every test. New sources go into `QSENSORS_CORE_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; both lists are also scanned for translations.
 
-**`tests/`**: 8 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 9 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 

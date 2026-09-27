@@ -9,7 +9,6 @@
 #include <QMainWindow>
 #include <QPalette>
 
-class QLabel;
 class QTimer;
 class QScrollArea;
 class QCloseEvent;
@@ -17,6 +16,7 @@ class QResizeEvent;
 class QShowEvent;
 class SensorsPanel;
 class SettingsPanel;
+class StatusLine;
 
 /** Main application surface: polling, persistence and sensor panel layout. */
 class MainWindow final : public QMainWindow {
@@ -52,13 +52,13 @@ private:
     /** Applies the polling interval from the runtime config to the timer. */
     void applyRuntimeConfig();
 
-    /** Updates status bar text in one place. */
+    /** Sets the permanent status bar text. */
     void setStatusMessage(const QString &text);
 
     /** Permanent status: reading count and refresh interval, or a hint when no sensors exist. */
     void updateReadingsStatus();
 
-    /** Shows @p text temporarily on top of the permanent status. */
+    /** Shows @p text for a while instead of the permanent status. */
     void showNotice(const QString &text);
 
     /** Saves the runtime config right away and reports a failed write. */
@@ -84,7 +84,7 @@ private:
     QWidget *m_contentContainer;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
-    QLabel *m_statusLabel;
+    StatusLine *m_statusLine;
     QTimer *m_timer;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;

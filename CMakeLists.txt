@@ -41,6 +41,7 @@ set(QSENSORS_CORE_SOURCES
         src/ui/widgets/lcd_segment_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
+        src/ui/widgets/status_line.cpp
 )
 set(QSENSORS_APP_SOURCES
         src/main.cpp
@@ -137,4 +138,5 @@ if (BUILD_TESTING)
     add_qsensors_test(test_sensor_identity tests/test_sensor_identity.cpp)
     add_qsensors_test(test_sensors_panel tests/test_sensors_panel.cpp)
     add_qsensors_test(test_theme_refresh tests/test_theme_refresh.cpp)
+    add_qsensors_test(test_status_line tests/test_status_line.cpp)
 endif ()

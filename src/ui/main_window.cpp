@@ -9,9 +9,9 @@
 #include "settings_schema.h"
 #include "settings_panel.h"
 #include "sensors_panel.h"
+#include "status_line.h"
 
 #include <QApplication>
-#include <QLabel>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -33,7 +33,7 @@ MainWindow::MainWindow(QWidget *parent)
       m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLabel(nullptr),
+      m_statusLine(nullptr),
       m_timer(new QTimer(this)) {
     setupUi();
     m_styledPalette = QApplication::palette();
@@ -90,8 +90,7 @@ void MainWindow::updateReadingsStatus() {
 }
 
 void MainWindow::showNotice(const QString &text) {
-    // Temporary message: the readings label stays in place underneath.
-    statusBar()->showMessage(text, kNoticeTimeoutMs);
+    m_statusLine->showNotice(text, kNoticeTimeoutMs);
 }
 
 void MainWindow::persistRuntimeConfig() {
@@ -144,12 +143,14 @@ void MainWindow::setupUi() {
     layout->addWidget(m_scrollArea);
     setCentralWidget(central);
 
-    m_statusLabel = new QLabel(this);
-    statusBar()->addWidget(m_statusLabel);
+    // Own status widget instead of QStatusBar::showMessage(), which leaves normal
+    // widgets visible when the message is set before the window is shown.
+    m_statusLine = new StatusLine(this);
+    statusBar()->addWidget(m_statusLine, 1);
 }
 
 void MainWindow::setStatusMessage(const QString &text) {
-    m_statusLabel->setText(text);
+    m_statusLine->setPermanentText(text);
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
