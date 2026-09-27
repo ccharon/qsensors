@@ -15,6 +15,7 @@ class SensorValueWidget final : public QWidget {
     Q_OBJECT
 
 public:
+    /** Creates the card for @p reading with fixed height and theme width limits. */
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
     /** Refreshes title, details tooltip and LCD (value and range bar graph). */

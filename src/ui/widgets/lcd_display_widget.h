@@ -16,10 +16,13 @@ class LcdDisplayWidget final : public QWidget {
     Q_OBJECT
 
 public:
+    /** Creates the display showing @p reading. */
     explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
+    /** Shows @p reading and schedules a repaint. */
     void setReading(const SensorReading &reading);
 
+    /** Card width with digits, bar graph and padding at their default height. */
     QSize sizeHint() const override;
 
     /** Number of lit bar graph segments out of @p segmentCount. */

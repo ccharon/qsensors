@@ -9,6 +9,7 @@
 #include <cmath>
 #include <optional>
 
+/** Rules applied to raw readings: unit scaling, default ranges and alert state. */
 namespace SensorsPolicy {
     /** Milli-unit readings at or above this no longer fit the six-cell LCD value ("9999.9"). */
     inline constexpr double kMilliUnitOverflow = 10000.0;
@@ -16,14 +17,9 @@ namespace SensorsPolicy {
     inline constexpr double kBaseUnitUnderflow = 0.1;
 
     /**
-     * Rescales Ampere/Watt readings to milli-units when the sensor's own scale is sub-1.
-     *
-     * With native limits the decision uses the native max (then min), which is stable by
-     * itself. Without limits the live value decides with wide hysteresis: the current scale
-     * is kept in @p latchedMilli (per sensor, by the caller). Milli is left only when the
-     * value would overflow the display (>= 10 A/W), base only when two decimals get too
-     * coarse (< 0.1 A/W). Values hovering around 1.0 therefore never flip between e.g.
-     * "982.7 mW" and "1.25 W", and a startup load spike does not decide for good.
+     * Rescales Ampere/Watt to mA/mW for sub-1 sensors. Native limits decide when present;
+     * otherwise @p latchedMilli carries the scale between polls with hysteresis
+     * (milli below kBaseUnitUnderflow, base from kMilliUnitOverflow) to avoid flicker.
      */
     inline void applyCurrentPowerUnitScaling(
         SensorUnit &unit,
@@ -100,9 +96,7 @@ namespace SensorsPolicy {
         if (category == SensorCategory::Voltages ||
             category == SensorCategory::Currents ||
             category == SensorCategory::Power) {
-            // Currents and power are signed (e.g. battery charging vs. discharging): a
-            // negative reading is a direction, not a fault. Without a native minimum the
-            // synthetic range is mirrored below zero instead of flagging an alert.
+            // Current and power are signed (battery charge/discharge); mirror the range below zero.
             const bool signedWithoutNativeMin = category != SensorCategory::Voltages
                                                 && measuredValue < 0.0 && !min.has_value();
             if (!min.has_value() && !max.has_value()) {

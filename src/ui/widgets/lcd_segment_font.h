@@ -33,6 +33,7 @@
  * with F and B they form proper letter shapes with clean mitered tips.
  */
 namespace LcdSegmentFont {
+    /** One bit per segment, as drawn in the diagram above. */
     enum Segment : quint32 {
         A = 1u << 0,
         B = 1u << 1,
@@ -58,8 +59,8 @@ namespace LcdSegmentFont {
     /** Highest segment bit; iterate `for (bit = 1; bit <= kLastSegment; bit <<= 1)`. */
     inline constexpr SegmentMask kLastSegment = O;
 
+    /** Segments of a classic 7-segment digit; used for digit ghosting. */
     inline constexpr SegmentMask kSevenSegments = A | B | C | D | E | F | G1 | G2;
-    inline constexpr SegmentMask kFourteenSegments = kSevenSegments | H | I | J | K | L | M;
 
     /** Glyph description; widths are relative to the cell height. */
     struct Glyph final {
@@ -67,7 +68,6 @@ namespace LcdSegmentFont {
         SegmentMask ghost = 0; // unlit segments drawn faintly, like a real LCD
         qreal width = 0.0; // drawable cell width / height
         qreal advance = 0.0; // horizontal pen advance / height
-        bool halfHeight = false; // glyph only occupies the upper half (e.g. degree sign)
     };
 
     /** Returns glyph for a supported character, std::nullopt otherwise. */
@@ -106,7 +106,7 @@ namespace LcdSegmentFont {
 
     /**
      * Largest digit height <= @p maxHeight at which value and unit fit into
-     * @p maxWidth, so unusually long readings shrink instead of being clipped.
+     * @p maxWidth; long readings shrink so nothing is clipped.
      */
     [[nodiscard]] qreal fitHeight(QStringView value, QStringView unit, qreal maxHeight, qreal maxWidth);
 }

@@ -11,11 +11,13 @@
 #include <QString>
 #include <QVector>
 
-/** Thin wrapper around libsensors discovery/readout. */
+/** libsensors wrapper: initializes the library and reads all chips into SensorReadings. */
 class SensorsBackend {
 public:
+    /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
     SensorsBackend();
 
+    /** Releases libsensors if this instance initialized it. */
     ~SensorsBackend();
 
     SensorsBackend(const SensorsBackend &) = delete;
@@ -28,11 +30,7 @@ public:
     /** Human-readable backend init error. */
     [[nodiscard]] QString lastError() const;
 
-    /**
-     * Snapshot of all supported sensor input values. Not const: remembers the
-     * milli/base unit chosen per limit-less current/power sensor across polls
-     * (hysteresis, see SensorsPolicy::applyCurrentPowerUnitScaling).
-     */
+    /** All readable sensors; keeps per-sensor unit scale state between calls. */
     [[nodiscard]] QVector<SensorReading> readAll(int defaultFanMaxRpm, TemperatureUnit temperatureUnit);
 
 private:

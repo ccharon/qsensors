@@ -22,6 +22,7 @@ class SensorsPanel final : public QWidget {
     Q_OBJECT
 
 public:
+    /** Creates an empty panel; content appears with the first setReadings(). */
     explicit SensorsPanel(QWidget *parent = nullptr);
 
     /** Replaces the expand/collapse state per chip; existing sections follow immediately. */

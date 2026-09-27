@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "theme/app_theme.h"
 

@@ -43,8 +43,7 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     painter.setClipRect(rect().adjusted(1, 1, -1, -1));
     painter.setPen(Qt::NoPen);
 
-    // Dark themes get brighter segment colors and a glow (backlit LCD) instead of
-    // the offset shadow, which would vanish on a dark backplane.
+    // A shadow is invisible on a dark backplane; dark themes use a glow.
     const bool dark = hasDarkBase();
     const bool alert = SensorsPolicy::isAlertState(m_reading);
     const QColor lit(dark ? (alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)

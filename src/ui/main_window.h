@@ -27,6 +27,7 @@ class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
+    /** Builds the UI, restores settings and starts polling when libsensors is available. */
     explicit MainWindow(QWidget *parent = nullptr);
 
 private slots:
@@ -34,6 +35,7 @@ private slots:
     void refreshReadings();
 
 protected:
+    /** Persists settings and window state before closing. */
     void closeEvent(QCloseEvent *event) override;
 
     /** Reflows sensor cards to current viewport width while preserving expand state. */
@@ -49,10 +51,9 @@ private:
     /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
     void applyThemeRefresh();
 
-private:
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
-    /** Applies runtime config to backend and polling timer. */
+    /** Applies the polling interval from the runtime config to the timer. */
     void applyRuntimeConfig();
 
     /** Updates status bar text in one place. */
@@ -73,13 +74,13 @@ private:
     /** Expands window width minimally until horizontal overflow is gone. */
     void ensureNoHorizontalOverflow(int extraPadding);
 
-    /** Loads persisted geometry, expand-state and fingerprint (+ runtime config). */
+    /** Loads runtime config, geometry, expand state and chip fingerprint. */
     void loadSettings();
 
-    /** Persists geometry, expand-state and current fingerprint (+ runtime config). */
+    /** Persists runtime config, geometry, expand state and chip fingerprint. */
     void saveSettings() const;
 
-    /** Current renderable width: scroll viewport when available, else window width. */
+    /** Width available to the sensor panel inside the scroll area. */
     [[nodiscard]] int viewportWidth() const;
 
     SensorsBackend m_backend;

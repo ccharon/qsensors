@@ -172,7 +172,7 @@ void SensorsPanel::reconcileChipSection(
 }
 
 void SensorsPanel::applyChipOrder(const QStringList &orderedChips) {
-    // Aktuelle Reihenfolge aus dem Layout lesen (Stretch-Items haben kein Widget).
+    // Current order from the layout; stretch items have no widget.
     QStringList current;
     for (int i = 0; i < m_layout->count(); ++i) {
         if (QWidget *w = m_layout->itemAt(i)->widget())

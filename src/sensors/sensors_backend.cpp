@@ -59,7 +59,7 @@ namespace {
         }
     }
 
-    /**  Helper that returns nullopt when a subfeature is missing or unreadable. */
+    /** Value of @p sf; nullopt when unreadable or not finite. */
     [[nodiscard]] std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_subfeature *sf) {
         double value = 0.0;
         if (sensors_get_value(chip, sf->number, &value) != 0) {

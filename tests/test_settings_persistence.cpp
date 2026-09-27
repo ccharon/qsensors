@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+// Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "app_config_store.h"
 #include "main_window_state_store.h"
@@ -105,7 +106,7 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("bus/0")), true);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("pci/slot/2")), false);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("normal-chip-isa-0000")), true);
-    // Kein Gruppen-Trennzeichen-Artefakt: alle drei Namen vorhanden, kein vierter.
+    // No group separator artifacts: exactly the three names come back.
     QCOMPARE(loaded.chipExpanded.size(), 3);
 }
 

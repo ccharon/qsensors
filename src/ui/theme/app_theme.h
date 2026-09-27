@@ -9,19 +9,23 @@
 
 class QWidget;
 
+/** Layout metrics, LCD colors and style sheets; change the look here, not in widgets. */
 namespace AppTheme {
+    // Sensor card width range; the column calculation uses the minimum.
     inline constexpr int kCardMinWidth = 150;
     inline constexpr int kCardWidth = 170;
     // Sensor card title: slightly smaller theme font, aligned with the LCD panel edge.
     inline constexpr qreal kCardTitleFontScale = 0.9;
     inline constexpr int kCardTitleInset = 2;
     inline constexpr int kCardTitleSpacing = 1;
+    // Spacing between cards, categories and sections in px.
     inline constexpr int kGridSpacing = 4;
     inline constexpr int kCategoryVsGridSpacingDelta = 2;
     inline constexpr int kUnifiedHorizontalSpacing = kGridSpacing + kCategoryVsGridSpacingDelta;
     inline constexpr int kChipCardFrameWidthTotal = 2; // 1px left + 1px right
     inline constexpr int kSensorsPanelVerticalSpacing = 10;
     inline constexpr int kCategoryBlockSpacing = 3;
+    // Extra width when fitting the window to its content on first show.
     inline constexpr int kInitialWidthFitPadding = 24;
     inline constexpr int kRestoredWidthFitPadding = 8;
     inline constexpr int kMaxColumnsPerCategory = 6;
@@ -33,7 +37,7 @@ namespace AppTheme {
     inline constexpr QRgb kLcdNormalRgb = 0x4a7c46;
     inline constexpr QRgb kLcdAlertRgb = 0xc14433;
     inline constexpr int kLcdGhostAlpha = 28;
-    // Dark themes: brighter "backlit" segment colors with a soft glow instead of a shadow.
+    // Dark themes: brighter backlit segment colors with a glow.
     inline constexpr QRgb kLcdNormalDarkRgb = 0x7ccc72;
     inline constexpr QRgb kLcdAlertDarkRgb = 0xf0664f;
     inline constexpr int kLcdGhostAlphaDark = 20;
@@ -46,24 +50,27 @@ namespace AppTheme {
     // Inner spacing between LCD segments and the display border.
     inline constexpr int kLcdPaddingX = 4;
     inline constexpr int kLcdPaddingY = 3;
-    // Range bar graph along the bottom of the LCD (replaces the former progress bar).
+    // Range bar graph along the bottom of the LCD.
     inline constexpr int kLcdBarHeight = 4;
     inline constexpr int kLcdBarGap = 3;
     inline constexpr qreal kLcdBarSegmentWidth = 3.5;
     inline constexpr qreal kLcdBarSegmentSpacing = 1.5;
 
+    /** Frame of a CollapsibleSection (object name "sectionCard"). */
     [[nodiscard]] QString sectionCardStyle();
 
+    /** Toggle header of a CollapsibleSection. */
     [[nodiscard]] QString sectionHeaderStyle();
 
+    /** Minimum width for the settings spin boxes. */
     [[nodiscard]] QString spinBoxStyle();
 
+    /** Minimum width for the settings combo box. */
     [[nodiscard]] QString comboBoxStyle();
 
     /**
-     * Re-applies every style sheet in @p root's subtree. Qt resolves palette(...)
-     * references only when a style sheet is set, so without this, styled widgets keep
-     * the old colors after a runtime light/dark switch.
+     * Re-applies every style sheet below @p root. Qt resolves palette(...) only when a
+     * sheet is set, so this is needed after a runtime light/dark switch.
      */
     void refreshStyleSheets(QWidget *root);
 }
