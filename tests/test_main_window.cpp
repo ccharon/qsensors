@@ -5,11 +5,13 @@
 #include "ui/theme/app_theme.h"
 #include "ui/widgets/collapsible_section.h"
 #include "ui/widgets/sensor_value_widget.h"
+#include "ui/widgets/status_line.h"
 
 #include <QPointer>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QSettings>
+#include <QSpinBox>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QtTest/QtTest>
@@ -27,6 +29,7 @@ private slots:
     void cards_share_one_size_and_survive_resizing();
     void height_limited_to_content_but_never_forced_smaller();
     void width_limited_to_full_layout();
+    void source_error_stays_in_status_after_setting_change();
 
 private:
     QTemporaryDir m_dir;
@@ -52,6 +55,13 @@ namespace {
                 add(QStringLiteral("chip-b"), SensorCategory::Voltages, i, SensorUnit::Volt, 1.0 + i);
             return readings;
         }
+    };
+
+    class BrokenSource final : public SensorSource {
+    public:
+        [[nodiscard]] bool isInitialized() const override { return false; }
+        [[nodiscard]] QString lastError() const override { return QStringLiteral("sensors_init failed (4)"); }
+        [[nodiscard]] QVector<SensorReading> readAll() override { return {}; }
     };
 
     std::unique_ptr<MainWindow> showWindow() {
@@ -199,6 +209,17 @@ void MainWindowTest::width_limited_to_full_layout() {
     window->showNormal();
     QTest::qWait(50);
     QCOMPARE(window->maximumWidth(), limit);
+}
+
+void MainWindowTest::source_error_stays_in_status_after_setting_change() {
+    MainWindow window([] { return std::make_unique<BrokenSource>(); });
+    const StatusLine *status = window.findChild<StatusLine *>();
+    QVERIFY(status->text().contains(QStringLiteral("sensors_init failed (4)")));
+
+    // Any settings change updates the status; the error must not be replaced by "No sensors found".
+    for (QSpinBox *spin: window.findChildren<QSpinBox *>())
+        spin->setValue(spin->value() == spin->maximum() ? spin->minimum() : spin->maximum());
+    QVERIFY2(status->text().contains(QStringLiteral("sensors_init failed (4)")), qPrintable(status->text()));
 }
 
 QTEST_MAIN(MainWindowTest)

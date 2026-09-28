@@ -58,7 +58,8 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
     connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
     // Reads once before returning, so the first readings are shown before the window.
     if (!m_monitor->start(m_runtimeConfig)) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_monitor->lastError()));
+        m_sourceError = m_monitor->lastError();
+        updateReadingsStatus();
     }
 }
 
@@ -68,6 +69,11 @@ void MainWindow::showReadings(const QVector<SensorReading> &readings) {
 }
 
 void MainWindow::updateReadingsStatus() {
+    // Without a source there are no readings; the reason matters more than the count.
+    if (!m_sourceError.isEmpty()) {
+        setStatusMessage(tr("libsensors init failed: %1").arg(m_sourceError));
+        return;
+    }
     const int count = m_sensorsPanel->readingCount();
     if (count == 0) {
         setStatusMessage(tr("No sensors found. Run sensors-detect and check the lm-sensors configuration."));

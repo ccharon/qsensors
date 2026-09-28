@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The sensor tooltip lists only the limits the firmware reports, or "No limits
   available"; previously it showed the assumed bar graph range as if it came
   from the firmware.
+- When libsensors cannot be initialized, the error stays in the status bar;
+  changing a setting used to replace it with "No sensors found".
 
 ## [0.80.10] - 2026-09-27
 

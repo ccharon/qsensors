@@ -58,7 +58,7 @@ private:
     /** Sets the permanent status bar text. */
     void setStatusMessage(const QString &text);
 
-    /** Permanent status: reading count and refresh interval, or a hint when no sensors exist. */
+    /** Permanent status: the source error, the reading count and refresh interval, or a hint when no sensors exist. */
     void updateReadingsStatus();
 
     /** Shows @p text for a while instead of the permanent status. */
@@ -86,6 +86,7 @@ private:
     void updateSizeLimits();
 
     SensorMonitor *m_monitor;
+    QString m_sourceError; // set when the sensor source could not be initialized
     VerticalScrollArea *m_scrollArea;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
