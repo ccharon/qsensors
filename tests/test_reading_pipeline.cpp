@@ -14,13 +14,14 @@ private slots:
     void fahrenheit_converts_value_and_limits();
     void fan_fallback_follows_config();
     void milli_scale_is_latched_per_sensor();
+    void firmware_limits_follow_milli_scale();
     void reprocessing_same_raw_readings_is_stable();
 };
 
 namespace {
     SensorReading temperature(const double value, const std::optional<double> max = std::nullopt) {
         return {.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures, .feature = QStringLiteral("temp1"),
-                .featureNumber = 0, .subfeatureNumber = 1, .value = value, .unit = SensorUnit::Celsius, .maxValue = max};
+                .featureNumber = 0, .subfeatureNumber = 1, .value = value, .unit = SensorUnit::Celsius, .firmwareMax = max};
     }
 
     SensorReading power(const double watts, const int featureNumber = 3) {
@@ -38,6 +39,8 @@ void ReadingPipelineTest::raw_values_pass_through_with_default_range() {
     QCOMPARE(shown[0].unit, SensorUnit::Celsius);
     QCOMPARE(shown[0].minValue, std::optional(0.0));
     QCOMPARE(shown[0].maxValue, std::optional(100.0));
+    // The default range fills the bar graph only; the firmware reported no limits.
+    QVERIFY(!shown[0].hasFirmwareLimits());
 }
 
 void ReadingPipelineTest::fahrenheit_converts_value_and_limits() {
@@ -50,6 +53,8 @@ void ReadingPipelineTest::fahrenheit_converts_value_and_limits() {
     QCOMPARE(shown[0].value, 212.0);
     QCOMPARE(shown[0].minValue, std::optional(32.0));
     QCOMPARE(shown[0].maxValue, std::optional(176.0));
+    QCOMPARE(shown[0].firmwareMin, std::nullopt);
+    QCOMPARE(shown[0].firmwareMax, std::optional(176.0));
 }
 
 void ReadingPipelineTest::fan_fallback_follows_config() {
@@ -81,6 +86,19 @@ void ReadingPipelineTest::milli_scale_is_latched_per_sensor() {
     QCOMPARE(pipeline.process({power(10.0)}, config)[0].unit, SensorUnit::Watt);
 }
 
+void ReadingPipelineTest::firmware_limits_follow_milli_scale() {
+    ReadingPipeline pipeline;
+    SensorReading raw = power(0.3);
+    raw.firmwareMax = 0.5;
+    const SensorReading shown = pipeline.process({raw}, RuntimeConfig{})[0];
+    QCOMPARE(shown.unit, SensorUnit::Milliwatt);
+    QCOMPARE(shown.firmwareMax, std::optional(500.0));
+    QCOMPARE(shown.maxValue, std::optional(500.0));
+    // Only a maximum: the bar graph gets a default minimum, the firmware limits do not.
+    QCOMPARE(shown.minValue, std::optional(100.0));
+    QCOMPARE(shown.firmwareMin, std::nullopt);
+}
+
 void ReadingPipelineTest::reprocessing_same_raw_readings_is_stable() {
     ReadingPipeline pipeline;
     const RuntimeConfig config;
@@ -94,6 +112,7 @@ void ReadingPipelineTest::reprocessing_same_raw_readings_is_stable() {
         QCOMPARE(second[i].value, first[i].value);
         QCOMPARE(second[i].minValue, first[i].minValue);
         QCOMPARE(second[i].maxValue, first[i].maxValue);
+        QCOMPARE(second[i].firmwareMax, first[i].firmwareMax);
     }
 }
 

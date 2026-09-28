@@ -56,9 +56,16 @@ struct SensorReading {
     int subfeatureNumber = -1;
     double value = 0.0;
     SensorUnit unit = SensorUnit::Unknown;
-    std::optional<double> minValue; // native limit or the default range policy
+    // Bar graph range: the firmware limit, or the default range policy where the firmware has none.
+    std::optional<double> minValue;
     std::optional<double> maxValue;
+    // Limits reported by the firmware; only these raise an alert (plus the temperature fallback).
+    std::optional<double> firmwareMin;
+    std::optional<double> firmwareMax;
 
-    /** True when at least one limit is known. */
+    /** True when at least one bar graph limit is known. */
     [[nodiscard]] bool hasRange() const { return minValue.has_value() || maxValue.has_value(); }
+
+    /** True when the firmware reports at least one limit. */
+    [[nodiscard]] bool hasFirmwareLimits() const { return firmwareMin.has_value() || firmwareMax.has_value(); }
 };

@@ -52,11 +52,12 @@ QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
     QStringList lines;
     lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());
     lines << tr("Chip: %1").arg(reading.chip.toHtmlEscaped());
-    if (reading.minValue)
-        lines << tr("Min: %1").arg(format(*reading.minValue).toHtmlEscaped());
-    if (reading.maxValue)
-        lines << tr("Max: %1").arg(format(*reading.maxValue).toHtmlEscaped());
-    if (!reading.hasRange())
+    // Only firmware limits: the default bar graph range is a guess, not a limit.
+    if (reading.firmwareMin)
+        lines << tr("Min: %1").arg(format(*reading.firmwareMin).toHtmlEscaped());
+    if (reading.firmwareMax)
+        lines << tr("Max: %1").arg(format(*reading.firmwareMax).toHtmlEscaped());
+    if (!reading.hasFirmwareLimits())
         lines << tr("No limits available");
     return lines.join(QStringLiteral("<br>"));
 }

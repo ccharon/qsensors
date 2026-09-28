@@ -15,6 +15,11 @@ namespace SensorsPolicy {
     inline constexpr double kMilliUnitOverflow = 10000.0;
     /** Base-unit readings below this lose too much precision at two decimals ("0.04"). */
     inline constexpr double kBaseUnitUnderflow = 0.1;
+    /**
+     * Upper bar graph limit, and alert threshold, for temperatures whose firmware
+     * reports no maximum (°C).
+     */
+    inline constexpr double kDefaultTemperatureMaxC = 100.0;
 
     /**
      * Rescales Ampere/Watt to mA/mW for sub-1 sensors. Native limits decide when present;
@@ -80,7 +85,7 @@ namespace SensorsPolicy {
                 min = 0.0;
             }
             if (!max.has_value()) {
-                max = 100.0;
+                max = kDefaultTemperatureMaxC;
             }
         }
 
@@ -130,18 +135,20 @@ namespace SensorsPolicy {
     }
 
     /**
-     * True when the reading violates its limits: fans below min, temperatures above
-     * max, electrical values outside [min, max].
+     * True when the reading violates its firmware limits: fans below min, temperatures
+     * above max, electrical values outside [min, max]. Default ranges never alert, except
+     * that temperatures without a firmware maximum alert above kDefaultTemperatureMaxC.
      */
     [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
-        const bool belowMin = reading.minValue && reading.value < *reading.minValue;
-        const bool aboveMax = reading.maxValue && reading.value > *reading.maxValue;
+        const bool belowMin = reading.firmwareMin && reading.value < *reading.firmwareMin;
+        const bool aboveMax = reading.firmwareMax && reading.value > *reading.firmwareMax;
         switch (reading.unit) {
             case SensorUnit::Rpm:
                 return belowMin;
             case SensorUnit::Celsius:
+                return reading.value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC);
             case SensorUnit::Fahrenheit:
-                return aboveMax;
+                return reading.value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0);
             case SensorUnit::Volt:
             case SensorUnit::Ampere:
             case SensorUnit::Milliampere:

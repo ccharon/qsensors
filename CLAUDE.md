@@ -35,7 +35,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits.
 - `reading_pipeline.{h,cpp}`: turns raw readings into display readings (mA/mW scaling with its per-sensor state, default ranges, temperature unit). A setting change re-processes the last raw readings without reading the hardware.
 - `sensor_monitor.{h,cpp}`: polls the source in a worker thread (source created, read and destroyed there only); the first read at startup is blocking so the window is sized to its content before it is shown; skips a poll while the previous one is still running.
-- `sensors_policy.h`: rules applied to readings: mA/mW scaling, default ranges when firmware has no limits, alert state and range fraction.
+- `sensors_policy.h`: rules applied to readings: mA/mW scaling, default bar graph ranges when firmware has no limits, alert state (firmware limits only, plus 100 °C for temperatures without a firmware maximum) and range fraction. `SensorReading` keeps the firmware limits (`firmwareMin/Max`, alert and tooltip) apart from the bar graph range (`minValue/maxValue`).
 - `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
 

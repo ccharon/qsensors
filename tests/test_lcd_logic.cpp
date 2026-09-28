@@ -33,7 +33,7 @@ void LcdLogicTest::barGraph_lights_proportional_segments() {
 
 void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
     SensorReading battery{.chip = QStringLiteral("macsmc_battery-isa-0000"), .feature = QStringLiteral("in0"),
-                          .value = 11.9, .unit = SensorUnit::Volt, .minValue = 9.888, .maxValue = 13.325};
+                          .value = 11.9, .unit = SensorUnit::Volt, .firmwareMin = 9.888, .firmwareMax = 13.325};
     const QString tip = SensorValueWidget::detailsToolTip(battery);
     QVERIFY(tip.contains(QStringLiteral("<b>in0</b>")));
     QVERIFY(tip.contains(QStringLiteral("macsmc_battery-isa-0000")));
@@ -47,6 +47,13 @@ void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
     const QString oddTip = SensorValueWidget::detailsToolTip(odd);
     QVERIFY(oddTip.contains(QStringLiteral("&lt;CPU &amp; SoC&gt;")));
     QVERIFY(oddTip.contains(QStringLiteral("No limits available")));
+
+    // A default bar graph range is not a limit and stays out of the tooltip.
+    SensorReading guessed{.chip = QStringLiteral("c"), .feature = QStringLiteral("temp1"), .value = 40.0,
+                          .unit = SensorUnit::Celsius, .minValue = 0.0, .maxValue = 100.0};
+    const QString guessedTip = SensorValueWidget::detailsToolTip(guessed);
+    QVERIFY(guessedTip.contains(QStringLiteral("No limits available")));
+    QVERIFY(!guessedTip.contains(QStringLiteral("100.0")));
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

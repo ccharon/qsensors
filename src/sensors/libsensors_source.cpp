@@ -191,8 +191,8 @@ namespace {
         };
 
         const RangeInfo nativeRange = readRange(chip, feature, selected.type);
-        reading.minValue = nativeRange.min;
-        reading.maxValue = nativeRange.max;
+        reading.firmwareMin = nativeRange.min;
+        reading.firmwareMax = nativeRange.max;
         readings.push_back(reading);
     }
 

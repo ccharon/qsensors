@@ -34,6 +34,8 @@ private slots:
     void signed_power_with_native_max_only_mirrors_range();
     void negative_voltage_keeps_zero_minimum();
     void alertState_matches_unit_rules();
+    void alertState_ignores_default_ranges();
+    void alertState_temperature_without_firmware_max_uses_fallback();
     void rangeFraction_maps_value_into_limits();
 };
 
@@ -318,34 +320,55 @@ void SensorsPolicyTest::negative_voltage_keeps_zero_minimum() {
 }
 
 void SensorsPolicyTest::alertState_matches_unit_rules() {
-    SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .minValue = 1000.0};
+    SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .firmwareMin = 1000.0};
     QVERIFY(SensorsPolicy::isAlertState(rpm));
 
-    SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .maxValue = 85.0};
+    SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .firmwareMax = 85.0};
     QVERIFY(SensorsPolicy::isAlertState(temp));
-    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .maxValue = 185.0};
+    SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .firmwareMax = 185.0};
     QVERIFY(SensorsPolicy::isAlertState(tempF));
 
-    SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .minValue = 1.0, .maxValue = 1.3};
+    SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .firmwareMin = 1.0, .firmwareMax = 1.3};
     QVERIFY(SensorsPolicy::isAlertState(volt));
 
-    SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .minValue = 1.0, .maxValue = 100.0};
+    SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .firmwareMin = 1.0, .firmwareMax = 100.0};
     QVERIFY(!SensorsPolicy::isAlertState(normal));
 
-    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .maxValue = 100.0};
+    SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .firmwareMax = 100.0};
     QVERIFY(SensorsPolicy::isAlertState(wattOver));
 
-    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .maxValue = 10.0};
+    SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .firmwareMax = 10.0};
     QVERIFY(SensorsPolicy::isAlertState(ampOver));
 
-    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .minValue = 0.0, .maxValue = 10.0};
+    SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .firmwareMin = 0.0, .firmwareMax = 10.0};
     QVERIFY(!SensorsPolicy::isAlertState(ampNormal));
 
-    SensorReading milliwattOver{.value = 550.0, .unit = SensorUnit::Milliwatt, .maxValue = 500.0};
+    SensorReading milliwattOver{.value = 550.0, .unit = SensorUnit::Milliwatt, .firmwareMax = 500.0};
     QVERIFY(SensorsPolicy::isAlertState(milliwattOver));
 
-    SensorReading milliampNormal{.value = 300.0, .unit = SensorUnit::Milliampere, .minValue = 0.0, .maxValue = 500.0};
+    SensorReading milliampNormal{.value = 300.0, .unit = SensorUnit::Milliampere, .firmwareMin = 0.0, .firmwareMax = 500.0};
     QVERIFY(!SensorsPolicy::isAlertState(milliampNormal));
+}
+
+void SensorsPolicyTest::alertState_ignores_default_ranges() {
+    // Bar graph ranges from the default policy are guesses, not limits.
+    SensorReading idlePower{.value = 25.0, .unit = SensorUnit::Watt, .minValue = 40.0, .maxValue = 200.0,
+                            .firmwareMax = 200.0};
+    QVERIFY(!SensorsPolicy::isAlertState(idlePower));
+    SensorReading fan{.value = 0.0, .unit = SensorUnit::Rpm, .minValue = 0.0, .maxValue = 5000.0};
+    QVERIFY(!SensorsPolicy::isAlertState(fan));
+}
+
+void SensorsPolicyTest::alertState_temperature_without_firmware_max_uses_fallback() {
+    SensorReading hot{.value = SensorsPolicy::kDefaultTemperatureMaxC + 2.0, .unit = SensorUnit::Celsius};
+    QVERIFY(SensorsPolicy::isAlertState(hot));
+    SensorReading warm{.value = SensorsPolicy::kDefaultTemperatureMaxC - 2.0, .unit = SensorUnit::Celsius};
+    QVERIFY(!SensorsPolicy::isAlertState(warm));
+    SensorReading hotF{.value = 215.0, .unit = SensorUnit::Fahrenheit};
+    QVERIFY(SensorsPolicy::isAlertState(hotF));
+    // A firmware maximum above the fallback wins.
+    SensorReading junction{.value = 105.0, .unit = SensorUnit::Celsius, .firmwareMax = 110.0};
+    QVERIFY(!SensorsPolicy::isAlertState(junction));
 }
 
 void SensorsPolicyTest::rangeFraction_maps_value_into_limits() {

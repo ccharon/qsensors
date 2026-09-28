@@ -12,7 +12,8 @@
 
 /**
  * Turns raw readings of a SensorSource into display readings: mA/mW scaling,
- * default ranges where firmware has no limits, and the temperature unit.
+ * the bar graph range (default ranges where firmware has no limits), and the
+ * temperature unit. The firmware limits are kept apart; they alone raise alerts.
  */
 class ReadingPipeline {
 public:

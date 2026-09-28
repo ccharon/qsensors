@@ -10,7 +10,8 @@
 
 /**
  * Hardware access behind the readings. A source reports raw values only: native
- * units (°C, V, RPM, A, W) and firmware limits; ReadingPipeline prepares them for display.
+ * units (°C, V, RPM, A, W) and the firmware limits in firmwareMin/firmwareMax;
+ * ReadingPipeline prepares them for display and fills the bar graph range.
  */
 class SensorSource {
 public:

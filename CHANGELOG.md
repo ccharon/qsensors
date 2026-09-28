@@ -22,6 +22,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Resizing the window only moves the sensor cards; they are no longer
   recreated when the number of columns changes. The layout itself is unchanged.
 
+### Fixed
+- Sensors no longer show an alert because of a limit qsensors made up. When
+  the firmware reports only a maximum (e.g. a GPU power cap or a USB-C port's
+  maximum current), the bar graph assumes a minimum of 20 % of it; values
+  below that, such as an idle GPU or an unused port, were shown in red. Alerts
+  now come from firmware limits only. Temperatures without a firmware maximum
+  still turn red above 100 °C.
+- The sensor tooltip lists only the limits the firmware reports, or "No limits
+  available"; previously it showed the assumed bar graph range as if it came
+  from the firmware.
+
 ## [0.80.10] - 2026-09-27
 
 ### Added

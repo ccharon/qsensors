@@ -17,10 +17,10 @@ namespace {
         }
 
         reading.value = celsiusToFahrenheit(reading.value);
-        if (reading.minValue)
-            reading.minValue = celsiusToFahrenheit(*reading.minValue);
-        if (reading.maxValue)
-            reading.maxValue = celsiusToFahrenheit(*reading.maxValue);
+        for (std::optional<double> *limit: {&reading.minValue, &reading.maxValue, &reading.firmwareMin, &reading.firmwareMax}) {
+            if (*limit)
+                *limit = celsiusToFahrenheit(**limit);
+        }
         reading.unit = SensorUnit::Fahrenheit;
     }
 }
@@ -31,11 +31,14 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
         const QString latchKey = reading.chip + QLatin1Char(':') + QString::number(reading.featureNumber);
         const auto latchIt = m_milliScaleLatch.constFind(latchKey);
         std::optional<bool> latchedMilli = latchIt != m_milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
-        SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, reading.minValue, reading.maxValue,
-                                                    &latchedMilli);
+        SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, reading.firmwareMin,
+                                                    reading.firmwareMax, &latchedMilli);
         if (latchedMilli.has_value()) {
             m_milliScaleLatch.insert(latchKey, *latchedMilli);
         }
+        // The bar graph starts from the firmware limits; the policy fills in what is missing.
+        reading.minValue = reading.firmwareMin;
+        reading.maxValue = reading.firmwareMax;
         SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, reading.minValue, reading.maxValue,
                                                config.fanDefaultMaxRpm);
         applyTemperatureUnit(reading, config.temperatureUnit);

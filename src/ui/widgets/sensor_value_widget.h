@@ -21,7 +21,7 @@ public:
     /** Refreshes title, details tooltip and LCD (value and range bar graph). */
     void setReading(const SensorReading &reading);
 
-    /** Tooltip with full sensor name, chip and the min/max limits in display units. */
+    /** Tooltip with full sensor name, chip and the firmware min/max limits in display units. */
     [[nodiscard]] static QString detailsToolTip(const SensorReading &reading);
 
 protected:
