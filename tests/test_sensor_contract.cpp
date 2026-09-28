@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensors/sensors_backend.h"
+#include "sensors/sensor_reading.h"
 #include "ui/widgets/lcd_segment_font.h"
 #include "sensors/sensor_format.h"
 

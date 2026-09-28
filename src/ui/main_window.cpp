@@ -3,6 +3,8 @@
 
 #include "ui/main_window.h"
 
+#include "sensors/libsensors_source.h"
+
 #include "config/app_config_store.h"
 #include "ui/theme/app_theme.h"
 #include "ui/main_window_state_store.h"
@@ -30,6 +32,7 @@ namespace {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
+      m_source(std::make_unique<LibsensorsSource>()),
       m_scrollArea(nullptr),
       m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),
@@ -54,17 +57,17 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
         persistRuntimeConfig();
-        refreshReadings();
+        showReadings();
     });
 
     connect(m_settingsPanel, &SettingsPanel::temperatureUnitChanged, this, [this](const TemperatureUnit unit) {
         m_runtimeConfig.temperatureUnit = unit;
         persistRuntimeConfig();
-        refreshReadings();
+        showReadings();
     });
 
-    if (!m_backend.isInitialized()) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_backend.lastError()));
+    if (!m_source->isInitialized()) {
+        setStatusMessage(tr("libsensors init failed: %1").arg(m_source->lastError()));
         return;
     }
 
@@ -76,8 +79,13 @@ MainWindow::MainWindow(QWidget *parent)
 }
 
 void MainWindow::refreshReadings() {
-    m_sensorsPanel->setReadings(m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit),
-                                viewportWidth());
+    m_rawReadings = m_source->readAll();
+    showReadings();
+}
+
+void MainWindow::showReadings() {
+    // A setting change re-prepares the last raw readings instead of reading the hardware again.
+    m_sensorsPanel->setReadings(m_pipeline.process(m_rawReadings, m_runtimeConfig), viewportWidth());
     updateReadingsStatus();
 }
 

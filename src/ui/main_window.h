@@ -4,10 +4,14 @@
 #pragma once
 
 #include "config/runtime_config.h"
-#include "sensors/sensors_backend.h"
+#include "sensors/reading_pipeline.h"
+#include "sensors/sensor_source.h"
 
 #include <QMainWindow>
 #include <QPalette>
+#include <QVector>
+
+#include <memory>
 
 class QTimer;
 class QScrollArea;
@@ -27,7 +31,7 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 private slots:
-    /** Polls the backend and hands the readings to the sensors panel. */
+    /** Reads the source and shows the readings. */
     void refreshReadings();
 
 protected:
@@ -47,6 +51,9 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
+    /** Prepares the last raw readings with the runtime config and hands them to the sensors panel. */
+    void showReadings();
+
     /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
     void applyThemeRefresh();
 
@@ -91,7 +98,9 @@ private:
     /** Width available to the sensor panel inside the scroll area. */
     [[nodiscard]] int viewportWidth() const;
 
-    SensorsBackend m_backend;
+    std::unique_ptr<SensorSource> m_source;
+    ReadingPipeline m_pipeline;
+    QVector<SensorReading> m_rawReadings;
     QScrollArea *m_scrollArea;
     QWidget *m_contentContainer;
     SensorsPanel *m_sensorsPanel;

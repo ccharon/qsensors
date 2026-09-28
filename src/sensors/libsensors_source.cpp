@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensors/sensors_backend.h"
-#include "sensors/sensors_policy.h"
+#include "sensors/libsensors_source.h"
 
 #include <sensors/sensors.h>
 
@@ -18,10 +17,6 @@
 namespace {
     // libsensors defines no hard name-length limit; 256 covers all real-world chip names.
     constexpr size_t kChipNameBufferSize = 256;
-
-    [[nodiscard]] double celsiusToFahrenheit(const double valueC) {
-        return (valueC * (9.0 / 5.0)) + 32.0;
-    }
 
     /** Maps libsensors input types to visible category columns. */
     [[nodiscard]] SensorCategory categoryForType(const sensors_subfeature_type type) {
@@ -162,42 +157,16 @@ namespace {
         return QString::fromUtf8(feature->name != nullptr ? feature->name : "unknown");
     }
 
-    void applyRangeToReading(SensorReading &reading, const std::optional<double> &min, const std::optional<double> &max) {
-        reading.minValue = min;
-        reading.maxValue = max;
-    }
-
-    void applyTemperatureUnitToReading(SensorReading &reading, const TemperatureUnit temperatureUnit) {
-        if (temperatureUnit != TemperatureUnit::Fahrenheit || reading.unit != SensorUnit::Celsius) {
-            return;
-        }
-
-        reading.value = celsiusToFahrenheit(reading.value);
-        if (reading.minValue)
-            reading.minValue = celsiusToFahrenheit(*reading.minValue);
-        if (reading.maxValue)
-            reading.maxValue = celsiusToFahrenheit(*reading.maxValue);
-        reading.unit = SensorUnit::Fahrenheit;
-    }
-
-    /** Per-poll inputs plus the backend state that must survive between polls. */
-    struct ReadContext {
-        int defaultFanMaxRpm;
-        TemperatureUnit temperatureUnit;
-        QHash<QString, bool> &milliScaleLatch;
-        QSet<QString> &reportedProblems;
-    };
-
     // Polling repeats every few seconds; each problem is logged once per session.
-    void reportOnce(ReadContext &context, const QString &key, const QString &message) {
-        if (!context.reportedProblems.contains(key)) {
-            context.reportedProblems.insert(key);
+    void reportOnce(QSet<QString> &reportedProblems, const QString &key, const QString &message) {
+        if (!reportedProblems.contains(key)) {
+            reportedProblems.insert(key);
             qWarning("qsensors: %s", qPrintable(message));
         }
     }
 
     void appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature,
-                              QVector<SensorReading> &readings, ReadContext &context) {
+                              QVector<SensorReading> &readings, QSet<QString> &reportedProblems) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
         if (selected.subfeature == nullptr) {
             return;
@@ -205,7 +174,7 @@ namespace {
 
         const std::optional<double> value = readSubfeatureValue(chip, selected.subfeature);
         if (!value.has_value()) {
-            reportOnce(context, chipName + QLatin1Char('/') + QString::number(feature->number),
+            reportOnce(reportedProblems, chipName + QLatin1Char('/') + QString::number(feature->number),
                        QStringLiteral("skipping unreadable sensor %1 on %2")
                            .arg(QString::fromUtf8(feature->name != nullptr ? feature->name : "?"), chipName));
             return;
@@ -221,19 +190,9 @@ namespace {
             .unit = unitForType(selected.type),
         };
 
-        RangeInfo nativeRange = readRange(chip, feature, selected.type);
-        const QString latchKey = chipName + QLatin1Char(':') + QString::number(feature->number);
-        const auto latchIt = context.milliScaleLatch.constFind(latchKey);
-        std::optional<bool> latchedMilli = latchIt != context.milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
-        SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, nativeRange.min, nativeRange.max,
-                                                    &latchedMilli);
-        if (latchedMilli.has_value()) {
-            context.milliScaleLatch.insert(latchKey, *latchedMilli);
-        }
-        SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, nativeRange.min, nativeRange.max,
-                                               context.defaultFanMaxRpm);
-        applyRangeToReading(reading, nativeRange.min, nativeRange.max);
-        applyTemperatureUnitToReading(reading, context.temperatureUnit);
+        const RangeInfo nativeRange = readRange(chip, feature, selected.type);
+        reading.minValue = nativeRange.min;
+        reading.maxValue = nativeRange.max;
         readings.push_back(reading);
     }
 
@@ -247,10 +206,10 @@ namespace {
         return QString::fromUtf8(chipNameBuffer, length);
     }
 
-    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, ReadContext &context) {
+    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, QSet<QString> &reportedProblems) {
         const std::optional<QString> chipName = chipNameFrom(chip);
         if (!chipName.has_value() || chipName->isEmpty()) {
-            reportOnce(context, QStringLiteral("chip:%1").arg(chip->addr),
+            reportOnce(reportedProblems, QStringLiteral("chip:%1").arg(chip->addr),
                        QStringLiteral("skipping chip with unusable name (prefix %1)")
                            .arg(QString::fromUtf8(chip->prefix != nullptr ? chip->prefix : "?")));
             return;
@@ -259,17 +218,17 @@ namespace {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, *chipName, feature, readings, context);
+            appendFeatureReading(chip, *chipName, feature, readings, reportedProblems);
         }
     }
 
-    // sensors_init()/sensors_cleanup() manage process-wide state; one backend at a time.
+    // sensors_init()/sensors_cleanup() manage process-wide state; one source at a time.
     std::atomic_bool g_backendActive{false};
 }
 
-SensorsBackend::SensorsBackend() : m_initialized(false) {
+LibsensorsSource::LibsensorsSource() : m_initialized(false) {
     if (g_backendActive.exchange(true)) {
-        m_lastError = QStringLiteral("another SensorsBackend instance is already active");
+        m_lastError = QStringLiteral("another LibsensorsSource instance is already active");
         return;
     }
     // nullptr reads the system configuration (/etc/sensors3.conf, /etc/sensors.d/); its
@@ -283,32 +242,31 @@ SensorsBackend::SensorsBackend() : m_initialized(false) {
     m_initialized = true;
 }
 
-SensorsBackend::~SensorsBackend() {
+LibsensorsSource::~LibsensorsSource() {
     if (m_initialized) {
         sensors_cleanup();
         g_backendActive = false;
     }
 }
 
-bool SensorsBackend::isInitialized() const {
+bool LibsensorsSource::isInitialized() const {
     return m_initialized;
 }
 
-QString SensorsBackend::lastError() const {
+QString LibsensorsSource::lastError() const {
     return m_lastError;
 }
 
-QVector<SensorReading> SensorsBackend::readAll(const int defaultFanMaxRpm, const TemperatureUnit temperatureUnit) {
+QVector<SensorReading> LibsensorsSource::readAll() {
     QVector<SensorReading> readings;
     if (!m_initialized) {
         return readings;
     }
 
-    ReadContext context{defaultFanMaxRpm, temperatureUnit, m_milliScaleLatch, m_reportedProblems};
     const sensors_chip_name *chip = nullptr;
     int chipNr = 0;
     while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings, context);
+        appendChipReadings(chip, readings, m_reportedProblems);
     }
 
     return readings;

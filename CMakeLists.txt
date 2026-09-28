@@ -32,6 +32,7 @@ set(QSENSORS_MODEL_SOURCES
         src/config/app_config_store.cpp
         src/config/runtime_config.cpp
         src/config/settings_schema.cpp
+        src/sensors/reading_pipeline.cpp
         src/sensors/sensor_format.cpp
 )
 set(QSENSORS_UI_SOURCES
@@ -48,7 +49,7 @@ set(QSENSORS_UI_SOURCES
 set(QSENSORS_APP_SOURCES
         src/main.cpp
         src/ui/main_window.cpp
-        src/sensors/sensors_backend.cpp
+        src/sensors/libsensors_source.cpp
 )
 
 add_library(qsensors_model STATIC ${QSENSORS_MODEL_SOURCES})
@@ -131,6 +132,7 @@ if (BUILD_TESTING)
     endfunction()
 
     add_qsensors_test(test_sensors_policy tests/test_sensors_policy.cpp qsensors_model)
+    add_qsensors_test(test_reading_pipeline tests/test_reading_pipeline.cpp qsensors_model)
     add_qsensors_test(test_lcd_logic tests/test_lcd_logic.cpp qsensors_ui)
     add_qsensors_test(test_glyph_model tests/test_glyph_model.cpp qsensors_ui)
     add_qsensors_test(test_settings_persistence tests/test_settings_persistence.cpp qsensors_ui)

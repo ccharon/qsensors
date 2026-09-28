@@ -27,11 +27,13 @@ cmake --build build --target update_translations
 
 ## Architecture
 
-Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` list → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
+Data flow: polling timer → `SensorSource` (raw readings) → `ReadingPipeline` (display readings) → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
 
 **`src/sensors/`**: sensor data, rules and the libsensors integration; no Qt widgets.
 - `sensor_reading.h`: the normalized model (`SensorReading`, `SensorUnit`, `SensorCategory`, unit symbols) used by all layers.
-- `sensors_backend.{h,cpp}`: libsensors init/cleanup lifecycle, chip enumeration, reading limits; produces `SensorReading` lists. Temperature unit conversion happens here.
+- `sensor_source.h`: interface for hardware access; a source reports raw values only (°C, V, RPM, A, W and firmware limits).
+- `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits.
+- `reading_pipeline.{h,cpp}`: turns raw readings into display readings (mA/mW scaling with its per-sensor state, default ranges, temperature unit). A setting change re-processes the last raw readings without reading the hardware.
 - `sensors_policy.h`: rules applied to readings: mA/mW scaling, default ranges when firmware has no limits, alert state and range fraction.
 - `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
