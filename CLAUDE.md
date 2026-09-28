@@ -42,9 +42,12 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 **`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
-- `main_window`: gets the sensor source factory from `main.cpp` (libsensors) and runs it in a `SensorMonitor`; window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
-- `panels/sensors_panel`: chip-grouped layout; distributes columns per category (most rows first) and stretches all cards to one shared width in the spare space; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
+- `main_window`: gets the sensor source factory from `main.cpp` (libsensors) and runs it in a `SensorMonitor`; the height limit (at most as tall as the content, never forced smaller, rule in `window_sizing.h`, re-evaluated on `LayoutRequest`), status messages, settings load/save. Widths need no code here: they follow from the layouts.
+- `panels/sensors_panel`: chip-grouped layout; owns the chip expand state, the drag-and-drop chip order and the `CardGridPlan`; rebuilds a chip's cards only when its sensors change. Its minimum width ignores chip headers and collapsed state (one column per category for the chip with most categories).
+- `panels/card_grid_plan`: column planning without widgets: columns per category (most rows first) and the one card width shared by all chips, so all cards always have the same size.
+- `panels/category_row_layout`: `QLayout` per chip placing category titles and cards by the plan; `heightForWidth`, so a resize only moves cards.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
+- `widgets/vertical_scroll_area`: vertical-only scroll area whose minimum width is the content's plus the scrollbar, and whose size hint height is the content height at the current width.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
 - `widgets/status_line`: status bar text with timed notices on top of the permanent status.
 - `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip and limits).
@@ -53,7 +56,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
-**`tests/`**: 12 unit test files covering range policy and rules, the reading pipeline, the sensor monitor (worker thread, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 13 unit test files covering the main window sizing (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 
@@ -89,6 +92,6 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 
 - **Translation**: any new or changed user-visible string must be reflected in all supported locales (`en` English, `de` German, `fr` French, `es` Spanish, `pt` Portuguese) before the change is considered complete. CI enforces this via git diff on translation source files. Run `update_translations` target after string changes.
 - **CHANGELOG.md**: update in the same commit for any user-visible, behavior-relevant, or release-noteworthy change (Keep a Changelog format).
-- **Structural vs value updates**: `SensorsPanel` intentionally separates layout rebuilds (structure changed) from in-place value patches (same sensors, new readings). Preserve this distinction when modifying the panel.
+- **Structural vs value updates**: `SensorsPanel` intentionally separates rebuilds (sensors changed) from in-place value patches (same sensors, new readings); width changes are handled by the layouts alone and never rebuild. Preserve this distinction when modifying the panel.
 - **No silent settings migrations**: schema version bumps must be explicit and visible.
 - **libsensors lifecycle**: `sensors_init` / `sensors_cleanup` must be paired; no leaks. All libsensors calls happen in the `SensorMonitor` worker thread.

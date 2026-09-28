@@ -11,13 +11,13 @@
 #include <QPalette>
 #include <QVector>
 
-class QScrollArea;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
 class SensorsPanel;
 class SettingsPanel;
 class StatusLine;
+class VerticalScrollArea;
 
 /** Main application surface: polling, persistence and sensor panel layout. */
 class MainWindow final : public QMainWindow {
@@ -34,14 +34,14 @@ protected:
     /** Re-evaluates the height limit after the user resized the window. */
     void resizeEvent(QResizeEvent *event) override;
 
-    /** Applies initial relayout and optional width fit once after first data is shown. */
+    /** Fits the height to the content on the first show without a saved window size. */
     void showEvent(QShowEvent *event) override;
 
     /** Re-applies style sheets on light/dark switches; lifts the height limit when maximized. */
     void changeEvent(QEvent *event) override;
 
-    /** Relayouts on viewport width changes and tracks content height changes. */
-    bool eventFilter(QObject *watched, QEvent *event) override;
+    /** Re-evaluates the height limit once the layouts have taken a content change into account. */
+    bool event(QEvent *event) override;
 
 private:
     /** Hands new display readings to the sensors panel and updates the status. */
@@ -67,12 +67,6 @@ private:
     /** Saves the runtime config right away and reports a failed write. */
     void persistRuntimeConfig();
 
-    /** Keeps top-level minimum width aligned to widest currently required content. */
-    void updateMinimumWindowWidthConstraint();
-
-    /** Expands window width minimally until horizontal overflow is gone. */
-    void ensureNoHorizontalOverflow(int extraPadding);
-
     /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
     void loadSettings();
 
@@ -88,12 +82,8 @@ private:
     /** Keeps the window from being dragged taller than its content (see WindowSizing). */
     void updateHeightLimit();
 
-    /** Width available to the sensor panel inside the scroll area. */
-    [[nodiscard]] int viewportWidth() const;
-
     SensorMonitor *m_monitor;
-    QScrollArea *m_scrollArea;
-    QWidget *m_contentContainer;
+    VerticalScrollArea *m_scrollArea;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
     StatusLine *m_statusLine;

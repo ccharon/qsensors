@@ -4,7 +4,7 @@
 #pragma once
 
 #include "sensors/sensor_reading.h"
-#include "ui/theme/app_theme.h"
+#include "ui/panels/card_grid_plan.h"
 
 #include <QHash>
 #include <QMap>
@@ -13,16 +13,20 @@
 #include <QVector>
 #include <QWidget>
 
+class CategoryRowLayout;
 class CollapsibleSection;
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
 class QDropEvent;
-class QHBoxLayout;
 class QVBoxLayout;
 class SensorValueWidget;
 
-/** Chip-grouped sensor cards; owns the per-chip expand state. */
+/**
+ * Chip-grouped sensor cards; owns the per-chip expand state and chip order. The
+ * columns follow the panel width through each chip's CategoryRowLayout, so a resize
+ * never rebuilds widgets; only a change of the sensors does.
+ */
 class SensorsPanel final : public QWidget {
     Q_OBJECT
 
@@ -61,30 +65,14 @@ public:
     /** Number of readings currently shown. */
     [[nodiscard]] int readingCount() const;
 
-    /** Shows @p readings; rebuilds only sections whose sensors or column count changed. */
-    void setReadings(const QVector<SensorReading> &readings, int viewportWidth);
-
-    /** Re-evaluates the column layout for a new viewport width; unchanged sections are kept. */
-    void relayout(int viewportWidth);
-
-    /** Minimum width required so each category can still render at least one sensor column. */
-    [[nodiscard]] int minimumRequiredWidth() const;
+    /** Shows @p readings; rebuilds only sections whose sensors changed. */
+    void setReadings(const QVector<SensorReading> &readings);
 
     /**
-     * Columns per category for @p sensorCounts within @p availableWidth. Every category
-     * gets one column; each further column goes to the category with the most rows, as
-     * long as it saves a row and fits.
+     * Minimum width at which every chip still gets one column per category. Chip
+     * headers do not count; a long chip name is cut off rather than widening the window.
      */
-    [[nodiscard]] static QVector<int> columnsForCategories(const QVector<int> &sensorCounts, int availableWidth);
-
-    /** Width of categories laid out with @p columns at minimum card width, including the gaps. */
-    [[nodiscard]] static int categoriesWidth(const QVector<int> &columns);
-
-    /**
-     * Card width that spreads the width left over by @p columns within @p availableWidth
-     * evenly over all cards, between kCardMinWidth and kCardMaxWidth.
-     */
-    [[nodiscard]] static int cardWidthFor(const QVector<int> &columns, int availableWidth);
+    [[nodiscard]] QSize minimumSizeHint() const override;
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -93,7 +81,7 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 signals:
-    /** Chips or categories changed, so minimumRequiredWidth() may have changed. */
+    /** Chips or sensors changed, as opposed to new values of the same sensors. */
     void structureChanged();
 
     /** A restored expand state did not match the current chips and was dropped. */
@@ -106,21 +94,15 @@ private:
     /** One persistent UI section per chip, reused across refresh cycles. */
     struct ChipSection {
         CollapsibleSection *card = nullptr;
-        QHBoxLayout *categoryRow = nullptr;
+        CategoryRowLayout *grid = nullptr;
         /** Sensor keys currently rendered; a change requires a rebuild. */
         QString structureFingerprint;
-        /** Grid columns per category (in category order) the section was built with. */
-        QVector<int> columns;
-        /** One container per category, in category order; sized by applyCardWidth(). */
-        QVector<QWidget *> categoryContainers;
-        /** Card width currently applied. */
-        int cardWidth = 0;
         /** Cards by sensor key, for value-only updates. */
         QHash<QString, SensorValueWidget *> widgets;
     };
 
     /** Reconciles all sections with m_groups; returns true if the structure changed. */
-    bool render(int viewportWidth);
+    bool render();
 
     /** Drops the pending restored state when it belongs to another chip set. */
     void checkRestoredState();
@@ -128,21 +110,17 @@ private:
     /** Deletes sections of chips that are no longer present; returns true if any was removed. */
     bool removeStaleChipSections();
 
-    /** Creates, rebuilds or updates one section with the given layout; returns true if its sensors changed. */
-    bool reconcileChipSection(const QString &chipName, const CategoryGroups &categories, const QVector<int> &columns,
-                              int cardWidth);
+    /** Creates, rebuilds or updates one section; returns true if its sensors changed. */
+    bool reconcileChipSection(const QString &chipName, const CategoryGroups &categories);
 
     /** Creates and wires one reusable chip section container. */
     [[nodiscard]] ChipSection *createChipSection(const QString &chipName);
 
-    /** Rebuilds one chip section's category/widget subtree. */
-    void rebuildChipSection(ChipSection &section, const CategoryGroups &categories, const QVector<int> &columns);
+    /** Rebuilds one chip section's category titles and cards. */
+    void rebuildChipSection(ChipSection &section, const CategoryGroups &categories);
 
     /** Present chips in display order: preferred order first, then the rest alphabetically. */
     [[nodiscard]] QStringList displayOrder() const;
-
-    /** Sizes all cards and category containers of @p section for @p cardWidth. */
-    static void applyCardWidth(ChipSection &section, int cardWidth);
 
     /** Puts the chip cards into the layout in displayOrder() when it differs. */
     void applyChipOrder();
@@ -159,13 +137,13 @@ private:
     [[nodiscard]] static ChipGroups groupReadingsByChip(const QVector<SensorReading> &readings);
     [[nodiscard]] static QString chipStructureFingerprint(const CategoryGroups &categories);
     [[nodiscard]] static QVector<int> sensorCounts(const CategoryGroups &categories);
-    [[nodiscard]] static int widthForColumns(int columns, int cardWidth = AppTheme::kCardMinWidth);
 
     /** Width around the categories of a chip: panel margins, card frame and chip content margins. */
     [[nodiscard]] int chipChromeWidth() const;
 
     QVBoxLayout *m_layout;
     ChipGroups m_groups;
+    CardGridPlan m_plan;
     QHash<QString, ChipSection> m_chipSections;
     QStringList m_chipOrder; // order currently in the layout
     QStringList m_preferredOrder;

@@ -40,6 +40,8 @@ set(QSENSORS_UI_SOURCES
         src/ui/main_window.cpp
         src/ui/main_window_state_store.cpp
         src/ui/theme/app_theme.cpp
+        src/ui/panels/card_grid_plan.cpp
+        src/ui/panels/category_row_layout.cpp
         src/ui/panels/settings_panel.cpp
         src/ui/panels/sensors_panel.cpp
         src/ui/widgets/collapsible_section.cpp
@@ -47,6 +49,7 @@ set(QSENSORS_UI_SOURCES
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/ui/widgets/status_line.cpp
+        src/ui/widgets/vertical_scroll_area.cpp
 )
 set(QSENSORS_APP_SOURCES
         src/main.cpp
@@ -144,4 +147,5 @@ if (BUILD_TESTING)
     add_qsensors_test(test_theme_refresh tests/test_theme_refresh.cpp qsensors_ui)
     add_qsensors_test(test_status_line tests/test_status_line.cpp qsensors_ui)
     add_qsensors_test(test_window_sizing tests/test_window_sizing.cpp qsensors_ui)
+    add_qsensors_test(test_main_window tests/test_main_window.cpp qsensors_ui)
 endif ()

@@ -10,17 +10,15 @@
 #include "ui/panels/settings_panel.h"
 #include "ui/theme/app_theme.h"
 #include "ui/widgets/status_line.h"
+#include "ui/widgets/vertical_scroll_area.h"
 #include "ui/window_sizing.h"
 
 #include <QApplication>
 #include <QResizeEvent>
-#include <QScrollArea>
-#include <QScrollBar>
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
 #include <QVBoxLayout>
-#include <QWindow>
 #include <utility>
 
 namespace {
@@ -31,7 +29,6 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
     : QMainWindow(parent),
       m_monitor(new SensorMonitor(std::move(sourceFactory), this)),
       m_scrollArea(nullptr),
-      m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
       m_statusLine(nullptr) {
@@ -66,7 +63,7 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
 }
 
 void MainWindow::showReadings(const QVector<SensorReading> &readings) {
-    m_sensorsPanel->setReadings(readings, viewportWidth());
+    m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
 }
 
@@ -97,25 +94,20 @@ void MainWindow::setupUi() {
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    m_scrollArea = new QScrollArea(central);
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea = new VerticalScrollArea(central);
 
-    m_contentContainer = new QWidget(m_scrollArea);
-    auto *contentLayout = new QVBoxLayout(m_contentContainer);
+    auto *content = new QWidget(m_scrollArea);
+    auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(AppTheme::kNarrowGap);
-    contentLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
-    m_sensorsPanel = new SensorsPanel(m_contentContainer);
-    m_settingsPanel = new SettingsPanel(m_contentContainer);
-    connect(m_sensorsPanel, &SensorsPanel::structureChanged, this, &MainWindow::updateMinimumWindowWidthConstraint);
+    m_sensorsPanel = new SensorsPanel(content);
+    m_settingsPanel = new SettingsPanel(content);
     connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
         showNotice(tr("Sensor layout changed: UI config reset"));
     });
 
-    auto *settingsHost = new QWidget(m_contentContainer);
+    auto *settingsHost = new QWidget(content);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
     settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset,
                                            AppTheme::kSectionInset + AppTheme::kNarrowGap);
@@ -130,14 +122,9 @@ void MainWindow::setupUi() {
     contentLayout->addWidget(m_sensorsPanel, 1);
     contentLayout->addWidget(settingsHost, 0, Qt::AlignBottom);
 
-    m_scrollArea->setWidget(m_contentContainer);
+    m_scrollArea->setWidget(content);
     layout->addWidget(m_scrollArea);
     setCentralWidget(central);
-
-    // The viewport narrows when the scrollbar appears; the cards follow its width.
-    m_scrollArea->viewport()->installEventFilter(this);
-    // Expanding or collapsing sections changes the content height.
-    m_contentContainer->installEventFilter(this);
 
     // Own status widget instead of QStatusBar::showMessage(), which leaves normal
     // widgets visible when the message is set before the window is shown.
@@ -159,18 +146,17 @@ void MainWindow::resizeEvent(QResizeEvent *event) {
     updateHeightLimit();
 }
 
-bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
-    if (watched == m_scrollArea->viewport() && event->type() == QEvent::Resize) {
-        m_sensorsPanel->relayout(viewportWidth());
-    } else if (watched == m_contentContainer && event->type() == QEvent::LayoutRequest) {
-        // The layout recomputes its size hint after this event; read it afterwards.
-        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
+bool MainWindow::event(QEvent *event) {
+    const bool handled = QMainWindow::event(event);
+    // Posted whenever a size hint below changed, e.g. a collapsed chip or new sensors.
+    if (event->type() == QEvent::LayoutRequest) {
+        updateHeightLimit();
     }
-    return QMainWindow::eventFilter(watched, event);
+    return handled;
 }
 
 int MainWindow::contentWindowHeight() const {
-    return height() - m_scrollArea->viewport()->height() + m_contentContainer->layout()->sizeHint().height();
+    return height() - m_scrollArea->height() + m_scrollArea->sizeHint().height();
 }
 
 int MainWindow::availableScreenHeight() const {
@@ -198,9 +184,6 @@ void MainWindow::updateHeightLimit() {
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
-        m_sensorsPanel->relayout(viewportWidth());
-        ensureNoHorizontalOverflow(m_hasSavedGeometry ? AppTheme::kRestoredWidthFitPadding : AppTheme::kInitialWidthFitPadding);
-        updateMinimumWindowWidthConstraint();
         // Without saved geometry the first height fits the content; applied once the
         // layout has computed its size (see updateHeightLimit()).
         m_fitHeightToContent = !m_hasSavedGeometry;
@@ -260,46 +243,3 @@ void MainWindow::applyRuntimeConfig() {
     m_monitor->setConfig(m_runtimeConfig);
     updateReadingsStatus();
 }
-
-void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {
-    // Let pending layout updates settle before deciding if horizontal overflow is real.
-    m_scrollArea->ensurePolished();
-    m_scrollArea->updateGeometry();
-    m_contentContainer->ensurePolished();
-    m_contentContainer->updateGeometry();
-
-    auto *hBar = m_scrollArea->horizontalScrollBar();
-    if (hBar->maximum() <= 0) {
-        return;
-    }
-
-    QScreen *screen = windowHandle() != nullptr ? windowHandle()->screen() : QApplication::primaryScreen();
-    if (screen == nullptr) {
-        return;
-    }
-
-    const int maxWidth = screen->availableGeometry().width();
-    const int extra = hBar->maximum() + extraPadding;
-    const int targetWidth = std::min(maxWidth, width() + extra);
-    if (targetWidth > width()) {
-        resize(targetWidth, height());
-    }
-}
-
-void MainWindow::updateMinimumWindowWidthConstraint() {
-    const int sensorsMin = m_sensorsPanel->minimumRequiredWidth();
-    const int settingsMin = (AppTheme::kSectionInset * 2) + m_settingsPanel->minimumRequiredWidth();
-    const int requiredContentWidth = std::max(sensorsMin, settingsMin);
-
-    m_contentContainer->setMinimumWidth(requiredContentWidth);
-
-    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar()->sizeHint().width();
-    const int scrollAreaChrome = (m_scrollArea->frameWidth() * 2) + verticalScrollbarReserve;
-    const int requiredCentralWidth = requiredContentWidth + scrollAreaChrome;
-    m_scrollArea->setMinimumWidth(requiredCentralWidth);
-}
-
-int MainWindow::viewportWidth() const {
-    return m_scrollArea->viewport()->width();
-}
-
