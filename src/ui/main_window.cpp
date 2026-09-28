@@ -227,11 +227,15 @@ void MainWindow::applyThemeRefresh() {
 }
 
 void MainWindow::loadSettings() {
-    // Runtime config and UI layout state are intentionally persisted independently.
-    m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
-    if (QSettings settings; SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
+    // The only migration point: the stores below read the current schema.
+    QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
+    if (SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
         showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
     }
+
+    // Runtime config and UI layout state are intentionally persisted independently.
+    m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
     const MainWindowState state = MainWindowStateStore::load();
 
     m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);

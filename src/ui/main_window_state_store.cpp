@@ -3,7 +3,6 @@
 
 #include "ui/main_window_state_store.h"
 #include "config/settings_keys.h"
-#include "config/settings_schema.h"
 
 #include <QSettings>
 #include <QStringList>
@@ -24,7 +23,6 @@ namespace {
 MainWindowState MainWindowStateStore::load() {
     MainWindowState state;
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
 
     state.geometry = settings.value(SettingsKeys::kWindowGeometry).toByteArray();
 
@@ -42,7 +40,6 @@ MainWindowState MainWindowStateStore::load() {
 
 bool MainWindowStateStore::save(const MainWindowState &state) {
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
     settings.setValue(SettingsKeys::kWindowGeometry, state.geometry);
     settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
     settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);

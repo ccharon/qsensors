@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   current readings right away, without reading the sensors again.
 - Resizing the window only moves the sensor cards; they are no longer
   recreated when the number of columns changes. The layout itself is unchanged.
+- Settings from an older qsensors are migrated once at startup and the
+  migration is logged; reading the settings no longer writes to the file.
 
 ### Fixed
 - Sensors no longer show an alert because of a limit qsensors made up. When

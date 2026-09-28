@@ -14,8 +14,10 @@ namespace SettingsSchema {
     [[nodiscard]] int storedVersion(const QSettings &settings);
 
     /**
-     * Migrates older settings to kCurrentVersion. Settings from a newer qsensors
-     * are left untouched and logged, so their version marker is never downgraded.
+     * Migrates older settings to kCurrentVersion and logs the migration; new settings
+     * just get the version marker. Settings from a newer qsensors are left untouched
+     * and logged, so their version marker is never downgraded. Runs once at startup,
+     * before any settings are read; the stores do not migrate.
      */
     void ensureUpToDate(QSettings &settings);
 }

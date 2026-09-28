@@ -33,6 +33,12 @@ void SettingsSchema::ensureUpToDate(QSettings &settings) {
         return;
     }
 
+    if (version == kCurrentVersion) {
+        return;
+    }
+
+    // Settings without any key are a first start, not a migration.
+    const bool existing = !settings.allKeys().isEmpty();
     if (version < 1) {
         migrateV0ToV1(settings);
     }
@@ -41,4 +47,8 @@ void SettingsSchema::ensureUpToDate(QSettings &settings) {
     }
 
     settings.setValue(SettingsKeys::kSchemaVersion, kCurrentVersion);
+    if (existing) {
+        qInfo("qsensors: migrated settings in %s from schema v%d to v%d",
+              qPrintable(settings.fileName()), version, kCurrentVersion);
+    }
 }

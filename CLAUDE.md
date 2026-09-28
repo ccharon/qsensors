@@ -39,7 +39,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
 
-**`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
+**`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2); it runs once, at the start of `MainWindow::loadSettings()`, and logs every migration. The stores only read and write keys; they never migrate.
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
 - `main_window`: gets the sensor source factory from `main.cpp` (libsensors) and runs it in a `SensorMonitor`; size limits (rule in `window_sizing.h`, re-evaluated on `LayoutRequest`): at most as tall as the content and at most as wide as the full layout (all columns, all cards at maximum width, scrollbar room included), never forced smaller, lifted when maximized; the first start without saved geometry fits both. Minimum widths need no code here: they follow from the layouts.
