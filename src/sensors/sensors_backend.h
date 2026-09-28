@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "runtime_config.h"
-#include "sensor_reading.h"
+#include "config/runtime_config.h"
+#include "sensors/sensor_reading.h"
 
 #include <QHash>
 #include <QSet>

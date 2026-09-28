@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "lcd_segment_font.h"
+#include "ui/widgets/lcd_segment_font.h"
 
 #include <QHash>
 #include <QPainterPath>

@@ -1,16 +1,16 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "main_window.h"
+#include "ui/main_window.h"
 
-#include "app_config_store.h"
-#include "theme/app_theme.h"
-#include "main_window_state_store.h"
-#include "settings_schema.h"
-#include "settings_panel.h"
-#include "sensors_panel.h"
-#include "status_line.h"
-#include "window_sizing.h"
+#include "config/app_config_store.h"
+#include "ui/theme/app_theme.h"
+#include "ui/main_window_state_store.h"
+#include "config/settings_schema.h"
+#include "ui/panels/settings_panel.h"
+#include "ui/panels/sensors_panel.h"
+#include "ui/widgets/status_line.h"
+#include "ui/window_sizing.h"
 
 #include <QApplication>
 #include <QResizeEvent>

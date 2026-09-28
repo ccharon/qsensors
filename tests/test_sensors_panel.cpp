@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensors_panel.h"
-#include "collapsible_section.h"
-#include "sensor_identity.h"
-#include "sensor_value_widget.h"
-#include "theme/app_theme.h"
+#include "ui/panels/sensors_panel.h"
+#include "ui/widgets/collapsible_section.h"
+#include "sensors/sensor_identity.h"
+#include "ui/widgets/sensor_value_widget.h"
+#include "ui/theme/app_theme.h"
 
 #include <QApplication>
 #include <algorithm>

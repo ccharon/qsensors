@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensor_value_widget.h"
-#include "theme/app_theme.h"
-#include "lcd_display_widget.h"
-#include "sensor_format.h"
+#include "ui/widgets/sensor_value_widget.h"
+#include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_display_widget.h"
+#include "sensors/sensor_format.h"
 
 #include <QLabel>
 #include <QResizeEvent>

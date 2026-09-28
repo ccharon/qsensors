@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "lcd_display_widget.h"
-#include "sensor_value_widget.h"
+#include "ui/widgets/lcd_display_widget.h"
+#include "ui/widgets/sensor_value_widget.h"
 
 #include <QtTest/QtTest>
 

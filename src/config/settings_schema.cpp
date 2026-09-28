@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "settings_schema.h"
-#include "runtime_config.h"
-#include "settings_keys.h"
+#include "config/settings_schema.h"
+#include "config/runtime_config.h"
+#include "config/settings_keys.h"
 
 #include <QSettings>
 #include <QDebug>

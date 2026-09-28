@@ -48,7 +48,7 @@ Data flow: polling timer → `SensorsBackend` → normalized `SensorReading` lis
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
-**Build targets**: `qsensors_core` (static library with everything except `main.cpp`, `main_window` and the libsensors backend) is linked by the app and by every test. New sources go into `QSENSORS_CORE_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; both lists are also scanned for translations.
+**Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui` without `main_window`, adds `Qt::Widgets`), which is used by the app (`main.cpp`, `main_window`, the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
 **`tests/`**: 10 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 

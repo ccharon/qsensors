@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "sensor_reading.h"
+#include "sensors/sensor_reading.h"
 
 #include <QWidget>
 

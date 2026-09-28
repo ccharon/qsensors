@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "runtime_config.h"
-#include "sensors_backend.h"
+#include "config/runtime_config.h"
+#include "sensors/sensors_backend.h"
 
 #include <QMainWindow>
 #include <QPalette>

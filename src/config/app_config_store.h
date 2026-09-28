@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "runtime_config.h"
+#include "config/runtime_config.h"
 
 /** Reads/writes persisted runtime configuration via QSettings. */
 namespace AppConfigStore {

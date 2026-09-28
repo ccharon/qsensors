@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "main_window.h"
+#include "ui/main_window.h"
 
 #include <QApplication>
 #include <QIcon>

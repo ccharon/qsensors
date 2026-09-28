@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "sensor_reading.h"
-#include "theme/app_theme.h"
+#include "sensors/sensor_reading.h"
+#include "ui/theme/app_theme.h"
 
 #include <QHash>
 #include <QMap>

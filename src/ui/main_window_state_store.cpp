@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "main_window_state_store.h"
-#include "settings_keys.h"
-#include "settings_schema.h"
+#include "ui/main_window_state_store.h"
+#include "config/settings_keys.h"
+#include "config/settings_schema.h"
 
 #include <QSettings>
 #include <QStringList>

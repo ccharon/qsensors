@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensor_format.h"
+#include "sensors/sensor_format.h"
 
 QString SensorFormat::valueDigits(const SensorUnit unit, const double value) {
     const auto pad = [value](const int width, const int decimals) {

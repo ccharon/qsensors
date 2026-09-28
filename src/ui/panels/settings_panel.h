@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "collapsible_section.h"
-#include "runtime_config.h"
+#include "ui/widgets/collapsible_section.h"
+#include "config/runtime_config.h"
 
 class QFormLayout;
 class QSpinBox;
