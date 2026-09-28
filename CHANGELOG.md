@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Sensors are read in a background thread, so slow drivers (e.g. drive
+  temperatures via `drivetemp`) no longer freeze the window. A read that takes
+  longer than the polling interval delays the next one instead of piling up.
+- Changing the temperature unit or the fan fallback maximum applies to the
+  current readings right away, without reading the sensors again.
+
 ## [0.80.10] - 2026-09-27
 
 ### Added

@@ -34,6 +34,7 @@ set(QSENSORS_MODEL_SOURCES
         src/config/settings_schema.cpp
         src/sensors/reading_pipeline.cpp
         src/sensors/sensor_format.cpp
+        src/sensors/sensor_monitor.cpp
 )
 set(QSENSORS_UI_SOURCES
         src/ui/main_window_state_store.cpp
@@ -133,6 +134,7 @@ if (BUILD_TESTING)
 
     add_qsensors_test(test_sensors_policy tests/test_sensors_policy.cpp qsensors_model)
     add_qsensors_test(test_reading_pipeline tests/test_reading_pipeline.cpp qsensors_model)
+    add_qsensors_test(test_sensor_monitor tests/test_sensor_monitor.cpp qsensors_model)
     add_qsensors_test(test_lcd_logic tests/test_lcd_logic.cpp qsensors_ui)
     add_qsensors_test(test_glyph_model tests/test_glyph_model.cpp qsensors_ui)
     add_qsensors_test(test_settings_persistence tests/test_settings_persistence.cpp qsensors_ui)

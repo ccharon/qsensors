@@ -4,20 +4,17 @@
 #pragma once
 
 #include "config/runtime_config.h"
-#include "sensors/reading_pipeline.h"
-#include "sensors/sensor_source.h"
+#include "sensors/sensor_reading.h"
 
 #include <QMainWindow>
 #include <QPalette>
 #include <QVector>
 
-#include <memory>
-
-class QTimer;
 class QScrollArea;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
+class SensorMonitor;
 class SensorsPanel;
 class SettingsPanel;
 class StatusLine;
@@ -29,10 +26,6 @@ class MainWindow final : public QMainWindow {
 public:
     /** Builds the UI, restores settings and starts polling when libsensors is available. */
     explicit MainWindow(QWidget *parent = nullptr);
-
-private slots:
-    /** Reads the source and shows the readings. */
-    void refreshReadings();
 
 protected:
     /** Persists settings and window state before closing. */
@@ -51,15 +44,15 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    /** Prepares the last raw readings with the runtime config and hands them to the sensors panel. */
-    void showReadings();
+    /** Hands new display readings to the sensors panel and updates the status. */
+    void showReadings(const QVector<SensorReading> &readings);
 
     /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
     void applyThemeRefresh();
 
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
-    /** Applies the polling interval from the runtime config to the timer. */
+    /** Applies a changed runtime config to polling, persists it and updates the status. */
     void applyRuntimeConfig();
 
     /** Sets the permanent status bar text. */
@@ -98,15 +91,12 @@ private:
     /** Width available to the sensor panel inside the scroll area. */
     [[nodiscard]] int viewportWidth() const;
 
-    std::unique_ptr<SensorSource> m_source;
-    ReadingPipeline m_pipeline;
-    QVector<SensorReading> m_rawReadings;
+    SensorMonitor *m_monitor;
     QScrollArea *m_scrollArea;
     QWidget *m_contentContainer;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
     StatusLine *m_statusLine;
-    QTimer *m_timer;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
     bool m_fitHeightToContent = false; // pending first height fit without saved geometry

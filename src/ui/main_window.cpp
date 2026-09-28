@@ -3,14 +3,14 @@
 
 #include "ui/main_window.h"
 
-#include "sensors/libsensors_source.h"
-
 #include "config/app_config_store.h"
-#include "ui/theme/app_theme.h"
-#include "ui/main_window_state_store.h"
 #include "config/settings_schema.h"
-#include "ui/panels/settings_panel.h"
+#include "sensors/libsensors_source.h"
+#include "sensors/sensor_monitor.h"
+#include "ui/main_window_state_store.h"
 #include "ui/panels/sensors_panel.h"
+#include "ui/panels/settings_panel.h"
+#include "ui/theme/app_theme.h"
 #include "ui/widgets/status_line.h"
 #include "ui/window_sizing.h"
 
@@ -21,10 +21,9 @@
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
-#include <QTimer>
 #include <QVBoxLayout>
 #include <QWindow>
-#include <chrono>
+#include <memory>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
@@ -32,13 +31,12 @@ namespace {
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent),
-      m_source(std::make_unique<LibsensorsSource>()),
+      m_monitor(new SensorMonitor([] { return std::make_unique<LibsensorsSource>(); }, this)),
       m_scrollArea(nullptr),
       m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLine(nullptr),
-      m_timer(new QTimer(this)) {
+      m_statusLine(nullptr) {
     setupUi();
     m_styledPalette = QApplication::palette();
     loadSettings();
@@ -50,42 +48,27 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
         m_runtimeConfig.pollingIntervalSec = value;
         applyRuntimeConfig();
-        persistRuntimeConfig();
-        updateReadingsStatus();
     });
 
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
-        persistRuntimeConfig();
-        showReadings();
+        applyRuntimeConfig();
     });
 
     connect(m_settingsPanel, &SettingsPanel::temperatureUnitChanged, this, [this](const TemperatureUnit unit) {
         m_runtimeConfig.temperatureUnit = unit;
-        persistRuntimeConfig();
-        showReadings();
+        applyRuntimeConfig();
     });
 
-    if (!m_source->isInitialized()) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_source->lastError()));
-        return;
+    connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
+    // Reads once before returning, so the first readings are shown before the window.
+    if (!m_monitor->start(m_runtimeConfig)) {
+        setStatusMessage(tr("libsensors init failed: %1").arg(m_monitor->lastError()));
     }
-
-    connect(m_timer, &QTimer::timeout, this, &MainWindow::refreshReadings);
-    applyRuntimeConfig();
-    m_timer->start();
-    // Intentional first immediate sample for fast startup feedback.
-    refreshReadings();
 }
 
-void MainWindow::refreshReadings() {
-    m_rawReadings = m_source->readAll();
-    showReadings();
-}
-
-void MainWindow::showReadings() {
-    // A setting change re-prepares the last raw readings instead of reading the hardware again.
-    m_sensorsPanel->setReadings(m_pipeline.process(m_rawReadings, m_runtimeConfig), viewportWidth());
+void MainWindow::showReadings(const QVector<SensorReading> &readings) {
+    m_sensorsPanel->setReadings(readings, viewportWidth());
     updateReadingsStatus();
 }
 
@@ -275,7 +258,9 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
-    m_timer->setInterval(std::chrono::seconds(m_runtimeConfig.pollingIntervalSec));
+    persistRuntimeConfig();
+    m_monitor->setConfig(m_runtimeConfig);
+    updateReadingsStatus();
 }
 
 void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {

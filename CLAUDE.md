@@ -27,13 +27,14 @@ cmake --build build --target update_translations
 
 ## Architecture
 
-Data flow: polling timer → `SensorSource` (raw readings) → `ReadingPipeline` (display readings) → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
+Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw readings) → `ReadingPipeline` in the UI thread (display readings) → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
 
 **`src/sensors/`**: sensor data, rules and the libsensors integration; no Qt widgets.
 - `sensor_reading.h`: the normalized model (`SensorReading`, `SensorUnit`, `SensorCategory`, unit symbols) used by all layers.
 - `sensor_source.h`: interface for hardware access; a source reports raw values only (°C, V, RPM, A, W and firmware limits).
 - `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits.
 - `reading_pipeline.{h,cpp}`: turns raw readings into display readings (mA/mW scaling with its per-sensor state, default ranges, temperature unit). A setting change re-processes the last raw readings without reading the hardware.
+- `sensor_monitor.{h,cpp}`: polls the source in a worker thread (source created, read and destroyed there only); the first read at startup is blocking so the window is sized to its content before it is shown; skips a poll while the previous one is still running.
 - `sensors_policy.h`: rules applied to readings: mA/mW scaling, default ranges when firmware has no limits, alert state and range fraction.
 - `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
@@ -41,7 +42,7 @@ Data flow: polling timer → `SensorSource` (raw readings) → `ReadingPipeline`
 **`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
-- `main_window`: polling, window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
+- `main_window`: composition root (creates the `SensorMonitor` with the libsensors source), window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
 - `panels/sensors_panel`: chip-grouped layout; distributes columns per category (most rows first) and stretches all cards to one shared width in the spare space; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
@@ -52,7 +53,7 @@ Data flow: polling timer → `SensorSource` (raw readings) → `ReadingPipeline`
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui` without `main_window`, adds `Qt::Widgets`), which is used by the app (`main.cpp`, `main_window`, the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
-**`tests/`**: 10 unit test files covering range policy and rules, LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 12 unit test files covering range policy and rules, the reading pipeline, the sensor monitor (worker thread, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 
@@ -90,4 +91,4 @@ Data flow: polling timer → `SensorSource` (raw readings) → `ReadingPipeline`
 - **CHANGELOG.md**: update in the same commit for any user-visible, behavior-relevant, or release-noteworthy change (Keep a Changelog format).
 - **Structural vs value updates**: `SensorsPanel` intentionally separates layout rebuilds (structure changed) from in-place value patches (same sensors, new readings). Preserve this distinction when modifying the panel.
 - **No silent settings migrations**: schema version bumps must be explicit and visible.
-- **libsensors lifecycle**: `sensors_init` / `sensors_cleanup` must be paired; no leaks.
+- **libsensors lifecycle**: `sensors_init` / `sensors_cleanup` must be paired; no leaks. All libsensors calls happen in the `SensorMonitor` worker thread.
