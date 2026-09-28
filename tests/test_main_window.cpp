@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "ui/main_window.h"
+#include "ui/theme/app_theme.h"
 #include "ui/widgets/collapsible_section.h"
 #include "ui/widgets/sensor_value_widget.h"
 
@@ -25,6 +26,7 @@ private slots:
     void minimum_width_shows_every_card_completely();
     void cards_share_one_size_and_survive_resizing();
     void height_limited_to_content_but_never_forced_smaller();
+    void width_limited_to_full_layout();
 
 private:
     QTemporaryDir m_dir;
@@ -43,7 +45,7 @@ namespace {
                 readings.append({.chip = chip, .category = category, .feature = QStringLiteral("s%1").arg(number),
                                  .featureNumber = number, .subfeatureNumber = number, .value = value, .unit = unit});
             };
-            for (int i = 0; i < 5; ++i)
+            for (int i = 0; i < 4; ++i)
                 add(QStringLiteral("chip-a"), SensorCategory::Temperatures, i, SensorUnit::Celsius, 40.0 + i);
             add(QStringLiteral("chip-a"), SensorCategory::Fans, 10, SensorUnit::Rpm, 1200.0);
             for (int i = 0; i < 3; ++i)
@@ -104,6 +106,9 @@ void MainWindowTest::first_start_fits_height_to_content() {
     const auto window = showWindow();
     QVERIFY(contentFits(*window));
     QCOMPARE(window->maximumHeight(), window->height());
+    // The full layout is narrower than the default width, so the width is fitted too.
+    QVERIFY(window->width() < AppTheme::kInitialWindowWidth);
+    QCOMPARE(window->width(), window->maximumWidth());
 }
 
 void MainWindowTest::minimum_width_shows_every_card_completely() {
@@ -124,7 +129,7 @@ void MainWindowTest::cards_share_one_size_and_survive_resizing() {
     QList<QPointer<SensorValueWidget>> cards;
     for (SensorValueWidget *card: visibleCards(*window))
         cards.append(card);
-    QCOMPARE(cards.size(), 9);
+    QCOMPARE(cards.size(), 8);
 
     QSet<int> columnCounts;
     for (int width = window->minimumWidth(); width < 800; width += 23) {
@@ -166,6 +171,34 @@ void MainWindowTest::height_limited_to_content_but_never_forced_smaller() {
     resizeWindow(*window, 600, 5000);
     QVERIFY(window->height() < fitted);
     QVERIFY(contentFits(*window));
+}
+
+void MainWindowTest::width_limited_to_full_layout() {
+    const auto window = showWindow();
+    // A low window shows the scrollbar, so the limit must include room for it.
+    resizeWindow(*window, 5000, 150);
+    QVERIFY(scrollArea(*window)->verticalScrollBar()->isVisible());
+    const int limit = window->width();
+    QCOMPARE(limit, window->maximumWidth());
+    for (const SensorValueWidget *card: visibleCards(*window))
+        QCOMPARE(card->width(), AppTheme::kCardMaxWidth);
+
+    // One pixel less and the cards have to shrink: the limit adds no empty space.
+    resizeWindow(*window, limit - 1, 150);
+    QVERIFY(visibleCards(*window).first()->width() < AppTheme::kCardMaxWidth);
+
+    // Collapsed chips still count, so collapsing does not change the limit.
+    section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+    QTest::qWait(50);
+    QCOMPARE(window->maximumWidth(), limit);
+
+    // Maximized windows fill the screen; the limit returns afterwards.
+    window->showMaximized();
+    QTest::qWait(50);
+    QCOMPARE(window->maximumWidth(), QWIDGETSIZE_MAX);
+    window->showNormal();
+    QTest::qWait(50);
+    QCOMPARE(window->maximumWidth(), limit);
 }
 
 QTEST_MAIN(MainWindowTest)

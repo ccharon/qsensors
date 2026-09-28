@@ -3,6 +3,8 @@
 
 #pragma once
 
+#include "ui/theme/app_theme.h"
+
 #include <QHash>
 #include <QString>
 #include <QVector>
@@ -28,14 +30,20 @@ public:
     [[nodiscard]] int minimumWidth() const;
 
     /**
+     * Widest useful width: every chip has all the columns that still save a row, and
+     * all cards have kCardMaxWidth. More width would only add empty space.
+     */
+    [[nodiscard]] int maximumWidth() const;
+
+    /**
      * Columns per category for @p sensorCounts within @p availableWidth. Every category
      * gets one column; each further column goes to the category with the most rows, as
      * long as it saves a row and fits.
      */
     [[nodiscard]] static QVector<int> columnsForCategories(const QVector<int> &sensorCounts, int availableWidth);
 
-    /** Width of categories laid out with @p columns at minimum card width, including the gaps. */
-    [[nodiscard]] static int categoriesWidth(const QVector<int> &columns);
+    /** Width of categories laid out with @p columns and @p cardWidth, including the gaps. */
+    [[nodiscard]] static int categoriesWidth(const QVector<int> &columns, int cardWidth = AppTheme::kCardMinWidth);
 
     /**
      * Card width that spreads the width left over by @p columns within @p availableWidth

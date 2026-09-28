@@ -146,6 +146,10 @@ QSize SensorsPanel::minimumSizeHint() const {
     return {chipChromeWidth() + m_plan.minimumWidth(), QWidget::minimumSizeHint().height()};
 }
 
+int SensorsPanel::maximumUsefulWidth() const {
+    return m_groups.isEmpty() ? QWIDGETSIZE_MAX : chipChromeWidth() + m_plan.maximumWidth();
+}
+
 void SensorsPanel::checkRestoredState() {
     if (m_restoredFingerprint.isEmpty()) {
         return;

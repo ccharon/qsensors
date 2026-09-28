@@ -18,6 +18,9 @@ class VerticalScrollArea final : public QScrollArea {
 public:
     explicit VerticalScrollArea(QWidget *parent = nullptr);
 
+    /** Width of the area for content of @p contentWidth, with room for the scrollbar. */
+    [[nodiscard]] int widthForContent(int contentWidth) const;
+
     [[nodiscard]] QSize minimumSizeHint() const override;
     [[nodiscard]] QSize sizeHint() const override;
 

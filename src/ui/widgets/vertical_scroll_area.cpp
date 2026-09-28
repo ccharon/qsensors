@@ -12,12 +12,15 @@ VerticalScrollArea::VerticalScrollArea(QWidget *parent) : QScrollArea(parent) {
     setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
 }
 
+int VerticalScrollArea::widthForContent(const int contentWidth) const {
+    // Room for the scrollbar is always reserved, so it can appear without cutting off content.
+    return contentWidth + 2 * frameWidth() + verticalScrollBar()->sizeHint().width();
+}
+
 QSize VerticalScrollArea::minimumSizeHint() const {
     QSize size = QScrollArea::minimumSizeHint();
     if (const QWidget *content = widget()) {
-        // Room for the scrollbar is always reserved, so it can appear without cutting off content.
-        size.setWidth(content->minimumSizeHint().width() + 2 * frameWidth()
-                      + verticalScrollBar()->sizeHint().width());
+        size.setWidth(widthForContent(content->minimumSizeHint().width()));
     }
     return size;
 }

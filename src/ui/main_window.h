@@ -31,16 +31,16 @@ protected:
     /** Persists settings and window state before closing. */
     void closeEvent(QCloseEvent *event) override;
 
-    /** Re-evaluates the height limit after the user resized the window. */
+    /** Re-evaluates the size limits after the user resized the window. */
     void resizeEvent(QResizeEvent *event) override;
 
-    /** Fits the height to the content on the first show without a saved window size. */
+    /** Fits the size to the content on the first show without a saved window size. */
     void showEvent(QShowEvent *event) override;
 
-    /** Re-applies style sheets on light/dark switches; lifts the height limit when maximized. */
+    /** Re-applies style sheets on light/dark switches; lifts the size limits when maximized. */
     void changeEvent(QEvent *event) override;
 
-    /** Re-evaluates the height limit once the layouts have taken a content change into account. */
+    /** Re-evaluates the size limits once the layouts have taken a content change into account. */
     bool event(QEvent *event) override;
 
 private:
@@ -76,11 +76,14 @@ private:
     /** Window height at which the whole content fits without scrolling. */
     [[nodiscard]] int contentWindowHeight() const;
 
-    /** Available height of the window's screen. */
-    [[nodiscard]] int availableScreenHeight() const;
+    /** Window width at which all cards have their maximum width and columns (see CardGridPlan). */
+    [[nodiscard]] int contentWindowWidth() const;
 
-    /** Keeps the window from being dragged taller than its content (see WindowSizing). */
-    void updateHeightLimit();
+    /** Available size of the window's screen. */
+    [[nodiscard]] QSize availableScreenSize() const;
+
+    /** Keeps the window from being dragged larger than its content needs (see WindowSizing). */
+    void updateSizeLimits();
 
     SensorMonitor *m_monitor;
     VerticalScrollArea *m_scrollArea;
@@ -89,7 +92,7 @@ private:
     StatusLine *m_statusLine;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
-    bool m_fitHeightToContent = false; // pending first height fit without saved geometry
+    bool m_fitToContent = false; // pending first size fit without saved geometry
     RuntimeConfig m_runtimeConfig;
     // Palette the style sheets were last resolved against; avoids redundant refreshes.
     QPalette m_styledPalette;

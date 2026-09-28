@@ -74,6 +74,13 @@ public:
      */
     [[nodiscard]] QSize minimumSizeHint() const override;
 
+    /**
+     * Widest useful panel width (see CardGridPlan::maximumWidth()), collapsed chips
+     * included; QWIDGETSIZE_MAX without chips. Not a widget constraint: a wider panel
+     * (e.g. maximized) still stretches its chip frames.
+     */
+    [[nodiscard]] int maximumUsefulWidth() const;
+
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dragMoveEvent(QDragMoveEvent *event) override;

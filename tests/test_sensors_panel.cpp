@@ -37,6 +37,7 @@ private slots:
     void card_width_spreads_spare_width_up_to_maximum();
     void cards_fill_width_with_one_shared_width();
     void collapsed_chips_still_count_for_minimum_width();
+    void maximum_width_is_where_all_cards_reach_maximum();
 };
 
 namespace {
@@ -321,6 +322,20 @@ void SensorsPanelTest::collapsed_chips_still_count_for_minimum_width() {
     // chip-a has two categories and sets the minimum; collapsing it must not narrow the window.
     headerFor(panel, QStringLiteral("chip-a"))->toggle();
     QCOMPARE(panel.minimumSizeHint().width(), expanded);
+}
+
+void SensorsPanelTest::maximum_width_is_where_all_cards_reach_maximum() {
+    CardGridPlan plan;
+    QCOMPARE(plan.maximumWidth(), 0);
+    // chip-a ends with {3, 1} columns (a 4th column would not save a row), chip-b with {3}.
+    plan.setChips({{QStringLiteral("chip-a"), {5, 1}}, {QStringLiteral("chip-b"), {3}}});
+    const int width = plan.maximumWidth();
+    QCOMPARE(width, CardGridPlan::categoriesWidth({3, 1}, AppTheme::kCardMaxWidth));
+
+    QCOMPARE(plan.columns(QStringLiteral("chip-a"), width), (QVector<int>{3, 1}));
+    QCOMPARE(plan.columns(QStringLiteral("chip-a"), 2 * width), (QVector<int>{3, 1}));
+    QCOMPARE(plan.cardWidth(width), AppTheme::kCardMaxWidth);
+    QVERIFY(plan.cardWidth(width - 1) < AppTheme::kCardMaxWidth);
 }
 
 QTEST_MAIN(SensorsPanelTest)

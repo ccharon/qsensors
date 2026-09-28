@@ -6,6 +6,7 @@
 #include "ui/theme/app_theme.h"
 
 #include <algorithm>
+#include <limits>
 
 bool CardGridPlan::setChips(const QHash<QString, QVector<int>> &sensorCounts) {
     if (sensorCounts == m_sensorCounts)
@@ -34,6 +35,16 @@ int CardGridPlan::minimumWidth() const {
     return categoriesWidth(QVector<int>(maxCategoryCount, 1));
 }
 
+int CardGridPlan::maximumWidth() const {
+    // Columns stop growing once no further column saves a row, however wide the space.
+    constexpr int kUnbounded = std::numeric_limits<int>::max() / 2;
+    int width = 0;
+    for (const QVector<int> &counts: m_sensorCounts) {
+        width = std::max(width, categoriesWidth(columnsForCategories(counts, kUnbounded), AppTheme::kCardMaxWidth));
+    }
+    return width;
+}
+
 QVector<int> CardGridPlan::columnsForCategories(const QVector<int> &sensorCounts, const int availableWidth) {
     QVector<int> columns(sensorCounts.size(), 1);
     const int pitch = AppTheme::kCardMinWidth + AppTheme::kUnifiedHorizontalSpacing;
@@ -59,10 +70,10 @@ QVector<int> CardGridPlan::columnsForCategories(const QVector<int> &sensorCounts
     return columns;
 }
 
-int CardGridPlan::categoriesWidth(const QVector<int> &columns) {
+int CardGridPlan::categoriesWidth(const QVector<int> &columns, const int cardWidth) {
     int width = 0;
     for (const int cols: columns)
-        width += widthForColumns(cols, AppTheme::kCardMinWidth);
+        width += widthForColumns(cols, cardWidth);
     return width + std::max<int>(0, static_cast<int>(columns.size()) - 1) * AppTheme::kUnifiedHorizontalSpacing;
 }
 

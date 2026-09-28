@@ -143,14 +143,14 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    updateHeightLimit();
+    updateSizeLimits();
 }
 
 bool MainWindow::event(QEvent *event) {
     const bool handled = QMainWindow::event(event);
     // Posted whenever a size hint below changed, e.g. a collapsed chip or new sensors.
     if (event->type() == QEvent::LayoutRequest) {
-        updateHeightLimit();
+        updateSizeLimits();
     }
     return handled;
 }
@@ -159,36 +159,49 @@ int MainWindow::contentWindowHeight() const {
     return height() - m_scrollArea->height() + m_scrollArea->sizeHint().height();
 }
 
-int MainWindow::availableScreenHeight() const {
-    return screen() != nullptr ? screen()->availableGeometry().height() : height();
+int MainWindow::contentWindowWidth() const {
+    const int usefulWidth = m_sensorsPanel->maximumUsefulWidth();
+    if (usefulWidth >= QWIDGETSIZE_MAX)
+        return QWIDGETSIZE_MAX;
+    // The settings may need more than the sensors; they must never be cut off.
+    const int contentWidth = std::max(usefulWidth, m_scrollArea->widget()->minimumSizeHint().width());
+    return width() - m_scrollArea->width() + m_scrollArea->widthForContent(contentWidth);
 }
 
-void MainWindow::updateHeightLimit() {
+QSize MainWindow::availableScreenSize() const {
+    return screen() != nullptr ? screen()->availableGeometry().size() : size();
+}
+
+void MainWindow::updateSizeLimits() {
     if (isMaximized() || isFullScreen()) {
-        setMaximumHeight(QWIDGETSIZE_MAX);
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         return;
     }
-    if (m_fitHeightToContent) {
-        m_fitHeightToContent = false;
-        // Raise the limit first; an earlier, smaller limit would clip the resize.
-        const int fitted = std::min(contentWindowHeight(), availableScreenHeight());
-        setMaximumHeight(std::max(fitted, maximumHeight()));
-        resize(width(), fitted);
+    const QSize screenSize = availableScreenSize();
+    if (m_fitToContent) {
+        m_fitToContent = false;
+        // Raise the limits first; earlier, smaller limits would clip the resize.
+        const QSize fitted(std::min({width(), contentWindowWidth(), screenSize.width()}),
+                           std::min(contentWindowHeight(), screenSize.height()));
+        setMaximumSize(maximumSize().expandedTo(fitted));
+        resize(fitted);
     }
-    const int limit = WindowSizing::maximumHeight(contentWindowHeight(), height(), availableScreenHeight());
-    if (limit != maximumHeight()) {
-        setMaximumHeight(limit);
+    const QSize limit(
+        std::max(WindowSizing::maximumExtent(contentWindowWidth(), width(), screenSize.width()), minimumWidth()),
+        WindowSizing::maximumExtent(contentWindowHeight(), height(), screenSize.height()));
+    if (limit != maximumSize()) {
+        setMaximumSize(limit);
     }
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
-        // Without saved geometry the first height fits the content; applied once the
-        // layout has computed its size (see updateHeightLimit()).
-        m_fitHeightToContent = !m_hasSavedGeometry;
+        // Without saved geometry the first size fits the content; applied once the
+        // layout has computed its size (see updateSizeLimits()).
+        m_fitToContent = !m_hasSavedGeometry;
         m_initialLayoutApplied = true;
-        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, &MainWindow::updateSizeLimits, Qt::QueuedConnection);
     }
 }
 
@@ -200,7 +213,7 @@ void MainWindow::changeEvent(QEvent *event) {
         applyThemeRefresh();
     } else if (event->type() == QEvent::WindowStateChange) {
         // Maximized and full-screen windows fill the screen regardless of content.
-        updateHeightLimit();
+        updateSizeLimits();
     }
 }
 

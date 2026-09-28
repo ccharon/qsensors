@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The window cannot be dragged wider than the full layout: once every
+  category has all its columns and all cards have their maximum width, more
+  width would only add empty space. Collapsed chips count, maximized and
+  full-screen windows still fill the screen, and a wider window is never
+  shrunk automatically. Without a saved window size the first width fits
+  this limit when it is narrower than the default.
 - Sensors are read in a background thread, so slow drivers (e.g. drive
   temperatures via `drivetemp`) no longer freeze the window. A read that takes
   longer than the polling interval delays the next one instead of piling up.
