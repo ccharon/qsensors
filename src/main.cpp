@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
+#include "sensors/libsensors_source.h"
 #include "ui/main_window.h"
 
 #include <QApplication>
 #include <QIcon>
 #include <QLocale>
 #include <QTranslator>
+
+#include <memory>
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
@@ -27,7 +30,7 @@ int main(int argc, char *argv[]) {
     }
 
     app.setWindowIcon(QIcon(QStringLiteral(":/icons/qsensors.png")));
-    MainWindow window;
+    MainWindow window([] { return std::make_unique<LibsensorsSource>(); });
     window.show();
     return QApplication::exec();
 }

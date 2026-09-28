@@ -37,6 +37,7 @@ set(QSENSORS_MODEL_SOURCES
         src/sensors/sensor_monitor.cpp
 )
 set(QSENSORS_UI_SOURCES
+        src/ui/main_window.cpp
         src/ui/main_window_state_store.cpp
         src/ui/theme/app_theme.cpp
         src/ui/panels/settings_panel.cpp
@@ -49,7 +50,6 @@ set(QSENSORS_UI_SOURCES
 )
 set(QSENSORS_APP_SOURCES
         src/main.cpp
-        src/ui/main_window.cpp
         src/sensors/libsensors_source.cpp
 )
 

@@ -5,8 +5,6 @@
 
 #include "config/app_config_store.h"
 #include "config/settings_schema.h"
-#include "sensors/libsensors_source.h"
-#include "sensors/sensor_monitor.h"
 #include "ui/main_window_state_store.h"
 #include "ui/panels/sensors_panel.h"
 #include "ui/panels/settings_panel.h"
@@ -23,15 +21,15 @@
 #include <QStatusBar>
 #include <QVBoxLayout>
 #include <QWindow>
-#include <memory>
+#include <utility>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
 }
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
     : QMainWindow(parent),
-      m_monitor(new SensorMonitor([] { return std::make_unique<LibsensorsSource>(); }, this)),
+      m_monitor(new SensorMonitor(std::move(sourceFactory), this)),
       m_scrollArea(nullptr),
       m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),

@@ -42,7 +42,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 **`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2).
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
-- `main_window`: composition root (creates the `SensorMonitor` with the libsensors source), window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
+- `main_window`: gets the sensor source factory from `main.cpp` (libsensors) and runs it in a `SensorMonitor`; window sizing (height limited to the content, rule in `window_sizing.h`), status messages, settings load/save.
 - `panels/sensors_panel`: chip-grouped layout; distributes columns per category (most rows first) and stretches all cards to one shared width in the spare space; owns the chip expand state and the drag-and-drop chip order; separates structural rebuilds from value-only updates to avoid layout thrash.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
@@ -51,7 +51,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
-**Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui` without `main_window`, adds `Qt::Widgets`), which is used by the app (`main.cpp`, `main_window`, the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
+**Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
 **`tests/`**: 12 unit test files covering range policy and rules, the reading pipeline, the sensor monitor (worker thread, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 

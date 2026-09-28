@@ -4,6 +4,7 @@
 #pragma once
 
 #include "config/runtime_config.h"
+#include "sensors/sensor_monitor.h"
 #include "sensors/sensor_reading.h"
 
 #include <QMainWindow>
@@ -14,7 +15,6 @@ class QScrollArea;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
-class SensorMonitor;
 class SensorsPanel;
 class SettingsPanel;
 class StatusLine;
@@ -24,8 +24,8 @@ class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
-    /** Builds the UI, restores settings and starts polling when libsensors is available. */
-    explicit MainWindow(QWidget *parent = nullptr);
+    /** Builds the UI, restores settings and starts polling the source made by @p sourceFactory. */
+    explicit MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent = nullptr);
 
 protected:
     /** Persists settings and window state before closing. */
