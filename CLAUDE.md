@@ -30,13 +30,13 @@ cmake --build build --target update_translations
 Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw readings) → `ReadingPipeline` in the UI thread (display readings) → `SensorsPanel` reconciles structure → selective widget rebuild or in-place value update → `QSettings` persistence.
 
 **`src/sensors/`**: sensor data, rules and the libsensors integration; no Qt widgets.
-- `sensor_reading.h`: the normalized model (`SensorReading`, `SensorUnit`, `SensorCategory`, unit symbols) used by all layers.
+- `sensor_reading.h`: the normalized model (`SensorReading`, `SensorUnit`, `SensorCategory`, unit symbols) used by all layers. `SensorReading::value` is `std::optional<double>`: nullopt when libsensors lists the sensor but cannot read it (or it reads non-finite); the reading and its card stay, so this is a value update, not a structural one.
 - `sensor_source.h`: interface for hardware access; a source reports raw values only (°C, V, RPM, A, W and firmware limits).
-- `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits.
+- `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits (`temp*_crit` stands in for a missing or implausible `temp*_max`). An unreadable input is reported without a value (logged once); inputs without read permission are skipped.
 - `reading_pipeline.{h,cpp}`: turns raw readings into display readings (drops placeholder firmware limits, mA/mW scaling with its per-sensor state, default ranges, temperature unit). A setting change re-processes the last raw readings without reading the hardware.
 - `sensor_monitor.{h,cpp}`: polls the source in a worker thread (source created, read and destroyed there only); the first read at startup is blocking so the window is sized to its content before it is shown; skips a poll while the previous one is still running; reports a read outstanding for longer than `stallTimeoutFor()` (3 intervals, at least 10 s) via `stalledChanged()`, which `main_window` shows in the status; the destructor waits at most 3 s for the worker and otherwise leaks the thread, so source and poller still die in the worker if the read ever returns.
-- `sensors_policy.h`: rules applied to readings: placeholder firmware limits (0/0, max not above min, 0 K and 65535 K temperatures) dropped as if never reported, mA/mW scaling (a zero limit gives no scale), default bar graph ranges when firmware has no limits, alert state (firmware limits only, plus 100 °C for temperatures without a firmware maximum) and range fraction. `SensorReading` keeps the firmware limits (`firmwareMin/Max`, alert and tooltip) apart from the bar graph range (`minValue/maxValue`).
-- `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
+- `sensors_policy.h`: rules applied to readings: placeholder firmware limits (0/0, max not above min, 0 K and 65535 K temperatures) dropped as if never reported, mA/mW scaling (a zero limit gives no scale; without a value the latched scale is kept), default bar graph ranges when firmware has no limits, alert state (firmware limits only, plus 100 °C for temperatures without a firmware maximum; never without a value) and range fraction (none without a value). `SensorReading` keeps the firmware limits (`firmwareMin/Max`, alert and tooltip) apart from the bar graph range (`minValue/maxValue`).
+- `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips; a missing value shows a dash in every digit cell (`----.-`), unit kept.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
 
 **`src/config/`**: runtime configuration. `runtime_config.{h,cpp}` defines `TemperatureUnit`, polling interval bounds (1-10 s, default 2 s) and fan RPM fallback bounds (500-9999, default 5000). `app_config_store.{h,cpp}` validates and persists them via QSettings. `settings_keys.h` holds all QSettings keys. `settings_schema.{h,cpp}` handles versioned migration (current: v2); it runs once, at the start of `MainWindow::loadSettings()`, and logs every migration. The stores only read and write keys; they never migrate.
@@ -50,7 +50,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `widgets/vertical_scroll_area`: vertical-only scroll area whose minimum width is the content's plus the scrollbar, and whose size hint height is the content height at the current width.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
 - `widgets/status_line`: status bar text with timed notices on top of the permanent status.
-- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip and limits).
+- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip, a line when the sensor cannot be read, and limits).
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 

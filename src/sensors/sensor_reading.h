@@ -54,7 +54,8 @@ struct SensorReading {
     QString feature; // label from sensors.conf, or the libsensors feature name
     int featureNumber = -1; // libsensors numbering, stable while the chip exists
     int subfeatureNumber = -1;
-    double value = 0.0;
+    // Measured value; nullopt while the sensor is listed but cannot be read (or reads non-finite).
+    std::optional<double> value = std::nullopt;
     SensorUnit unit = SensorUnit::Unknown;
     // Bar graph range: the firmware limit, or the default range policy where the firmware has none.
     std::optional<double> minValue;
@@ -65,6 +66,9 @@ struct SensorReading {
 
     /** True when at least one bar graph limit is known. */
     [[nodiscard]] bool hasRange() const { return minValue.has_value() || maxValue.has_value(); }
+
+    /** True when the sensor delivered a value in this poll. */
+    [[nodiscard]] bool hasValue() const { return value.has_value(); }
 
     /** True when the firmware reports at least one limit. */
     [[nodiscard]] bool hasFirmwareLimits() const { return firmwareMin.has_value() || firmwareMax.has_value(); }

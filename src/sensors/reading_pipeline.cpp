@@ -4,6 +4,7 @@
 #include "sensors/reading_pipeline.h"
 #include "sensors/sensors_policy.h"
 
+#include <cmath>
 #include <optional>
 
 namespace {
@@ -16,8 +17,7 @@ namespace {
             return;
         }
 
-        reading.value = celsiusToFahrenheit(reading.value);
-        for (std::optional<double> *limit: {&reading.minValue, &reading.maxValue, &reading.firmwareMin, &reading.firmwareMax}) {
+        for (std::optional<double> *limit: {&reading.value, &reading.minValue, &reading.maxValue, &reading.firmwareMin, &reading.firmwareMax}) {
             if (*limit)
                 *limit = celsiusToFahrenheit(**limit);
         }
@@ -31,6 +31,10 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
         const QString latchKey = reading.chip + QLatin1Char(':') + QString::number(reading.featureNumber);
         const auto latchIt = m_milliScaleLatch.constFind(latchKey);
         std::optional<bool> latchedMilli = latchIt != m_milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
+        // A non-finite value is no value: no alert, no bar graph, placeholder on the LCD.
+        if (reading.value && !std::isfinite(*reading.value)) {
+            reading.value.reset();
+        }
         // Before scaling and the °F conversion: the rule works on raw source units.
         SensorsPolicy::dropImplausibleFirmwareLimits(reading.unit, reading.firmwareMin, reading.firmwareMax);
         SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, reading.firmwareMin,

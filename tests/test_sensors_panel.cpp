@@ -38,6 +38,8 @@ private slots:
     void cards_fill_width_with_one_shared_width();
     void collapsed_chips_still_count_for_minimum_width();
     void maximum_width_is_where_all_cards_reach_maximum();
+    void unreadable_sensor_is_a_value_update();
+    void chip_with_only_unreadable_sensors_keeps_its_cards();
 };
 
 namespace {
@@ -336,6 +338,72 @@ void SensorsPanelTest::maximum_width_is_where_all_cards_reach_maximum() {
     QCOMPARE(plan.columns(QStringLiteral("chip-a"), 2 * width), (QVector<int>{3, 1}));
     QCOMPARE(plan.cardWidth(width), AppTheme::kCardMaxWidth);
     QVERIFY(plan.cardWidth(width - 1) < AppTheme::kCardMaxWidth);
+}
+
+void SensorsPanelTest::unreadable_sensor_is_a_value_update() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(spy.count(), 1);
+    layOut(panel, 900);
+    QList<QPointer<SensorValueWidget>> before;
+    for (SensorValueWidget *card: cards(panel))
+        before.append(card);
+    const QString fingerprint = panel.chipFingerprint();
+    const QSize minimum = panel.minimumSizeHint();
+    const auto tempCard = [&panel] {
+        for (SensorValueWidget *card: cards(panel))
+            if (card->toolTip().contains(QStringLiteral("temp1")))
+                return card;
+        return static_cast<SensorValueWidget *>(nullptr);
+    };
+    SensorValueWidget *temp = tempCard();
+    QVERIFY(temp);
+    const QRect geometry = temp->geometry();
+
+    QVector<SensorReading> unreadable = sampleReadings(40.0);
+    unreadable[0].value.reset();
+    panel.setReadings(unreadable);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.chipFingerprint(), fingerprint);
+    QCOMPARE(panel.readingCount(), 3);
+    QCOMPARE(panel.minimumSizeHint(), minimum);
+    QCOMPARE(tempCard(), temp);
+    QVERIFY(temp->toolTip().contains(QStringLiteral("cannot be read")));
+    layOut(panel, 900);
+    QCOMPARE(temp->geometry(), geometry);
+
+    panel.setReadings(sampleReadings(42.0));
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!temp->toolTip().contains(QStringLiteral("cannot be read")));
+    for (const QPointer<SensorValueWidget> &card: before)
+        QVERIFY(!card.isNull());
+    QCOMPARE(cards(panel).size(), 3);
+}
+
+void SensorsPanelTest::chip_with_only_unreadable_sensors_keeps_its_cards() {
+    // chip-b's only sensor cannot be read from the first poll on.
+    QVector<SensorReading> readings = sampleReadings(40.0);
+    readings[2].value.reset();
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
+    panel.setReadings(readings);
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(headerFor(panel, QStringLiteral("chip-b")));
+    QCOMPARE(cards(panel).size(), 3);
+    QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(sampleReadings(40.0)));
+
+    QList<QPointer<SensorValueWidget>> before;
+    for (SensorValueWidget *card: cards(panel))
+        before.append(card);
+    panel.setReadings(sampleReadings(41.0));
+    readings[0].value.reset();
+    readings[1].value.reset();
+    panel.setReadings(readings);
+    QCOMPARE(spy.count(), 1);
+    for (const QPointer<SensorValueWidget> &card: before)
+        QVERIFY(!card.isNull());
+    QCOMPARE(cards(panel).size(), 3);
 }
 
 QTEST_MAIN(SensorsPanelTest)

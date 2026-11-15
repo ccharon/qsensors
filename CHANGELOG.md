@@ -54,6 +54,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   100 °C.
 - A current or power sensor with a firmware limit of 0 no longer switches to
   mA or mW because of it; 12 A was shown as 12000.0 mA.
+- A sensor that cannot be read for a moment keeps its card. The LCD shows
+  dashes instead of the value, without bar graph or alert, and the tooltip
+  says that the sensor cannot be read at the moment. Previously the card, or
+  the whole chip when none of its sensors could be read, disappeared and the
+  layout was rebuilt, again and again for sensors that fail now and then: a
+  GPU in runtime suspend, a stopped fan, a drive in standby. A current or
+  power sensor keeps its mA/mW unit while it cannot be read.
+- Temperatures whose maximum is a placeholder (NVMe 65261.85 °C) use the
+  critical limit as maximum when the firmware reports one.
 
 ## [0.80.10] - 2026-09-27
 

@@ -16,6 +16,7 @@ private slots:
     void unknown_unit_has_no_symbol_and_no_glyph();
     void valueDigits_formats_by_unit();
     void valueWithUnit_appends_symbol();
+    void valueDigits_missing_value_shows_dashes_in_number_layout();
 };
 
 void SensorContractTest::known_units_have_symbols_and_glyphs() {
@@ -67,6 +68,28 @@ void SensorContractTest::valueWithUnit_appends_symbol() {
     QCOMPARE(SensorFormat::valueWithUnit(SensorUnit::Volt, 9.888), QStringLiteral("9.89 V"));
     QCOMPARE(SensorFormat::valueWithUnit(SensorUnit::Rpm, 1534.0), QStringLiteral("1534 RPM"));
     QCOMPARE(SensorFormat::valueWithUnit(SensorUnit::Unknown, 1.5), QStringLiteral("1.50"));
+}
+
+void SensorContractTest::valueDigits_missing_value_shows_dashes_in_number_layout() {
+    QCOMPARE(SensorFormat::valueDigits(SensorUnit::Rpm, std::nullopt), QStringLiteral("-----"));
+    QCOMPARE(SensorFormat::valueDigits(SensorUnit::Celsius, std::nullopt), QStringLiteral("----.-"));
+    QCOMPARE(SensorFormat::valueDigits(SensorUnit::Volt, std::nullopt), QStringLiteral("---.--"));
+    QCOMPARE(SensorFormat::valueDigits(SensorUnit::Milliwatt, std::nullopt), QStringLiteral("----.-"));
+
+    // Same cells as a number, so the digits keep their size when the value goes or returns.
+    for (const SensorUnit unit: {SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Volt, SensorUnit::Rpm,
+                                 SensorUnit::Ampere, SensorUnit::Milliampere, SensorUnit::Watt,
+                                 SensorUnit::Milliwatt, SensorUnit::Unknown}) {
+        const QString placeholder = SensorFormat::valueDigits(unit, std::nullopt);
+        const QString number = SensorFormat::valueDigits(unit, 1.0);
+        QVERIFY(LcdSegmentFont::supports(placeholder));
+        QCOMPARE(placeholder.size(), number.size());
+        const QString symbol = sensorUnitSymbol(unit);
+        QCOMPARE(LcdSegmentFont::layoutWidth(LcdSegmentFont::layoutText(placeholder, symbol, 28.0)),
+                 LcdSegmentFont::layoutWidth(LcdSegmentFont::layoutText(number, symbol, 28.0)));
+        QCOMPARE(LcdSegmentFont::fitHeight(placeholder, symbol, 28.0, 120.0),
+                 LcdSegmentFont::fitHeight(number, symbol, 28.0, 120.0));
+    }
 }
 
 QTEST_APPLESS_MAIN(SensorContractTest)

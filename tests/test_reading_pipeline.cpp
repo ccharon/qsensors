@@ -5,6 +5,7 @@
 #include "sensors/sensors_policy.h"
 
 #include <QtTest/QtTest>
+#include <limits>
 
 // Verifies how ReadingPipeline turns raw source readings into display readings.
 class ReadingPipelineTest final : public QObject {
@@ -29,6 +30,10 @@ private slots:
     void zero_minimums_with_real_maximum_are_kept();
     void negative_battery_current_minimum_is_kept();
     void reprocessing_with_dropped_limits_is_stable();
+    void missing_value_keeps_unit_and_limits();
+    void missing_first_value_uses_base_unit();
+    void non_finite_value_is_missing();
+    void reprocessing_with_missing_values_is_stable();
 };
 
 namespace {
@@ -86,7 +91,7 @@ void ReadingPipelineTest::raw_values_pass_through_with_default_range() {
     const QVector<SensorReading> shown = pipeline.process({temperature(42.0)}, RuntimeConfig{});
 
     QCOMPARE(shown.size(), 1);
-    QCOMPARE(shown[0].value, 42.0);
+    QCOMPARE(shown[0].value.value(), 42.0);
     QCOMPARE(shown[0].unit, SensorUnit::Celsius);
     QCOMPARE(shown[0].minValue, std::optional(0.0));
     QCOMPARE(shown[0].maxValue, std::optional(100.0));
@@ -101,7 +106,7 @@ void ReadingPipelineTest::fahrenheit_converts_value_and_limits() {
     const QVector<SensorReading> shown = pipeline.process({temperature(100.0, 80.0)}, config);
 
     QCOMPARE(shown[0].unit, SensorUnit::Fahrenheit);
-    QCOMPARE(shown[0].value, 212.0);
+    QCOMPARE(shown[0].value.value(), 212.0);
     QCOMPARE(shown[0].minValue, std::optional(32.0));
     QCOMPARE(shown[0].maxValue, std::optional(176.0));
     QCOMPARE(shown[0].firmwareMin, std::nullopt);
@@ -128,7 +133,7 @@ void ReadingPipelineTest::milli_scale_is_latched_per_sensor() {
     QCOMPARE(pipeline.process({power(0.5)}, config)[0].unit, SensorUnit::Milliwatt);
     const SensorReading latched = pipeline.process({power(1.5)}, config)[0];
     QCOMPARE(latched.unit, SensorUnit::Milliwatt);
-    QCOMPARE(latched.value, 1500.0);
+    QCOMPARE(latched.value.value(), 1500.0);
 
     // Another sensor at 1.5 W has no history and starts in W.
     QCOMPARE(pipeline.process({power(1.5, 4)}, config)[0].unit, SensorUnit::Watt);
@@ -225,7 +230,7 @@ void ReadingPipelineTest::nvme_sentinel_temperature_limits_are_ignored_in_fahren
     raw.firmwareMax = kNvmeHighC;
     const SensorReading shown = processOne(raw, TemperatureUnit::Fahrenheit);
     QCOMPARE(shown.unit, SensorUnit::Fahrenheit);
-    QCOMPARE(shown.value, 104.0);
+    QCOMPARE(shown.value.value(), 104.0);
     QVERIFY(!shown.hasFirmwareLimits());
     QVERIFY(!SensorsPolicy::isAlertState(shown));
     QCOMPARE(shown.minValue, std::optional(32.0));
@@ -240,7 +245,7 @@ void ReadingPipelineTest::zero_limit_does_not_decide_milli_scale() {
     // 12 A with a zero maximum stays in A instead of becoming 12000.0 mA.
     const SensorReading zeroMax = processOne(current(12.0, std::nullopt, 0.0));
     QCOMPARE(zeroMax.unit, SensorUnit::Ampere);
-    QCOMPARE(zeroMax.value, 12.0);
+    QCOMPARE(zeroMax.value.value(), 12.0);
     QVERIFY(!zeroMax.hasFirmwareLimits());
     QVERIFY(!SensorsPolicy::isAlertState(zeroMax));
     QCOMPARE(zeroMax.minValue, std::optional(0.0));
@@ -256,12 +261,12 @@ void ReadingPipelineTest::zero_limit_does_not_decide_milli_scale() {
     // A zero minimum is a usable limit, but carries no scale: the value decides.
     const SensorReading zeroMin = processOne(current(12.0, 0.0, std::nullopt));
     QCOMPARE(zeroMin.unit, SensorUnit::Ampere);
-    QCOMPARE(zeroMin.value, 12.0);
+    QCOMPARE(zeroMin.value.value(), 12.0);
     QCOMPARE(zeroMin.firmwareMin, std::optional(0.0));
     QVERIFY(!SensorsPolicy::isAlertState(zeroMin));
     const SensorReading smallZeroMin = processOne(current(0.25, 0.0, std::nullopt));
     QCOMPARE(smallZeroMin.unit, SensorUnit::Milliampere);
-    QCOMPARE(smallZeroMin.value, 250.0);
+    QCOMPARE(smallZeroMin.value.value(), 250.0);
 }
 
 void ReadingPipelineTest::freezer_temperature_limits_are_kept() {
@@ -359,6 +364,81 @@ void ReadingPipelineTest::reprocessing_with_dropped_limits_is_stable() {
     }
     // The raw readings keep what the firmware reported.
     QCOMPARE(input[2].firmwareMax, std::optional(kNvmeHighC));
+}
+
+void ReadingPipelineTest::missing_value_keeps_unit_and_limits() {
+    ReadingPipeline pipeline;
+    const RuntimeConfig config;
+    SensorReading unreadable = power(0.3);
+    unreadable.value.reset();
+
+    QCOMPARE(pipeline.process({power(0.3)}, config)[0].unit, SensorUnit::Milliwatt);
+    const SensorReading missing = pipeline.process({unreadable}, config)[0];
+    QCOMPARE(missing.unit, SensorUnit::Milliwatt);
+    QCOMPARE(missing.value, std::nullopt);
+    QVERIFY(!SensorsPolicy::isAlertState(missing));
+    QCOMPARE(SensorsPolicy::rangeFraction(missing), std::nullopt);
+    // 1.5 W would switch a fresh sensor to W; the latch from before the gap still holds.
+    const SensorReading back = pipeline.process({power(1.5)}, config)[0];
+    QCOMPARE(back.unit, SensorUnit::Milliwatt);
+    QCOMPARE(back.value.value(), 1500.0);
+
+    // Firmware limits are reported, cleaned and converted without a value.
+    SensorReading hot = temperature(0.0, 80.0);
+    hot.value.reset();
+    hot.firmwareMin = -273.15;
+    RuntimeConfig fahrenheit;
+    fahrenheit.temperatureUnit = TemperatureUnit::Fahrenheit;
+    const SensorReading shown = pipeline.process({hot}, fahrenheit)[0];
+    QCOMPARE(shown.unit, SensorUnit::Fahrenheit);
+    QCOMPARE(shown.value, std::nullopt);
+    QCOMPARE(shown.firmwareMin, std::nullopt);
+    QCOMPARE(shown.firmwareMax.value(), 176.0);
+    QVERIFY(!SensorsPolicy::isAlertState(shown));
+}
+
+void ReadingPipelineTest::missing_first_value_uses_base_unit() {
+    ReadingPipeline pipeline;
+    const RuntimeConfig config;
+    SensorReading unreadable = power(0.3);
+    unreadable.value.reset();
+
+    QCOMPARE(pipeline.process({unreadable}, config)[0].unit, SensorUnit::Watt);
+    QCOMPARE(pipeline.process({unreadable}, config)[0].unit, SensorUnit::Watt);
+    // Nothing was latched while the value was missing; the first value decides.
+    QCOMPARE(pipeline.process({power(0.3)}, config)[0].unit, SensorUnit::Milliwatt);
+}
+
+void ReadingPipelineTest::non_finite_value_is_missing() {
+    ReadingPipeline pipeline;
+    for (const double value: {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity()}) {
+        const SensorReading shown = pipeline.process({temperature(value, 80.0)}, RuntimeConfig{})[0];
+        QCOMPARE(shown.value, std::nullopt);
+        QCOMPARE(shown.firmwareMax, std::optional(80.0));
+        QVERIFY(!SensorsPolicy::isAlertState(shown));
+    }
+}
+
+void ReadingPipelineTest::reprocessing_with_missing_values_is_stable() {
+    ReadingPipeline pipeline;
+    const RuntimeConfig config;
+    SensorReading unreadablePower = power(0.05);
+    unreadablePower.value.reset();
+    SensorReading unreadableFan = fan(0.0, 500.0, std::nullopt);
+    unreadableFan.value.reset();
+    const QVector<SensorReading> input{unreadablePower, unreadableFan, voltage(12.0, std::nullopt, std::nullopt)};
+
+    const QVector<SensorReading> first = pipeline.process(input, config);
+    const QVector<SensorReading> second = pipeline.process(input, config);
+    for (int i = 0; i < first.size(); ++i) {
+        QCOMPARE(second[i].unit, first[i].unit);
+        QCOMPARE(second[i].value, first[i].value);
+        QCOMPARE(second[i].minValue, first[i].minValue);
+        QCOMPARE(second[i].maxValue, first[i].maxValue);
+        QCOMPARE(second[i].firmwareMin, first[i].firmwareMin);
+        QCOMPARE(second[i].firmwareMax, first[i].firmwareMax);
+    }
+    QCOMPARE(first[1].firmwareMin, std::optional(500.0));
 }
 
 QTEST_APPLESS_MAIN(ReadingPipelineTest)

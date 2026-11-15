@@ -46,6 +46,10 @@
         <translation>Chip: %1</translation>
     </message>
     <message>
+        <source>The sensor cannot be read at the moment</source>
+        <translation>El sensor no se puede leer en este momento</translation>
+    </message>
+    <message>
         <source>Min: %1</source>
         <translation>Mín.: %1</translation>
     </message>

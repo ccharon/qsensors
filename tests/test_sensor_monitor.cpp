@@ -124,7 +124,7 @@ void SensorMonitorTest::start_reads_once_in_worker_and_emits_before_returning() 
 
     QVERIFY(monitor.start(RuntimeConfig{}));
     QCOMPARE(spy.count(), 1);
-    QCOMPARE(readingsAt(spy, 0).at(0).value, 41.0);
+    QCOMPARE(readingsAt(spy, 0).at(0).value.value(), 41.0);
     QCOMPARE(readingsAt(spy, 0).at(0).maxValue, std::optional(100.0)); // prepared by the pipeline
     QVERIFY(log->createdIn != QThread::currentThread());
     QCOMPARE(log->reads(), 1);
@@ -156,7 +156,7 @@ void SensorMonitorTest::timer_polls_in_worker_thread() {
     QVERIFY(monitor.start(config));
     QVERIFY(spy.wait(3000));
     QCOMPARE(spy.count(), 2);
-    QCOMPARE(readingsAt(spy, 1).at(0).value, 42.0);
+    QCOMPARE(readingsAt(spy, 1).at(0).value.value(), 42.0);
     QCOMPARE(log->readIn.at(1), log->createdIn);
 }
 
@@ -171,7 +171,7 @@ void SensorMonitorTest::display_setting_change_reprocesses_without_reading() {
     monitor.setConfig(config);
     QCOMPARE(spy.count(), 2);
     QCOMPARE(readingsAt(spy, 1).at(0).unit, SensorUnit::Fahrenheit);
-    QCOMPARE(readingsAt(spy, 1).at(0).value, 41.0 * 9.0 / 5.0 + 32.0);
+    QCOMPARE(readingsAt(spy, 1).at(0).value.value(), 41.0 * 9.0 / 5.0 + 32.0);
     QCOMPARE(log->reads(), 1);
 
     // Only the interval changed: nothing to re-emit.
@@ -230,7 +230,7 @@ void SensorMonitorTest::stalled_read_is_reported_and_recovery_too() {
     QCOMPARE(stalled.at(1).at(0).toBool(), false);
     QVERIFY(!monitor.isStalled());
     QCOMPARE(readings.count(), 2);
-    QCOMPARE(readingsAt(readings, 1).at(0).value, 42.0);
+    QCOMPARE(readingsAt(readings, 1).at(0).value.value(), 42.0);
 }
 
 void SensorMonitorTest::normal_read_is_not_reported_as_stalled() {

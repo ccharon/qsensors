@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/libsensors_source.h"
+#include "sensors/sensors_policy.h"
 
 #include <sensors/error.h>
 #include <sensors/sensors.h>
@@ -93,8 +94,10 @@ namespace {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
                 range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MIN);
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MAX);
-                if (!range.max) {
-                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT);
+                // crit stands in for a missing or placeholder max (NVMe reports 65261.85 °C).
+                if (!range.max || !SensorsPolicy::isPlausibleTemperatureLimitC(*range.max)) {
+                    if (const auto crit = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT))
+                        range.max = crit;
                 }
                 break;
             case SENSORS_SUBFEATURE_IN_INPUT:
@@ -169,16 +172,18 @@ namespace {
     void appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature,
                               QVector<SensorReading> &readings, QSet<QString> &reportedProblems) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
-        if (selected.subfeature == nullptr) {
+        // An input without read permission never delivers a value; it gets no card.
+        if (selected.subfeature == nullptr || (selected.subfeature->flags & SENSORS_MODE_R) == 0) {
             return;
         }
 
+        // Intermittent failures (runtime suspend, stopped fan, drive standby) keep the card;
+        // the reading carries no value until the input can be read again.
         const std::optional<double> value = readSubfeatureValue(chip, selected.subfeature);
         if (!value.has_value()) {
             reportOnce(reportedProblems, chipName + QLatin1Char('/') + QString::number(feature->number),
-                       QStringLiteral("skipping unreadable sensor %1 on %2")
+                       QStringLiteral("cannot read sensor %1 on %2")
                            .arg(QString::fromUtf8(feature->name != nullptr ? feature->name : "?"), chipName));
-            return;
         }
 
         SensorReading reading{
@@ -187,7 +192,7 @@ namespace {
             .feature = resolveFeatureLabel(chip, feature),
             .featureNumber = feature->number,
             .subfeatureNumber = selected.subfeature->number,
-            .value = *value,
+            .value = value,
             .unit = unitForType(selected.type),
         };
 

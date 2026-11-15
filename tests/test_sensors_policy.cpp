@@ -41,6 +41,10 @@ private slots:
     void implausibleLimits_inverted_or_zero_limits_dropped();
     void implausibleLimits_plausible_limits_kept();
     void currentPower_zero_limit_is_no_scale_reference();
+    void missingValue_never_alerts_and_has_no_fraction();
+    void missingValue_keeps_latched_scale();
+    void missingValue_yields_valid_range();
+    void plausibleTemperatureLimit_rejects_placeholders();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
@@ -165,54 +169,54 @@ void SensorsPolicyTest::inf_input_yields_finite_range() {
 
 void SensorsPolicyTest::currentPower_scaling_uses_native_max_when_present() {
     SensorUnit unit = SensorUnit::Watt;
-    double value = 0.926;
+    std::optional<double> value = 0.926;
     std::optional<double> min;
     std::optional<double> max = 0.5;
 
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
 
     QCOMPARE(unit, SensorUnit::Milliwatt);
-    QCOMPARE(value, 926.0);
+    QCOMPARE(value.value(), 926.0);
     QCOMPARE(*max, 500.0);
 }
 
 void SensorsPolicyTest::currentPower_scaling_falls_back_to_value_when_no_range() {
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 0.003;
+    std::optional<double> value = 0.003;
     std::optional<double> min;
     std::optional<double> max;
 
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
 
     QCOMPARE(unit, SensorUnit::Milliampere);
-    QCOMPARE(value, 3.0);
+    QCOMPARE(value.value(), 3.0);
     QVERIFY(!min.has_value());
     QVERIFY(!max.has_value());
 }
 
 void SensorsPolicyTest::currentPower_scaling_skipped_when_at_or_above_one() {
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 5.0;
+    std::optional<double> value = 5.0;
     std::optional<double> min = 0.0;
     std::optional<double> max = 10.0;
 
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
 
     QCOMPARE(unit, SensorUnit::Ampere);
-    QCOMPARE(value, 5.0);
+    QCOMPARE(value.value(), 5.0);
     QCOMPARE(*max, 10.0);
 }
 
 void SensorsPolicyTest::currentPower_scaling_ignores_unrelated_units() {
     SensorUnit unit = SensorUnit::Volt;
-    double value = 0.011;
+    std::optional<double> value = 0.011;
     std::optional<double> min;
     std::optional<double> max;
 
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
 
     QCOMPARE(unit, SensorUnit::Volt);
-    QCOMPARE(value, 0.011);
+    QCOMPARE(value.value(), 0.011);
 }
 
 void SensorsPolicyTest::currentPower_latched_milli_survives_crossing_one() {
@@ -221,7 +225,7 @@ void SensorsPolicyTest::currentPower_latched_milli_survives_crossing_one() {
     std::optional<double> max;
 
     SensorUnit unit = SensorUnit::Watt;
-    double value = 0.9827;
+    std::optional<double> value = 0.9827;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Milliwatt);
     QCOMPARE(latch, std::optional<bool>(true));
@@ -231,7 +235,7 @@ void SensorsPolicyTest::currentPower_latched_milli_survives_crossing_one() {
     value = 1.25;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Milliwatt);
-    QCOMPARE(value, 1250.0);
+    QCOMPARE(value.value(), 1250.0);
 }
 
 void SensorsPolicyTest::currentPower_latched_base_survives_dropping_below_one() {
@@ -240,7 +244,7 @@ void SensorsPolicyTest::currentPower_latched_base_survives_dropping_below_one() 
     std::optional<double> max;
 
     SensorUnit unit = SensorUnit::Watt;
-    double value = 1.25;
+    std::optional<double> value = 1.25;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Watt);
     QCOMPARE(latch, std::optional<bool>(false));
@@ -249,7 +253,7 @@ void SensorsPolicyTest::currentPower_latched_base_survives_dropping_below_one() 
     value = 0.9;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Watt);
-    QCOMPARE(value, 0.9);
+    QCOMPARE(value.value(), 0.9);
 }
 
 void SensorsPolicyTest::currentPower_latched_milli_released_on_display_overflow() {
@@ -259,10 +263,10 @@ void SensorsPolicyTest::currentPower_latched_milli_released_on_display_overflow(
 
     // 12 A would render as 12000.0 mA, which no longer fits the LCD.
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 12.0;
+    std::optional<double> value = 12.0;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Ampere);
-    QCOMPARE(value, 12.0);
+    QCOMPARE(value.value(), 12.0);
     QCOMPARE(latch, std::optional<bool>(false));
 }
 
@@ -273,10 +277,10 @@ void SensorsPolicyTest::currentPower_latched_base_switches_to_milli_when_too_coa
 
     // 0.04 A would render as "0.04"; milli keeps useful precision.
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 0.04;
+    std::optional<double> value = 0.04;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Milliampere);
-    QCOMPARE(value, 40.0);
+    QCOMPARE(value.value(), 40.0);
     QCOMPARE(latch, std::optional<bool>(true));
 }
 
@@ -286,10 +290,10 @@ void SensorsPolicyTest::currentPower_native_limits_bypass_latch() {
     std::optional<double> max = 10.0;
 
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 0.5;
+    std::optional<double> value = 0.5;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Ampere);
-    QCOMPARE(value, 0.5);
+    QCOMPARE(value.value(), 0.5);
 }
 
 void SensorsPolicyTest::signed_current_without_limits_mirrors_range() {
@@ -468,13 +472,13 @@ void SensorsPolicyTest::implausibleLimits_plausible_limits_kept() {
 
 void SensorsPolicyTest::currentPower_zero_limit_is_no_scale_reference() {
     SensorUnit unit = SensorUnit::Ampere;
-    double value = 12.0;
+    std::optional<double> value = 12.0;
     std::optional<double> min = 0.0;
     std::optional<double> max;
     std::optional<bool> latch;
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
     QCOMPARE(unit, SensorUnit::Ampere);
-    QCOMPARE(value, 12.0);
+    QCOMPARE(value.value(), 12.0);
     QCOMPARE(latch, std::optional<bool>(false));
 
     // A nonzero minimum decides when the maximum is zero.
@@ -485,6 +489,79 @@ void SensorsPolicyTest::currentPower_zero_limit_is_no_scale_reference() {
     SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
     QCOMPARE(unit, SensorUnit::Milliampere);
     QCOMPARE(min, std::optional(-500.0));
+}
+
+void SensorsPolicyTest::missingValue_never_alerts_and_has_no_fraction() {
+    // Limits that a value of 0 would violate: a missing value must not read as 0.
+    const auto missing = [](const SensorUnit unit, const std::optional<double> min, const std::optional<double> max) {
+        SensorReading reading;
+        reading.unit = unit;
+        reading.minValue = reading.firmwareMin = min;
+        reading.maxValue = reading.firmwareMax = max;
+        return reading;
+    };
+    const SensorReading readings[] = {
+        missing(SensorUnit::Rpm, 1000.0, 5000.0),
+        missing(SensorUnit::Celsius, -40.0, -10.0),
+        missing(SensorUnit::Volt, 11.0, 13.0),
+        missing(SensorUnit::Milliampere, 100.0, 500.0),
+    };
+    for (const SensorReading &reading: readings) {
+        QVERIFY(!reading.hasValue());
+        QVERIFY(!SensorsPolicy::isAlertState(reading));
+        QCOMPARE(SensorsPolicy::rangeFraction(reading), std::nullopt);
+    }
+}
+
+void SensorsPolicyTest::missingValue_keeps_latched_scale() {
+    std::optional<double> min;
+    std::optional<double> max;
+
+    for (const bool latched: {true, false}) {
+        std::optional<bool> latch = latched;
+        SensorUnit unit = SensorUnit::Watt;
+        std::optional<double> value;
+        SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
+        QCOMPARE(unit, latched ? SensorUnit::Milliwatt : SensorUnit::Watt);
+        QCOMPARE(value, std::nullopt);
+        QCOMPARE(latch, std::optional(latched));
+    }
+
+    // Nothing latched yet: base unit, and the first real value still decides.
+    std::optional<bool> latch;
+    SensorUnit unit = SensorUnit::Ampere;
+    std::optional<double> value;
+    SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
+    QCOMPARE(unit, SensorUnit::Ampere);
+    QCOMPARE(latch, std::nullopt);
+
+    // Firmware limits decide even without a value.
+    unit = SensorUnit::Ampere;
+    max = 0.5;
+    SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
+    QCOMPARE(unit, SensorUnit::Milliampere);
+    QCOMPARE(max, std::optional(500.0));
+    QCOMPARE(value, std::nullopt);
+}
+
+void SensorsPolicyTest::missingValue_yields_valid_range() {
+    for (const SensorCategory category: {SensorCategory::Temperatures, SensorCategory::Fans, SensorCategory::Voltages,
+                                         SensorCategory::Currents, SensorCategory::Power, SensorCategory::Other}) {
+        std::optional<double> min;
+        std::optional<double> max;
+        SensorsPolicy::applyDefaultRangePolicy(category, std::nullopt, min, max, 5000);
+        QVERIFY(min.has_value() && max.has_value());
+        QVERIFY(*max > *min);
+    }
+}
+
+void SensorsPolicyTest::plausibleTemperatureLimit_rejects_placeholders() {
+    QVERIFY(SensorsPolicy::isPlausibleTemperatureLimitC(84.85));
+    QVERIFY(SensorsPolicy::isPlausibleTemperatureLimitC(-40.0));
+    QVERIFY(SensorsPolicy::isPlausibleTemperatureLimitC(SensorsPolicy::kTemperatureLimitMaxPlausibleC));
+    QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(65261.85));
+    QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(-273.15));
+    QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(std::numeric_limits<double>::quiet_NaN()));
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

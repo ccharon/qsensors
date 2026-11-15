@@ -15,6 +15,7 @@ private slots:
     void barGraph_lights_proportional_segments();
     void detailsToolTip_lists_chip_and_limits_in_display_units();
     void detailsToolTip_omits_placeholder_firmware_limits();
+    void missing_value_lights_no_bar_and_tooltip_says_so();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -99,6 +100,24 @@ void LcdLogicTest::detailsToolTip_omits_placeholder_firmware_limits() {
     const QString fahrenheitTip = tipFor(kTemp, -18.0, kC, -40.0, -10.0, TemperatureUnit::Fahrenheit);
     QVERIFY(fahrenheitTip.contains(QStringLiteral("Min: -40.0 °F")));
     QVERIFY(fahrenheitTip.contains(QStringLiteral("Max: 14.0 °F")));
+}
+
+void LcdLogicTest::missing_value_lights_no_bar_and_tooltip_says_so() {
+    SensorReading fan;
+    fan.chip = QStringLiteral("c");
+    fan.feature = QStringLiteral("fan1");
+    fan.unit = SensorUnit::Rpm;
+    fan.minValue = fan.firmwareMin = 500.0;
+    fan.maxValue = 5000.0;
+    QCOMPARE(LcdDisplayWidget::litBarSegments(fan, 20), 0);
+
+    const QString tip = SensorValueWidget::detailsToolTip(fan);
+    QVERIFY(tip.contains(QStringLiteral("The sensor cannot be read at the moment")));
+    // Limits are still reported without a value.
+    QVERIFY(tip.contains(QStringLiteral("Min: 500 RPM")));
+
+    fan.value = 1200.0;
+    QVERIFY(!SensorValueWidget::detailsToolTip(fan).contains(QStringLiteral("cannot be read")));
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

@@ -52,6 +52,8 @@ QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
     QStringList lines;
     lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());
     lines << tr("Chip: %1").arg(reading.chip.toHtmlEscaped());
+    if (!reading.hasValue())
+        lines << tr("The sensor cannot be read at the moment");
     // Only firmware limits: the default bar graph range is a guess, not a limit.
     if (reading.firmwareMin)
         lines << tr("Min: %1").arg(format(*reading.firmwareMin).toHtmlEscaped());
