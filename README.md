@@ -8,8 +8,9 @@ Qt6/Wayland-oriented sensor monitor with an xsensors-inspired UI and direct
 ## Dependencies
 
 - C++20 compiler
-- CMake
-- Qt6 (`Core`, `Gui`, `Widgets`)
+- CMake 4.2 or newer
+- Qt6 (`Core`, `Gui`, `Widgets`, and the Linguist tools for the translations;
+  `Test` only when building the tests)
 - `libsensors` (lm-sensors)
 
 ## Build
@@ -18,6 +19,12 @@ Qt6/Wayland-oriented sensor monitor with an xsensors-inspired UI and direct
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
 ```
+
+| Option | Default | Effect |
+|---|---|---|
+| `BUILD_TESTING` | `ON` | Builds the tests (needs Qt Test); run them with `ctest --test-dir build` |
+| `QSENSORS_WARNINGS_AS_ERRORS` | `OFF` | Treats compiler warnings in qsensors code as errors |
+| `QSENSORS_SANITIZE` | `OFF` | Builds with AddressSanitizer and UndefinedBehaviorSanitizer |
 
 ## Run
 
@@ -48,19 +55,30 @@ Build an AppImage locally inside the matching container, e.g. for arm64:
 `~/.config/qsensors/qsensors.conf`
 
 Runtime keys currently used:
-- `runtime/polling_interval_sec`
-- `runtime/fan_default_max_rpm`
+- `runtime/polling_interval_sec` (1 to 10 seconds, default 2)
+- `runtime/fan_default_max_rpm` (500 to 9999, default 5000)
 - `runtime/temperature_unit` (`C` or `F`, default `C`)
 
-Temperature display is selectable in the settings panel (`Celsius` / `Fahrenheit`).
+The settings panel changes these values. The window size, the chip order and
+the collapsed chips are stored under `ui/`. The chip order and the collapsed
+chips are saved as soon as they change, the window size when the window closes.
 
 ## Sensor range policy (normalization)
 
-The backend returns normalized readings intended for direct rendering:
-- native firmware limits are used when available
-- missing limits are completed by qsensors category policy defaults
-- for temperature readings, values and limits are returned in the requested
-  display unit (`C` or `F`)
+Readings are normalized before they are rendered:
+- native firmware limits are used when available; placeholder limits (for
+  example min = max = 0, or the -273.15 / 65261.85 degrees C of NVMe secondary
+  sensors) are ignored
+- the bar graph range is completed by category defaults where the firmware
+  reports no limits; alerts come from firmware limits only (temperatures
+  without a firmware maximum turn red above 100 degrees C)
+- for temperature readings, values and limits are in the selected display
+  unit (`C` or `F`)
+- a sensor that cannot be read at the moment keeps its card and shows dashes
+
+The sensors are read in a background thread. The status bar shows the number of
+readings and the refresh interval, or the reason when libsensors cannot be
+initialized, no sensors are found, or a read does not return.
 
 ## License
 

@@ -175,9 +175,11 @@ bool LcdDisplayWidget::hasDarkBase() const {
 
 void LcdDisplayWidget::paintPanel(QPainter &painter) const {
     const auto blend = [](const QColor &a, const QColor &b, const qreal t) {
-        return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
-                                a.greenF() + (b.greenF() - a.greenF()) * t,
-                                a.blueF() + (b.blueF() - a.blueF()) * t);
+        const auto mix = [t](const qreal from, const qreal to) {
+            return static_cast<float>(from + (to - from) * t);
+        };
+        return QColor::fromRgbF(mix(a.redF(), b.redF()), mix(a.greenF(), b.greenF()),
+                                mix(a.blueF(), b.blueF()));
     };
 
     // Backplane: palette base tinted towards the LCD green, so light and dark themes both work.

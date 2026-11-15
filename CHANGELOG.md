@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- CMake options `QSENSORS_WARNINGS_AS_ERRORS` and `QSENSORS_SANITIZE` (both
+  `OFF` by default) for developers: warnings as errors, and a build with
+  AddressSanitizer and UndefinedBehaviorSanitizer.
+
 ### Changed
+- Qt Test is only required when building the tests (`BUILD_TESTING=ON`); a
+  build without tests no longer needs it.
 - The window cannot be dragged wider than the full layout: once every
   category has all its columns and all cards have their maximum width, more
   width would only add empty space. Collapsed chips count, maximized and

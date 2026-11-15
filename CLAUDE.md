@@ -4,13 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`qsensors` is a native Qt6 Widgets application for Linux/Wayland that displays hardware sensor data directly from `libsensors` (lm-sensors), with an xsensors-inspired LCD-style UI. See `AGENTS.md` for the full project policy document.
+`qsensors` is a native Qt6 Widgets application for Linux/Wayland that displays hardware sensor data directly from `libsensors` (lm-sensors), with an xsensors-inspired LCD-style UI.
 
 ## Build & Test Commands
 
 ```bash
-# Configure (with tests)
+# Configure (with tests; -DBUILD_TESTING=OFF builds without Qt Test)
 cmake -S . -B build -DBUILD_TESTING=ON
+
+# Optional, both default OFF: warnings as errors; ASan + UBSan build
+cmake -S . -B build -DQSENSORS_WARNINGS_AS_ERRORS=ON
+cmake -S . -B build-asan -DQSENSORS_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
 
 # Build
 cmake --build build -j
@@ -55,6 +59,8 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
+
+**Build options**: the INTERFACE library `qsensors_build_options` carries the warning flags (`-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wold-style-cast`; `-Wno-missing-field-initializers` because designated initializers rely on default member initializers) and the sanitizer flags. It is linked only into `qsensors_model`, `qsensors_ui`, `qsensors` and the tests, so nothing leaks to consumers. `QSENSORS_WARNINGS_AS_ERRORS` adds `-Werror`; `QSENSORS_SANITIZE` adds ASan + UBSan (`test_sensor_monitor` deliberately leaks one QThread in its shutdown-timeout case, which LeakSanitizer reports). Qt Test is required only when `BUILD_TESTING` is on. Keep the code warning-free.
 
 **`tests/`**: 13 unit test files covering the main window sizing and status (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, stall reporting and bounded shutdown, with a fake source), LCD logic (including repaint behaviour), segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel (including chip layout signals and the drag position), the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 

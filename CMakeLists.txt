@@ -2,17 +2,41 @@ cmake_minimum_required(VERSION 4.2)
 project(qsensors VERSION 0.80.10)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
-set(CMAKE_AUTOUIC ON)
 
-find_package(Qt6 COMPONENTS
-        Core
-        Gui
-        Widgets
-        Test
-        LinguistTools
-        REQUIRED)
+option(QSENSORS_WARNINGS_AS_ERRORS "Treat compiler warnings in qsensors code as errors" OFF)
+option(QSENSORS_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+
+# Defines BUILD_TESTING, which decides whether Qt Test is required.
+include(CTest)
+
+set(QSENSORS_QT_COMPONENTS Core Gui Widgets LinguistTools)
+if (BUILD_TESTING)
+    list(APPEND QSENSORS_QT_COMPONENTS Test)
+endif ()
+find_package(Qt6 REQUIRED COMPONENTS ${QSENSORS_QT_COMPONENTS})
+
+# Warnings and sanitizers apply to qsensors' own targets only (PRIVATE use of this
+# interface library, so nothing leaks to consumers). Generated moc/rcc sources are
+# compiled with the same flags and are checked to be warning-free.
+add_library(qsensors_build_options INTERFACE)
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(qsensors_build_options INTERFACE
+            -Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wold-style-cast
+            # Designated initializers omit members on purpose; they have default member initializers.
+            -Wno-missing-field-initializers)
+    if (QSENSORS_WARNINGS_AS_ERRORS)
+        target_compile_options(qsensors_build_options INTERFACE -Werror)
+    endif ()
+endif ()
+if (QSENSORS_SANITIZE)
+    target_compile_options(qsensors_build_options INTERFACE
+            -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
+    target_link_options(qsensors_build_options INTERFACE -fsanitize=address,undefined)
+endif ()
 find_package(PkgConfig QUIET)
 if (PkgConfig_FOUND)
     pkg_check_modules(SENSORS QUIET IMPORTED_TARGET libsensors)
@@ -59,6 +83,7 @@ set(QSENSORS_APP_SOURCES
 add_library(qsensors_model STATIC ${QSENSORS_MODEL_SOURCES})
 target_include_directories(qsensors_model PUBLIC src)
 target_link_libraries(qsensors_model PUBLIC Qt::Core)
+target_link_libraries(qsensors_model PRIVATE qsensors_build_options)
 
 add_library(qsensors_ui STATIC ${QSENSORS_UI_SOURCES})
 target_link_libraries(qsensors_ui PUBLIC
@@ -66,6 +91,7 @@ target_link_libraries(qsensors_ui PUBLIC
         Qt::Gui
         Qt::Widgets
 )
+target_link_libraries(qsensors_ui PRIVATE qsensors_build_options)
 
 add_executable(qsensors ${QSENSORS_APP_SOURCES} resources/resources.qrc)
 target_compile_definitions(qsensors PRIVATE QSENSORS_VERSION="${PROJECT_VERSION}")
@@ -73,6 +99,7 @@ if (NOT SENSORS_FOUND)
     target_include_directories(qsensors PRIVATE ${SENSORS_INCLUDE_DIR})
 endif ()
 target_link_libraries(qsensors qsensors_ui)
+target_link_libraries(qsensors qsensors_build_options)
 if (SENSORS_FOUND)
     target_link_libraries(qsensors PkgConfig::SENSORS)
 else ()
@@ -124,13 +151,12 @@ qt_add_translations(qsensors
         LUPDATE_OPTIONS -no-obsolete -locations none
 )
 
-include(CTest)
 if (BUILD_TESTING)
     # Tests creating widgets run on the offscreen platform, so CI needs no display.
     # Model tests link only the model, so they cannot pull in widgets by accident.
     function(add_qsensors_test target source library)
         add_executable(${target} ${source})
-        target_link_libraries(${target} ${library} Qt::Test)
+        target_link_libraries(${target} ${library} Qt::Test qsensors_build_options)
         add_test(NAME ${target} COMMAND ${target})
         set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endfunction()
