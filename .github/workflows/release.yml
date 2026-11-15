@@ -65,7 +65,7 @@ jobs:
       contents: write
     steps:
       - name: Download AppImages and notes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
