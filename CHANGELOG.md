@@ -45,6 +45,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   waits up to 3 s for the read, logs a warning and exits.
 - The libsensors initialization error in the status bar includes the reason
   from libsensors, not only the error number.
+- Firmware limits that are placeholders are ignored, as if the firmware had
+  reported none: no alert, the default bar graph range, not listed in the
+  tooltip. This covers an unconfigured voltage input with min = max = 0 V,
+  which showed every voltage in red, a maximum not above the minimum, and the
+  -273.15 °C / 65261.85 °C limits of NVMe secondary sensors, which left the bar
+  graph empty. Temperatures with a placeholder maximum still turn red above
+  100 °C.
+- A current or power sensor with a firmware limit of 0 no longer switches to
+  mA or mW because of it; 12 A was shown as 12000.0 mA.
 
 ## [0.80.10] - 2026-09-27
 

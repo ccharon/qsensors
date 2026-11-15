@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
+#include "sensors/reading_pipeline.h"
 #include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 
@@ -13,6 +14,7 @@ class LcdLogicTest final : public QObject {
 private slots:
     void barGraph_lights_proportional_segments();
     void detailsToolTip_lists_chip_and_limits_in_display_units();
+    void detailsToolTip_omits_placeholder_firmware_limits();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -54,6 +56,49 @@ void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
     const QString guessedTip = SensorValueWidget::detailsToolTip(guessed);
     QVERIFY(guessedTip.contains(QStringLiteral("No limits available")));
     QVERIFY(!guessedTip.contains(QStringLiteral("100.0")));
+}
+
+void LcdLogicTest::detailsToolTip_omits_placeholder_firmware_limits() {
+    const auto tipFor = [](const SensorCategory category, const double value, const SensorUnit unit,
+                           const std::optional<double> min, const std::optional<double> max,
+                           const TemperatureUnit temperatureUnit = TemperatureUnit::Celsius) {
+        SensorReading raw;
+        raw.chip = QStringLiteral("c");
+        raw.category = category;
+        raw.feature = QStringLiteral("f");
+        raw.value = value;
+        raw.unit = unit;
+        raw.firmwareMin = min;
+        raw.firmwareMax = max;
+        RuntimeConfig config;
+        config.temperatureUnit = temperatureUnit;
+        ReadingPipeline pipeline;
+        return SensorValueWidget::detailsToolTip(pipeline.process({raw}, config)[0]);
+    };
+    constexpr auto kTemp = SensorCategory::Temperatures;
+    constexpr auto kC = SensorUnit::Celsius;
+
+    // NVMe secondary sensor: 0 K and 65535 K are placeholders.
+    for (const TemperatureUnit unit: {TemperatureUnit::Celsius, TemperatureUnit::Fahrenheit}) {
+        const QString tip = tipFor(kTemp, 40.0, kC, -273.15, 65261.85, unit);
+        QVERIFY(tip.contains(QStringLiteral("No limits available")));
+        QVERIFY(!tip.contains(QStringLiteral("Min:")));
+        QVERIFY(!tip.contains(QStringLiteral("Max:")));
+    }
+
+    // Unconfigured voltage input and a current with a zero maximum.
+    QVERIFY(tipFor(SensorCategory::Voltages, 1.2, SensorUnit::Volt, 0.0, 0.0)
+                .contains(QStringLiteral("No limits available")));
+    QVERIFY(tipFor(SensorCategory::Currents, 12.0, SensorUnit::Ampere, std::nullopt, 0.0)
+                .contains(QStringLiteral("No limits available")));
+
+    // A freezer sensor keeps its limits, in the chosen unit.
+    const QString celsiusTip = tipFor(kTemp, -18.0, kC, -40.0, -10.0);
+    QVERIFY(celsiusTip.contains(QStringLiteral("Min: -40.0 °C")));
+    QVERIFY(celsiusTip.contains(QStringLiteral("Max: -10.0 °C")));
+    const QString fahrenheitTip = tipFor(kTemp, -18.0, kC, -40.0, -10.0, TemperatureUnit::Fahrenheit);
+    QVERIFY(fahrenheitTip.contains(QStringLiteral("Min: -40.0 °F")));
+    QVERIFY(fahrenheitTip.contains(QStringLiteral("Max: 14.0 °F")));
 }
 
 QTEST_APPLESS_MAIN(LcdLogicTest)

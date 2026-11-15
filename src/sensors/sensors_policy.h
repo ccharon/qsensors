@@ -20,11 +20,59 @@ namespace SensorsPolicy {
      * reports no maximum (°C).
      */
     inline constexpr double kDefaultTemperatureMaxC = 100.0;
+    /**
+     * Temperature limits at or below this (°C) are the 0 K placeholder, e.g. NVMe
+     * secondary sensors reporting low = -273.15 °C.
+     */
+    inline constexpr double kTemperatureLimitAbsoluteZeroC = -273.0;
+    /**
+     * Temperature limits above this (°C) are placeholders, e.g. NVMe high = 65261.85 °C
+     * (65535 K). Thermocouple converters such as the MAX31856 measure up to 1800 °C.
+     */
+    inline constexpr double kTemperatureLimitMaxPlausibleC = 2000.0;
 
     /**
-     * Rescales Ampere/Watt to mA/mW for sub-1 sensors. Native limits decide when present;
-     * otherwise @p latchedMilli carries the scale between polls with hysteresis
-     * (milli below kBaseUnitUnderflow, base from kMilliUnitOverflow) to avoid flicker.
+     * Drops firmware limits that are placeholders rather than limits, so that they are
+     * treated as never reported. Expects raw source units (°C, V, RPM, A, W). Rules:
+     * - non-finite limits;
+     * - temperature limits outside (kTemperatureLimitAbsoluteZeroC, kTemperatureLimitMaxPlausibleC];
+     * - max not above min: both, except a zero max with a positive min drops only the max
+     *   (unset limit registers read 0, e.g. a fan with a minimum but no maximum);
+     * - a zero max without a min for voltages, fans, currents and power: these read 0
+     *   when the limit is unset (e.g. an unconfigured voltage input). Temperatures keep
+     *   it, since 0 °C is a real limit for a freezer.
+     * The measured value is not consulted, so the limits shown do not change from poll to poll.
+     */
+    inline void dropImplausibleFirmwareLimits(
+        const SensorUnit unit,
+        std::optional<double> &min,
+        std::optional<double> &max
+    ) {
+        for (std::optional<double> *limit: {&min, &max}) {
+            if (*limit && !std::isfinite(**limit))
+                limit->reset();
+            if (*limit && unit == SensorUnit::Celsius
+                && (**limit <= kTemperatureLimitAbsoluteZeroC || **limit > kTemperatureLimitMaxPlausibleC))
+                limit->reset();
+        }
+
+        if (min && max && *max <= *min) {
+            if (*max != 0.0 || *min <= 0.0)
+                min.reset();
+            max.reset();
+        }
+
+        const bool zeroMeansUnset = unit == SensorUnit::Volt || unit == SensorUnit::Rpm
+                                    || unit == SensorUnit::Ampere || unit == SensorUnit::Watt;
+        if (zeroMeansUnset && !min && max && *max == 0.0)
+            max.reset();
+    }
+
+    /**
+     * Rescales Ampere/Watt to mA/mW for sub-1 sensors. A nonzero native limit decides when
+     * present (a zero limit carries no scale); otherwise @p latchedMilli carries the scale
+     * between polls with hysteresis (milli below kBaseUnitUnderflow, base from
+     * kMilliUnitOverflow) to avoid flicker.
      */
     inline void applyCurrentPowerUnitScaling(
         SensorUnit &unit,
@@ -39,8 +87,11 @@ namespace SensorsPolicy {
 
         constexpr double kMilliScale = 1000.0;
         bool useMilli = false;
-        if (max.has_value() || min.has_value()) {
-            const double reference = max.has_value() ? *max : *min;
+        const auto isScaleReference = [](const std::optional<double> &limit) {
+            return limit.has_value() && *limit != 0.0;
+        };
+        if (isScaleReference(max) || isScaleReference(min)) {
+            const double reference = isScaleReference(max) ? *max : *min;
             useMilli = std::isfinite(reference) && std::abs(reference) < 1.0;
         } else if (!std::isfinite(value)) {
             return;

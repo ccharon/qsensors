@@ -37,6 +37,10 @@ private slots:
     void alertState_ignores_default_ranges();
     void alertState_temperature_without_firmware_max_uses_fallback();
     void rangeFraction_maps_value_into_limits();
+    void implausibleLimits_temperature_sentinels_dropped();
+    void implausibleLimits_inverted_or_zero_limits_dropped();
+    void implausibleLimits_plausible_limits_kept();
+    void currentPower_zero_limit_is_no_scale_reference();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
@@ -387,6 +391,100 @@ void SensorsPolicyTest::rangeFraction_maps_value_into_limits() {
     // Degenerate range (max <= min) falls back to a one-unit span instead of dividing by zero.
     SensorReading degenerate{.value = 3.0, .unit = SensorUnit::Volt, .minValue = 3.0, .maxValue = 3.0};
     QCOMPARE(*SensorsPolicy::rangeFraction(degenerate), 0.0);
+}
+
+void SensorsPolicyTest::implausibleLimits_temperature_sentinels_dropped() {
+    std::optional<double> min = -273.15;
+    std::optional<double> max = 65261.85;
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Celsius, min, max);
+    QVERIFY(!min.has_value());
+    QVERIFY(!max.has_value());
+
+    // Only the sentinel goes; a real limit next to it stays.
+    min = -273.15;
+    max = 84.85;
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Celsius, min, max);
+    QVERIFY(!min.has_value());
+    QCOMPARE(max, std::optional(84.85));
+
+    min = std::nullopt;
+    max = std::numeric_limits<double>::quiet_NaN();
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Celsius, min, max);
+    QVERIFY(!max.has_value());
+}
+
+void SensorsPolicyTest::implausibleLimits_inverted_or_zero_limits_dropped() {
+    std::optional<double> min = 0.0;
+    std::optional<double> max = 0.0;
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Volt, min, max);
+    QVERIFY(!min.has_value());
+    QVERIFY(!max.has_value());
+
+    min = 5.0;
+    max = 3.0;
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Volt, min, max);
+    QVERIFY(!min.has_value());
+    QVERIFY(!max.has_value());
+
+    min = 1000.0;
+    max = 0.0;
+    SensorsPolicy::dropImplausibleFirmwareLimits(SensorUnit::Rpm, min, max);
+    QCOMPARE(min, std::optional(1000.0));
+    QVERIFY(!max.has_value());
+
+    for (const SensorUnit unit: {SensorUnit::Volt, SensorUnit::Rpm, SensorUnit::Ampere, SensorUnit::Watt}) {
+        min = std::nullopt;
+        max = 0.0;
+        SensorsPolicy::dropImplausibleFirmwareLimits(unit, min, max);
+        QVERIFY(!max.has_value());
+    }
+}
+
+void SensorsPolicyTest::implausibleLimits_plausible_limits_kept() {
+    struct Case {
+        SensorUnit unit;
+        std::optional<double> min;
+        std::optional<double> max;
+    };
+    const Case cases[] = {
+        {SensorUnit::Celsius, -40.0, -10.0}, // freezer
+        {SensorUnit::Celsius, std::nullopt, 0.0}, // freezer maximum
+        {SensorUnit::Celsius, -55.0, 1800.0}, // thermocouple
+        {SensorUnit::Rpm, 0.0, std::nullopt}, // semi-passive fan
+        {SensorUnit::Volt, 0.0, 1.5},
+        {SensorUnit::Ampere, -5.0, 3.0}, // battery
+        {SensorUnit::Ampere, -5.0, 0.0}, // discharge only
+        {SensorUnit::Ampere, 0.0, std::nullopt},
+        {SensorUnit::Watt, std::nullopt, 0.5},
+    };
+    for (const Case &c: cases) {
+        std::optional<double> min = c.min;
+        std::optional<double> max = c.max;
+        SensorsPolicy::dropImplausibleFirmwareLimits(c.unit, min, max);
+        QCOMPARE(min, c.min);
+        QCOMPARE(max, c.max);
+    }
+}
+
+void SensorsPolicyTest::currentPower_zero_limit_is_no_scale_reference() {
+    SensorUnit unit = SensorUnit::Ampere;
+    double value = 12.0;
+    std::optional<double> min = 0.0;
+    std::optional<double> max;
+    std::optional<bool> latch;
+    SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max, &latch);
+    QCOMPARE(unit, SensorUnit::Ampere);
+    QCOMPARE(value, 12.0);
+    QCOMPARE(latch, std::optional<bool>(false));
+
+    // A nonzero minimum decides when the maximum is zero.
+    unit = SensorUnit::Ampere;
+    value = 0.2;
+    min = -0.5;
+    max = 0.0;
+    SensorsPolicy::applyCurrentPowerUnitScaling(unit, value, min, max);
+    QCOMPARE(unit, SensorUnit::Milliampere);
+    QCOMPARE(min, std::optional(-500.0));
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

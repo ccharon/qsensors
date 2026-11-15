@@ -31,6 +31,8 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
         const QString latchKey = reading.chip + QLatin1Char(':') + QString::number(reading.featureNumber);
         const auto latchIt = m_milliScaleLatch.constFind(latchKey);
         std::optional<bool> latchedMilli = latchIt != m_milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
+        // Before scaling and the °F conversion: the rule works on raw source units.
+        SensorsPolicy::dropImplausibleFirmwareLimits(reading.unit, reading.firmwareMin, reading.firmwareMax);
         SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, reading.firmwareMin,
                                                     reading.firmwareMax, &latchedMilli);
         if (latchedMilli.has_value()) {

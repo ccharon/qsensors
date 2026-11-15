@@ -11,9 +11,10 @@
 #include <QVector>
 
 /**
- * Turns raw readings of a SensorSource into display readings: mA/mW scaling,
- * the bar graph range (default ranges where firmware has no limits), and the
- * temperature unit. The firmware limits are kept apart; they alone raise alerts.
+ * Turns raw readings of a SensorSource into display readings: drops placeholder
+ * firmware limits, mA/mW scaling, the bar graph range (default ranges where firmware
+ * has no limits), and the temperature unit. The firmware limits are kept apart; they
+ * alone raise alerts.
  */
 class ReadingPipeline {
 public:
