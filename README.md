@@ -46,7 +46,7 @@ Qt 6.8 with the Wayland and X11 platform plugins; Qt picks one at startup.
 | `qsensors-X.Y.Z-aarch64.AppImage` | arm64 | 2.39 | Ubuntu 24.04+, Debian 13+, Fedora 40+ |
 
 Build an AppImage locally inside the matching container, e.g. for arm64:
-`docker run --rm -v "$PWD":/src -w /src -e VERSION=0.80.10 ubuntu:24.04 bash packaging/appimage/build.sh`
+`docker run --rm -v "$PWD":/src -w /src -e VERSION=0.80.11 ubuntu:24.04 bash packaging/appimage/build.sh`
 
 ## Configuration
 

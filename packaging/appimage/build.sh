@@ -4,10 +4,10 @@
 # Builds dist/qsensors-<VERSION>-<arch>.AppImage inside a release container.
 # The container's glibc is the minimum glibc of the AppImage, see release.yml.
 #
-# Usage (from the repository root): VERSION=0.80.10 packaging/appimage/build.sh
+# Usage (from the repository root): VERSION=0.80.11 packaging/appimage/build.sh
 set -euo pipefail
 
-: "${VERSION:?VERSION must be set, e.g. VERSION=0.80.10}"
+: "${VERSION:?VERSION must be set, e.g. VERSION=0.80.11}"
 QT_VERSION="6.8.3"
 AQTINSTALL_VERSION="3.3.0"
 CMAKE_SPEC="cmake>=4.2,<4.3"

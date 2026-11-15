@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.80.11] - 2026-11-15
+
 ### Added
 - CMake options `QSENSORS_WARNINGS_AS_ERRORS` and `QSENSORS_SANITIZE` (both
   `OFF` by default) for developers: warnings as errors, and a build with
@@ -252,7 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed translation entries for new temperature unit UI strings in `en/de/fr/es`.
 - Gentoo packaging README now explicitly requires copying `files/qsensors.desktop`.
 
-[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.10...develop
+[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.11...develop
+[0.80.11]: https://github.com/ccharon/qsensors/compare/v0.80.10...v0.80.11
 [0.80.10]: https://github.com/ccharon/qsensors/compare/0.80.9...v0.80.10
 [0.80.9]: https://github.com/ccharon/qsensors/compare/0.80.8...0.80.9
 [0.80.8]: https://github.com/ccharon/qsensors/compare/0.80.7...0.80.8
