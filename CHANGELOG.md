@@ -34,6 +34,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   migration is logged; reading the settings no longer writes to the file.
 
 ### Fixed
+- The x86_64 AppImage did not show NVMe, ACPI and virtual chips (e.g. `nvme-pci-*`,
+  `iwlwifi_*-virtual-*`): it bundled libsensors 3.4.0 from its build container.
+  Both AppImages now bundle libsensors 3.6.2, built from source, so they find the
+  same chips as a current system `sensors` and can read `power*_min` limits.
 - The order of the chips and which chips are collapsed are saved as soon as
   you change them, not only when the window closes. They were lost when
   qsensors was killed, crashed or the session ended. A failed write is

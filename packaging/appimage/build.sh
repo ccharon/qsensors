@@ -11,6 +11,11 @@ set -euo pipefail
 QT_VERSION="6.8.3"
 AQTINSTALL_VERSION="3.3.0"
 CMAKE_SPEC="cmake>=4.2,<4.3"
+# libsensors is built from source: the build containers ship older releases
+# (manylinux_2_28 has 3.4.0, which does not find NVMe, ACPI and virtual chips).
+LM_SENSORS_VERSION="3.6.2"
+LM_SENSORS_SONAME="libsensors.so.5"
+LM_SENSORS_SHA256="c6a0587e565778a40d88891928bf8943f27d353f382d5b745a997d635978a8f0"
 LINUXDEPLOY_VERSION="1-alpha-20251107-1"
 LINUXDEPLOY_PLUGIN_QT_VERSION="1-alpha-20250213-1"
 LINUXDEPLOY_PLUGIN_APPIMAGE_VERSION="1-alpha-20250213-1"
@@ -39,6 +44,7 @@ ROOT="$(pwd)"
 WORK="$ROOT/.appimage-work"
 # aqtinstall drops the "linux_" prefix for the directory: gcc_64, gcc_arm64.
 QT_DIR="$WORK/qt/$QT_VERSION/${QT_ARCH#linux_}"
+SENSORS_DIR="$WORK/sensors"
 mkdir -p "$WORK" "$ROOT/dist"
 
 # Runtime libraries are installed too: linuxdeploy bundles what the Qt plugins
@@ -47,7 +53,7 @@ install_system_packages() {
     if command -v dnf >/dev/null; then
         dnf install -y epel-release
         dnf install -y --enablerepo=powertools \
-            lm_sensors-devel mesa-libGL-devel mesa-libEGL-devel libxkbcommon-devel libxkbcommon-x11 \
+            bison flex mesa-libGL-devel mesa-libEGL-devel libxkbcommon-devel libxkbcommon-x11 \
             libxcb xcb-util-cursor xcb-util-image xcb-util-keysyms xcb-util-renderutil xcb-util-wm \
             libX11 libSM libICE libwayland-client libwayland-cursor libwayland-egl fontconfig freetype dbus-libs glib2 \
             dejavu-sans-fonts desktop-file-utils file patchelf curl
@@ -57,7 +63,7 @@ install_system_packages() {
         apt-get update
         apt-get install -y --no-install-recommends \
             build-essential python3 python3-venv curl ca-certificates file patchelf desktop-file-utils \
-            libsensors-dev libgl-dev libegl-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            bison flex libgl-dev libegl-dev libxkbcommon-dev libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 \
             libxcb-xinerama0 libxcb-randr0 libxcb-xkb1 libx11-xcb1 libsm6 libice6 \
             libwayland-client0 libwayland-cursor0 libwayland-egl1 libfontconfig1 libfreetype6 libdbus-1-3 \
@@ -94,6 +100,18 @@ download_checked() {
     chmod +x "$file"
 }
 
+# Only the shared library and its headers, in a private prefix. ETCDIR stays /etc
+# so the bundled library reads the host's /etc/sensors3.conf and /etc/sensors.d.
+install_libsensors() {
+    local tag="V${LM_SENSORS_VERSION//./-}"
+    local src="$WORK/lm-sensors-${LM_SENSORS_VERSION//./-}"
+    download_checked "https://github.com/lm-sensors/lm-sensors/archive/refs/tags/${tag}.tar.gz" \
+        "$WORK/lm-sensors.tar.gz" "$LM_SENSORS_SHA256"
+    rm -rf "$src" "$SENSORS_DIR"
+    tar -xzf "$WORK/lm-sensors.tar.gz" -C "$WORK"
+    make -C "$src" -j"$(nproc)" PREFIX="$SENSORS_DIR" ETCDIR=/etc BUILD_STATIC_LIB=0 install-lib
+}
+
 install_linuxdeploy() {
     cd "$WORK"
     download_checked "https://github.com/linuxdeploy/linuxdeploy/releases/download/${LINUXDEPLOY_VERSION}/linuxdeploy-${ARCH}.AppImage" \
@@ -108,7 +126,7 @@ install_linuxdeploy() {
 build_and_test() {
     cmake -S "$ROOT" -B "$WORK/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_PREFIX_PATH="$QT_DIR" -DBUILD_TESTING=ON
+        -DCMAKE_PREFIX_PATH="$QT_DIR;$SENSORS_DIR" -DBUILD_TESTING=ON
     cmake --build "$WORK/build" -j"$(nproc)"
     ctest --test-dir "$WORK/build" --output-on-failure
     rm -rf "$WORK/AppDir"
@@ -120,7 +138,7 @@ package_appimage() {
     # Containers have no FUSE; the tools unpack themselves instead of mounting.
     export APPIMAGE_EXTRACT_AND_RUN=1
     export QMAKE="$QT_DIR/bin/qmake"
-    export LD_LIBRARY_PATH="$QT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export LD_LIBRARY_PATH="$QT_DIR/lib:$SENSORS_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
     # Bundle Wayland next to the default xcb plugin; Qt picks one at startup.
     export EXTRA_PLATFORM_PLUGINS="libqwayland-generic.so"
     local linuxdeploy="./linuxdeploy-${ARCH}.AppImage"
@@ -144,7 +162,7 @@ package_appimage() {
 
 verify_bundle() {
     local appdir="$WORK/AppDir"
-    for pattern in 'libsensors.so*' 'libqxcb.so' 'libqwayland-generic.so' 'libxdg-shell.so'; do
+    for pattern in "$LM_SENSORS_SONAME" 'libqxcb.so' 'libqwayland-generic.so' 'libxdg-shell.so'; do
         if ! find "$appdir" -name "$pattern" | grep -q .; then
             echo "missing in AppDir: $pattern" >&2
             exit 1
@@ -156,6 +174,7 @@ verify_bundle() {
 install_system_packages
 install_build_tools
 install_qt
+install_libsensors
 install_linuxdeploy
 build_and_test
 package_appimage
