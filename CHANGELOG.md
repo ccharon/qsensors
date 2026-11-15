@@ -7,6 +7,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.80.11] - 2026-11-15
+
+### Added
+- CMake options `QSENSORS_WARNINGS_AS_ERRORS` and `QSENSORS_SANITIZE` (both
+  `OFF` by default) for developers: warnings as errors, and a build with
+  AddressSanitizer and UndefinedBehaviorSanitizer.
+
+### Changed
+- Qt Test is only required when building the tests (`BUILD_TESTING=ON`); a
+  build without tests no longer needs it.
+- The window cannot be dragged wider than the full layout: once every
+  category has all its columns and all cards have their maximum width, more
+  width would only add empty space. Collapsed chips count, maximized and
+  full-screen windows still fill the screen, and a wider window is never
+  shrunk automatically. Without a saved window size the first width fits
+  this limit when it is narrower than the default.
+- Sensors are read in a background thread, so slow drivers (e.g. drive
+  temperatures via `drivetemp`) no longer freeze the window. A read that takes
+  longer than the polling interval delays the next one instead of piling up.
+- Changing the temperature unit or the fan fallback maximum applies to the
+  current readings right away, without reading the sensors again.
+- Resizing the window only moves the sensor cards; they are no longer
+  recreated when the number of columns changes. The layout itself is unchanged.
+- Settings from an older qsensors are migrated once at startup and the
+  migration is logged; reading the settings no longer writes to the file.
+
+### Fixed
+- The order of the chips and which chips are collapsed are saved as soon as
+  you change them, not only when the window closes. They were lost when
+  qsensors was killed, crashed or the session ended. A failed write is
+  reported in the status bar. The window size is still saved on close.
+- Sensors no longer show an alert because of a limit qsensors made up. When
+  the firmware reports only a maximum (e.g. a GPU power cap or a USB-C port's
+  maximum current), the bar graph assumes a minimum of 20 % of it; values
+  below that, such as an idle GPU or an unused port, were shown in red. Alerts
+  now come from firmware limits only. Temperatures without a firmware maximum
+  still turn red above 100 °C.
+- The sensor tooltip lists only the limits the firmware reports, or "No limits
+  available"; previously it showed the assumed bar graph range as if it came
+  from the firmware.
+- When libsensors cannot be initialized, the error stays in the status bar;
+  changing a setting used to replace it with "No sensors found".
+- A sensor read that hangs (e.g. a blocked I2C bus) is shown in the status
+  bar: after three polling intervals, at least 10 s, it says that the sensors
+  are not responding and the values are outdated. The normal status returns
+  as soon as a read completes. Previously the old values stayed on screen as
+  if they were current.
+- Closing the window no longer hangs when a sensor read does not return. qsensors
+  waits up to 3 s for the read, logs a warning and exits.
+- The libsensors initialization error in the status bar includes the reason
+  from libsensors, not only the error number.
+- Firmware limits that are placeholders are ignored, as if the firmware had
+  reported none: no alert, the default bar graph range, not listed in the
+  tooltip. This covers an unconfigured voltage input with min = max = 0 V,
+  which showed every voltage in red, a maximum not above the minimum, and the
+  -273.15 °C / 65261.85 °C limits of NVMe secondary sensors, which left the bar
+  graph empty. Temperatures with a placeholder maximum still turn red above
+  100 °C.
+- A current or power sensor with a firmware limit of 0 no longer switches to
+  mA or mW because of it; 12 A was shown as 12000.0 mA.
+- A sensor that cannot be read for a moment keeps its card. The LCD shows
+  dashes instead of the value, without bar graph or alert, and the tooltip
+  says that the sensor cannot be read at the moment. Previously the card, or
+  the whole chip when none of its sensors could be read, disappeared and the
+  layout was rebuilt, again and again for sensors that fail now and then: a
+  GPU in runtime suspend, a stopped fan, a drive in standby. A current or
+  power sensor keeps its mA/mW unit while it cannot be read.
+- Temperatures whose maximum is a placeholder (NVMe 65261.85 °C) use the
+  critical limit as maximum when the firmware reports one.
+
 ## [0.80.10] - 2026-09-27
 
 ### Added
@@ -184,7 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed translation entries for new temperature unit UI strings in `en/de/fr/es`.
 - Gentoo packaging README now explicitly requires copying `files/qsensors.desktop`.
 
-[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.10...develop
+[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.11...develop
+[0.80.11]: https://github.com/ccharon/qsensors/compare/v0.80.10...v0.80.11
 [0.80.10]: https://github.com/ccharon/qsensors/compare/0.80.9...v0.80.10
 [0.80.9]: https://github.com/ccharon/qsensors/compare/0.80.8...0.80.9
 [0.80.8]: https://github.com/ccharon/qsensors/compare/0.80.7...0.80.8

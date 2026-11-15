@@ -8,11 +8,11 @@
 /** Rules for the main window size that do not depend on widgets. */
 namespace WindowSizing {
     /**
-     * Maximum window height: the user cannot drag the window taller than its content,
-     * but a window that is already taller (content shrank) is never forced smaller.
-     * Always within the available screen height.
+     * Maximum window width or height: the user cannot drag the window larger than its
+     * content needs, but a window that is already larger (content shrank) is never
+     * forced smaller. Always within the available screen size.
      */
-    [[nodiscard]] constexpr int maximumHeight(const int contentHeight, const int currentHeight, const int screenHeight) {
-        return std::min(std::max(contentHeight, currentHeight), std::max(screenHeight, currentHeight));
+    [[nodiscard]] constexpr int maximumExtent(const int content, const int current, const int screen) {
+        return std::min(std::max(content, current), std::max(screen, current));
     }
 }

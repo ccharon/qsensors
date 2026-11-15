@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensor_value_widget.h"
-#include "theme/app_theme.h"
-#include "lcd_display_widget.h"
-#include "sensor_format.h"
+#include "ui/widgets/sensor_value_widget.h"
+#include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_display_widget.h"
+#include "sensors/sensor_format.h"
 
 #include <QLabel>
 #include <QResizeEvent>
@@ -40,10 +40,17 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         updateElidedTitle();
     }
     // Set on the card itself so hovering title or LCD shows the same details.
-    const QString details = detailsToolTip(reading);
-    if (toolTip() != details)
-        setToolTip(details);
+    const ToolTipInputs inputs = ToolTipInputs::of(reading);
+    if (!m_hasToolTip || inputs != m_toolTipInputs) {
+        setToolTip(detailsToolTip(reading));
+        m_toolTipInputs = inputs;
+        m_hasToolTip = true;
+    }
     m_lcdValue->setReading(reading);
+}
+
+SensorValueWidget::ToolTipInputs SensorValueWidget::ToolTipInputs::of(const SensorReading &reading) {
+    return {reading.chip, reading.feature, reading.unit, reading.hasValue(), reading.firmwareMin, reading.firmwareMax};
 }
 
 QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
@@ -52,11 +59,14 @@ QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
     QStringList lines;
     lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());
     lines << tr("Chip: %1").arg(reading.chip.toHtmlEscaped());
-    if (reading.minValue)
-        lines << tr("Min: %1").arg(format(*reading.minValue).toHtmlEscaped());
-    if (reading.maxValue)
-        lines << tr("Max: %1").arg(format(*reading.maxValue).toHtmlEscaped());
-    if (!reading.hasRange())
+    if (!reading.hasValue())
+        lines << tr("The sensor cannot be read at the moment");
+    // Only firmware limits: the default bar graph range is a guess, not a limit.
+    if (reading.firmwareMin)
+        lines << tr("Min: %1").arg(format(*reading.firmwareMin).toHtmlEscaped());
+    if (reading.firmwareMax)
+        lines << tr("Max: %1").arg(format(*reading.firmwareMax).toHtmlEscaped());
+    if (!reading.hasFirmwareLimits())
         lines << tr("No limits available");
     return lines.join(QStringLiteral("<br>"));
 }

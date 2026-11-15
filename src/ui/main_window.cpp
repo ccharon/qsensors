@@ -1,41 +1,37 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "main_window.h"
+#include "ui/main_window.h"
 
-#include "app_config_store.h"
-#include "theme/app_theme.h"
-#include "main_window_state_store.h"
-#include "settings_schema.h"
-#include "settings_panel.h"
-#include "sensors_panel.h"
-#include "status_line.h"
-#include "window_sizing.h"
+#include "config/app_config_store.h"
+#include "config/settings_schema.h"
+#include "ui/main_window_state_store.h"
+#include "ui/panels/sensors_panel.h"
+#include "ui/panels/settings_panel.h"
+#include "ui/theme/app_theme.h"
+#include "ui/widgets/status_line.h"
+#include "ui/widgets/vertical_scroll_area.h"
+#include "ui/window_sizing.h"
 
 #include <QApplication>
 #include <QResizeEvent>
-#include <QScrollArea>
-#include <QScrollBar>
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
-#include <QTimer>
 #include <QVBoxLayout>
-#include <QWindow>
-#include <chrono>
+#include <utility>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
 }
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
     : QMainWindow(parent),
+      m_monitor(new SensorMonitor(std::move(sourceFactory), this)),
       m_scrollArea(nullptr),
-      m_contentContainer(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLine(nullptr),
-      m_timer(new QTimer(this)) {
+      m_statusLine(nullptr) {
     setupUi();
     m_styledPalette = QApplication::palette();
     loadSettings();
@@ -47,41 +43,43 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_settingsPanel, &SettingsPanel::pollingIntervalChanged, this, [this](int value) {
         m_runtimeConfig.pollingIntervalSec = value;
         applyRuntimeConfig();
-        persistRuntimeConfig();
-        updateReadingsStatus();
     });
 
     connect(m_settingsPanel, &SettingsPanel::fanDefaultMaxRpmChanged, this, [this](int value) {
         m_runtimeConfig.fanDefaultMaxRpm = value;
-        persistRuntimeConfig();
-        refreshReadings();
+        applyRuntimeConfig();
     });
 
     connect(m_settingsPanel, &SettingsPanel::temperatureUnitChanged, this, [this](const TemperatureUnit unit) {
         m_runtimeConfig.temperatureUnit = unit;
-        persistRuntimeConfig();
-        refreshReadings();
+        applyRuntimeConfig();
     });
 
-    if (!m_backend.isInitialized()) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_backend.lastError()));
-        return;
+    connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
+    connect(m_monitor, &SensorMonitor::stalledChanged, this, &MainWindow::updateReadingsStatus);
+    // Reads once before returning, so the first readings are shown before the window.
+    if (!m_monitor->start(m_runtimeConfig)) {
+        m_sourceError = m_monitor->lastError();
+        updateReadingsStatus();
     }
-
-    connect(m_timer, &QTimer::timeout, this, &MainWindow::refreshReadings);
-    applyRuntimeConfig();
-    m_timer->start();
-    // Intentional first immediate sample for fast startup feedback.
-    refreshReadings();
 }
 
-void MainWindow::refreshReadings() {
-    m_sensorsPanel->setReadings(m_backend.readAll(m_runtimeConfig.fanDefaultMaxRpm, m_runtimeConfig.temperatureUnit),
-                                viewportWidth());
+void MainWindow::showReadings(const QVector<SensorReading> &readings) {
+    m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
 }
 
 void MainWindow::updateReadingsStatus() {
+    // Without a source there are no readings; the reason matters more than the count.
+    if (!m_sourceError.isEmpty()) {
+        setStatusMessage(tr("libsensors init failed: %1").arg(m_sourceError));
+        return;
+    }
+    // The panel still shows the last readings; the count would suggest they are current.
+    if (m_monitor->isStalled()) {
+        setStatusMessage(tr("Sensors are not responding; the values shown are outdated"));
+        return;
+    }
     const int count = m_sensorsPanel->readingCount();
     if (count == 0) {
         setStatusMessage(tr("No sensors found. Run sensors-detect and check the lm-sensors configuration."));
@@ -100,6 +98,18 @@ void MainWindow::persistRuntimeConfig() {
     }
 }
 
+void MainWindow::persistChipLayout() {
+    const bool saved = MainWindowStateStore::saveLayout({
+        .geometry = {},
+        .chipExpanded = m_sensorsPanel->chipExpandedState(),
+        .chipOrder = m_sensorsPanel->chipOrder(),
+        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
+    });
+    if (!saved) {
+        showNotice(tr("Settings could not be saved"));
+    }
+}
+
 void MainWindow::setupUi() {
     setWindowTitle(QStringLiteral("%1 %2").arg(QApplication::applicationName(), QApplication::applicationVersion()));
     resize(AppTheme::kInitialWindowWidth, AppTheme::kInitialWindowHeight);
@@ -108,25 +118,22 @@ void MainWindow::setupUi() {
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
 
-    m_scrollArea = new QScrollArea(central);
-    m_scrollArea->setWidgetResizable(true);
-    m_scrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    m_scrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
+    m_scrollArea = new VerticalScrollArea(central);
 
-    m_contentContainer = new QWidget(m_scrollArea);
-    auto *contentLayout = new QVBoxLayout(m_contentContainer);
+    auto *content = new QWidget(m_scrollArea);
+    auto *contentLayout = new QVBoxLayout(content);
     contentLayout->setContentsMargins(0, 0, 0, 0);
     contentLayout->setSpacing(AppTheme::kNarrowGap);
-    contentLayout->setSizeConstraint(QLayout::SetMinAndMaxSize);
 
-    m_sensorsPanel = new SensorsPanel(m_contentContainer);
-    m_settingsPanel = new SettingsPanel(m_contentContainer);
-    connect(m_sensorsPanel, &SensorsPanel::structureChanged, this, &MainWindow::updateMinimumWindowWidthConstraint);
+    m_sensorsPanel = new SensorsPanel(content);
+    m_settingsPanel = new SettingsPanel(content);
+    connect(m_sensorsPanel, &SensorsPanel::chipOrderChanged, this, &MainWindow::persistChipLayout);
+    connect(m_sensorsPanel, &SensorsPanel::chipExpandedChanged, this, &MainWindow::persistChipLayout);
     connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
         showNotice(tr("Sensor layout changed: UI config reset"));
     });
 
-    auto *settingsHost = new QWidget(m_contentContainer);
+    auto *settingsHost = new QWidget(content);
     auto *settingsHostLayout = new QVBoxLayout(settingsHost);
     settingsHostLayout->setContentsMargins(AppTheme::kSectionInset, 0, AppTheme::kSectionInset,
                                            AppTheme::kSectionInset + AppTheme::kNarrowGap);
@@ -141,14 +148,9 @@ void MainWindow::setupUi() {
     contentLayout->addWidget(m_sensorsPanel, 1);
     contentLayout->addWidget(settingsHost, 0, Qt::AlignBottom);
 
-    m_scrollArea->setWidget(m_contentContainer);
+    m_scrollArea->setWidget(content);
     layout->addWidget(m_scrollArea);
     setCentralWidget(central);
-
-    // The viewport narrows when the scrollbar appears; the cards follow its width.
-    m_scrollArea->viewport()->installEventFilter(this);
-    // Expanding or collapsing sections changes the content height.
-    m_contentContainer->installEventFilter(this);
 
     // Own status widget instead of QStatusBar::showMessage(), which leaves normal
     // widgets visible when the message is set before the window is shown.
@@ -167,56 +169,65 @@ void MainWindow::closeEvent(QCloseEvent *event) {
 
 void MainWindow::resizeEvent(QResizeEvent *event) {
     QMainWindow::resizeEvent(event);
-    updateHeightLimit();
+    updateSizeLimits();
 }
 
-bool MainWindow::eventFilter(QObject *watched, QEvent *event) {
-    if (watched == m_scrollArea->viewport() && event->type() == QEvent::Resize) {
-        m_sensorsPanel->relayout(viewportWidth());
-    } else if (watched == m_contentContainer && event->type() == QEvent::LayoutRequest) {
-        // The layout recomputes its size hint after this event; read it afterwards.
-        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
+bool MainWindow::event(QEvent *event) {
+    const bool handled = QMainWindow::event(event);
+    // Posted whenever a size hint below changed, e.g. a collapsed chip or new sensors.
+    if (event->type() == QEvent::LayoutRequest) {
+        updateSizeLimits();
     }
-    return QMainWindow::eventFilter(watched, event);
+    return handled;
 }
 
 int MainWindow::contentWindowHeight() const {
-    return height() - m_scrollArea->viewport()->height() + m_contentContainer->layout()->sizeHint().height();
+    return height() - m_scrollArea->height() + m_scrollArea->sizeHint().height();
 }
 
-int MainWindow::availableScreenHeight() const {
-    return screen() != nullptr ? screen()->availableGeometry().height() : height();
+int MainWindow::contentWindowWidth() const {
+    const int usefulWidth = m_sensorsPanel->maximumUsefulWidth();
+    if (usefulWidth >= QWIDGETSIZE_MAX)
+        return QWIDGETSIZE_MAX;
+    // The settings may need more than the sensors; they must never be cut off.
+    const int contentWidth = std::max(usefulWidth, m_scrollArea->widget()->minimumSizeHint().width());
+    return width() - m_scrollArea->width() + m_scrollArea->widthForContent(contentWidth);
 }
 
-void MainWindow::updateHeightLimit() {
+QSize MainWindow::availableScreenSize() const {
+    return screen() != nullptr ? screen()->availableGeometry().size() : size();
+}
+
+void MainWindow::updateSizeLimits() {
     if (isMaximized() || isFullScreen()) {
-        setMaximumHeight(QWIDGETSIZE_MAX);
+        setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         return;
     }
-    if (m_fitHeightToContent) {
-        m_fitHeightToContent = false;
-        // Raise the limit first; an earlier, smaller limit would clip the resize.
-        const int fitted = std::min(contentWindowHeight(), availableScreenHeight());
-        setMaximumHeight(std::max(fitted, maximumHeight()));
-        resize(width(), fitted);
+    const QSize screenSize = availableScreenSize();
+    if (m_fitToContent) {
+        m_fitToContent = false;
+        // Raise the limits first; earlier, smaller limits would clip the resize.
+        const QSize fitted(std::min({width(), contentWindowWidth(), screenSize.width()}),
+                           std::min(contentWindowHeight(), screenSize.height()));
+        setMaximumSize(maximumSize().expandedTo(fitted));
+        resize(fitted);
     }
-    const int limit = WindowSizing::maximumHeight(contentWindowHeight(), height(), availableScreenHeight());
-    if (limit != maximumHeight()) {
-        setMaximumHeight(limit);
+    const QSize limit(
+        std::max(WindowSizing::maximumExtent(contentWindowWidth(), width(), screenSize.width()), minimumWidth()),
+        WindowSizing::maximumExtent(contentWindowHeight(), height(), screenSize.height()));
+    if (limit != maximumSize()) {
+        setMaximumSize(limit);
     }
 }
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
     if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
-        m_sensorsPanel->relayout(viewportWidth());
-        ensureNoHorizontalOverflow(m_hasSavedGeometry ? AppTheme::kRestoredWidthFitPadding : AppTheme::kInitialWidthFitPadding);
-        updateMinimumWindowWidthConstraint();
-        // Without saved geometry the first height fits the content; applied once the
-        // layout has computed its size (see updateHeightLimit()).
-        m_fitHeightToContent = !m_hasSavedGeometry;
+        // Without saved geometry the first size fits the content; applied once the
+        // layout has computed its size (see updateSizeLimits()).
+        m_fitToContent = !m_hasSavedGeometry;
         m_initialLayoutApplied = true;
-        QMetaObject::invokeMethod(this, &MainWindow::updateHeightLimit, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, &MainWindow::updateSizeLimits, Qt::QueuedConnection);
     }
 }
 
@@ -228,7 +239,7 @@ void MainWindow::changeEvent(QEvent *event) {
         applyThemeRefresh();
     } else if (event->type() == QEvent::WindowStateChange) {
         // Maximized and full-screen windows fill the screen regardless of content.
-        updateHeightLimit();
+        updateSizeLimits();
     }
 }
 
@@ -242,11 +253,15 @@ void MainWindow::applyThemeRefresh() {
 }
 
 void MainWindow::loadSettings() {
-    // Runtime config and UI layout state are intentionally persisted independently.
-    m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
-    if (QSettings settings; SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
+    // The only migration point: the stores below read the current schema.
+    QSettings settings;
+    SettingsSchema::ensureUpToDate(settings);
+    if (SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
         showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
     }
+
+    // Runtime config and UI layout state are intentionally persisted independently.
+    m_runtimeConfig = AppConfigStore::loadRuntimeConfig();
     const MainWindowState state = MainWindowStateStore::load();
 
     m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);
@@ -267,48 +282,7 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
-    m_timer->setInterval(std::chrono::seconds(m_runtimeConfig.pollingIntervalSec));
+    persistRuntimeConfig();
+    m_monitor->setConfig(m_runtimeConfig);
+    updateReadingsStatus();
 }
-
-void MainWindow::ensureNoHorizontalOverflow(const int extraPadding) {
-    // Let pending layout updates settle before deciding if horizontal overflow is real.
-    m_scrollArea->ensurePolished();
-    m_scrollArea->updateGeometry();
-    m_contentContainer->ensurePolished();
-    m_contentContainer->updateGeometry();
-
-    auto *hBar = m_scrollArea->horizontalScrollBar();
-    if (hBar->maximum() <= 0) {
-        return;
-    }
-
-    QScreen *screen = windowHandle() != nullptr ? windowHandle()->screen() : QApplication::primaryScreen();
-    if (screen == nullptr) {
-        return;
-    }
-
-    const int maxWidth = screen->availableGeometry().width();
-    const int extra = hBar->maximum() + extraPadding;
-    const int targetWidth = std::min(maxWidth, width() + extra);
-    if (targetWidth > width()) {
-        resize(targetWidth, height());
-    }
-}
-
-void MainWindow::updateMinimumWindowWidthConstraint() {
-    const int sensorsMin = m_sensorsPanel->minimumRequiredWidth();
-    const int settingsMin = (AppTheme::kSectionInset * 2) + m_settingsPanel->minimumRequiredWidth();
-    const int requiredContentWidth = std::max(sensorsMin, settingsMin);
-
-    m_contentContainer->setMinimumWidth(requiredContentWidth);
-
-    const int verticalScrollbarReserve = m_scrollArea->verticalScrollBar()->sizeHint().width();
-    const int scrollAreaChrome = (m_scrollArea->frameWidth() * 2) + verticalScrollbarReserve;
-    const int requiredCentralWidth = requiredContentWidth + scrollAreaChrome;
-    m_scrollArea->setMinimumWidth(requiredCentralWidth);
-}
-
-int MainWindow::viewportWidth() const {
-    return m_scrollArea->viewport()->width();
-}
-

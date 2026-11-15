@@ -23,6 +23,10 @@
         <translation>No sensors found. Run sensors-detect and check the lm-sensors configuration.</translation>
     </message>
     <message>
+        <source>Sensors are not responding; the values shown are outdated</source>
+        <translation>Sensors are not responding; the values shown are outdated</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Readings: %1 | Refresh: %2s</translation>
     </message>
@@ -40,6 +44,10 @@
     <message>
         <source>Chip: %1</source>
         <translation>Chip: %1</translation>
+    </message>
+    <message>
+        <source>The sensor cannot be read at the moment</source>
+        <translation>The sensor cannot be read at the moment</translation>
     </message>
     <message>
         <source>Min: %1</source>

@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "app_config_store.h"
-#include "settings_keys.h"
-#include "settings_schema.h"
+#include "config/app_config_store.h"
+#include "config/settings_keys.h"
 
 #include <QSettings>
 #include <QDebug>
@@ -31,7 +30,6 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
     QSettings settings;
     if (settings.status() != QSettings::NoError)
         qWarning("qsensors: settings file %s is unreadable, using defaults", qPrintable(settings.fileName()));
-    SettingsSchema::ensureUpToDate(settings);
 
     RuntimeConfig config;
     config.pollingIntervalSec = readBoundedInt(settings, SettingsKeys::kPollingIntervalSec,
@@ -57,7 +55,6 @@ RuntimeConfig AppConfigStore::loadRuntimeConfig() {
 
 bool AppConfigStore::saveRuntimeConfig(const RuntimeConfig &config) {
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
     settings.setValue(SettingsKeys::kPollingIntervalSec, config.pollingIntervalSec);
     settings.setValue(SettingsKeys::kFanDefaultMaxRpm, config.fanDefaultMaxRpm);
     settings.setValue(SettingsKeys::kTemperatureUnit, temperatureUnitToToken(config.temperatureUnit));

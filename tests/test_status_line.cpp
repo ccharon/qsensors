@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "status_line.h"
+#include "ui/widgets/status_line.h"
 
 #include <QtTest/QtTest>
 

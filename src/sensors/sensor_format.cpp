@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensor_format.h"
+#include "sensors/sensor_format.h"
 
-QString SensorFormat::valueDigits(const SensorUnit unit, const double value) {
+QString SensorFormat::valueDigits(const SensorUnit unit, const std::optional<double> value) {
     const auto pad = [value](const int width, const int decimals) {
-        return QStringLiteral("%1").arg(value, width, 'f', decimals, QLatin1Char(' '));
+        if (!value) {
+            const QString integer(width - decimals - (decimals > 0 ? 1 : 0), QLatin1Char('-'));
+            return decimals > 0 ? integer + QLatin1Char('.') + QString(decimals, QLatin1Char('-')) : integer;
+        }
+        return QStringLiteral("%1").arg(*value, width, 'f', decimals, QLatin1Char(' '));
     };
     switch (unit) {
         case SensorUnit::Rpm:

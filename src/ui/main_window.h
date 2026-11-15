@@ -3,62 +3,62 @@
 
 #pragma once
 
-#include "runtime_config.h"
-#include "sensors_backend.h"
+#include "config/runtime_config.h"
+#include "sensors/sensor_monitor.h"
+#include "sensors/sensor_reading.h"
 
 #include <QMainWindow>
 #include <QPalette>
+#include <QVector>
 
-class QTimer;
-class QScrollArea;
 class QCloseEvent;
 class QResizeEvent;
 class QShowEvent;
 class SensorsPanel;
 class SettingsPanel;
 class StatusLine;
+class VerticalScrollArea;
 
 /** Main application surface: polling, persistence and sensor panel layout. */
 class MainWindow final : public QMainWindow {
     Q_OBJECT
 
 public:
-    /** Builds the UI, restores settings and starts polling when libsensors is available. */
-    explicit MainWindow(QWidget *parent = nullptr);
-
-private slots:
-    /** Polls the backend and hands the readings to the sensors panel. */
-    void refreshReadings();
+    /** Builds the UI, restores settings and starts polling the source made by @p sourceFactory. */
+    explicit MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent = nullptr);
 
 protected:
     /** Persists settings and window state before closing. */
     void closeEvent(QCloseEvent *event) override;
 
-    /** Re-evaluates the height limit after the user resized the window. */
+    /** Re-evaluates the size limits after the user resized the window. */
     void resizeEvent(QResizeEvent *event) override;
 
-    /** Applies initial relayout and optional width fit once after first data is shown. */
+    /** Fits the size to the content on the first show without a saved window size. */
     void showEvent(QShowEvent *event) override;
 
-    /** Re-applies style sheets on light/dark switches; lifts the height limit when maximized. */
+    /** Re-applies style sheets on light/dark switches; lifts the size limits when maximized. */
     void changeEvent(QEvent *event) override;
 
-    /** Relayouts on viewport width changes and tracks content height changes. */
-    bool eventFilter(QObject *watched, QEvent *event) override;
+    /** Re-evaluates the size limits once the layouts have taken a content change into account. */
+    bool event(QEvent *event) override;
 
 private:
+    /** Hands new display readings to the sensors panel and updates the status. */
+    void showReadings(const QVector<SensorReading> &readings);
+
     /** Re-applies all style sheets so palette(...) references resolve to the current palette. */
     void applyThemeRefresh();
 
     /** Builds static widget hierarchy and signal wiring. */
     void setupUi();
-    /** Applies the polling interval from the runtime config to the timer. */
+    /** Applies a changed runtime config to polling, persists it and updates the status. */
     void applyRuntimeConfig();
 
     /** Sets the permanent status bar text. */
     void setStatusMessage(const QString &text);
 
-    /** Permanent status: reading count and refresh interval, or a hint when no sensors exist. */
+    /** Permanent status: the source error, a stalled read, the reading count and refresh interval, or a hint when no sensors exist. */
     void updateReadingsStatus();
 
     /** Shows @p text for a while instead of the permanent status. */
@@ -67,11 +67,8 @@ private:
     /** Saves the runtime config right away and reports a failed write. */
     void persistRuntimeConfig();
 
-    /** Keeps top-level minimum width aligned to widest currently required content. */
-    void updateMinimumWindowWidthConstraint();
-
-    /** Expands window width minimally until horizontal overflow is gone. */
-    void ensureNoHorizontalOverflow(int extraPadding);
+    /** Saves chip order, expand state and chip fingerprint right away and reports a failed write. */
+    void persistChipLayout();
 
     /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
     void loadSettings();
@@ -82,25 +79,24 @@ private:
     /** Window height at which the whole content fits without scrolling. */
     [[nodiscard]] int contentWindowHeight() const;
 
-    /** Available height of the window's screen. */
-    [[nodiscard]] int availableScreenHeight() const;
+    /** Window width at which all cards have their maximum width and columns (see CardGridPlan). */
+    [[nodiscard]] int contentWindowWidth() const;
 
-    /** Keeps the window from being dragged taller than its content (see WindowSizing). */
-    void updateHeightLimit();
+    /** Available size of the window's screen. */
+    [[nodiscard]] QSize availableScreenSize() const;
 
-    /** Width available to the sensor panel inside the scroll area. */
-    [[nodiscard]] int viewportWidth() const;
+    /** Keeps the window from being dragged larger than its content needs (see WindowSizing). */
+    void updateSizeLimits();
 
-    SensorsBackend m_backend;
-    QScrollArea *m_scrollArea;
-    QWidget *m_contentContainer;
+    SensorMonitor *m_monitor;
+    QString m_sourceError; // set when the sensor source could not be initialized
+    VerticalScrollArea *m_scrollArea;
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
     StatusLine *m_statusLine;
-    QTimer *m_timer;
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
-    bool m_fitHeightToContent = false; // pending first height fit without saved geometry
+    bool m_fitToContent = false; // pending first size fit without saved geometry
     RuntimeConfig m_runtimeConfig;
     // Palette the style sheets were last resolved against; avoids redundant refreshes.
     QPalette m_styledPalette;

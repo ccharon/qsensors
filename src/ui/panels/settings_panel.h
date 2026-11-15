@@ -3,8 +3,8 @@
 
 #pragma once
 
-#include "collapsible_section.h"
-#include "runtime_config.h"
+#include "ui/widgets/collapsible_section.h"
+#include "config/runtime_config.h"
 
 class QFormLayout;
 class QSpinBox;
@@ -24,9 +24,6 @@ public:
     void setFanDefaultMaxRpm(int rpm);
     /** Applies persisted temperature unit without re-emitting change signals. */
     void setTemperatureUnit(TemperatureUnit unit);
-
-    /** Minimum width required so settings content is fully visible. */
-    [[nodiscard]] int minimumRequiredWidth() const;
 
 signals:
     /** User committed a new polling interval in seconds. */

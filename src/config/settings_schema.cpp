@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "settings_schema.h"
-#include "runtime_config.h"
-#include "settings_keys.h"
+#include "config/settings_schema.h"
+#include "config/runtime_config.h"
+#include "config/settings_keys.h"
 
 #include <QSettings>
 #include <QDebug>
@@ -33,6 +33,12 @@ void SettingsSchema::ensureUpToDate(QSettings &settings) {
         return;
     }
 
+    if (version == kCurrentVersion) {
+        return;
+    }
+
+    // Settings without any key are a first start, not a migration.
+    const bool existing = !settings.allKeys().isEmpty();
     if (version < 1) {
         migrateV0ToV1(settings);
     }
@@ -41,4 +47,8 @@ void SettingsSchema::ensureUpToDate(QSettings &settings) {
     }
 
     settings.setValue(SettingsKeys::kSchemaVersion, kCurrentVersion);
+    if (existing) {
+        qInfo("qsensors: migrated settings in %s from schema v%d to v%d",
+              qPrintable(settings.fileName()), version, kCurrentVersion);
+    }
 }

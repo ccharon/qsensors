@@ -23,6 +23,10 @@
         <translation>Keine Sensoren gefunden. sensors-detect ausführen und die lm-sensors-Konfiguration prüfen.</translation>
     </message>
     <message>
+        <source>Sensors are not responding; the values shown are outdated</source>
+        <translation>Sensoren antworten nicht; die angezeigten Werte sind veraltet</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Messwerte: %1 | Aktualisierung: %2s</translation>
     </message>
@@ -40,6 +44,10 @@
     <message>
         <source>Chip: %1</source>
         <translation>Chip: %1</translation>
+    </message>
+    <message>
+        <source>The sensor cannot be read at the moment</source>
+        <translation>Der Sensor kann im Moment nicht gelesen werden</translation>
     </message>
     <message>
         <source>Min: %1</source>

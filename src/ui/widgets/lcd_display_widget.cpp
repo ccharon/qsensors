@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "lcd_display_widget.h"
-#include "lcd_segment_font.h"
-#include "sensor_format.h"
-#include "sensors_policy.h"
-#include "theme/app_theme.h"
+#include "ui/widgets/lcd_display_widget.h"
+#include "ui/widgets/lcd_segment_font.h"
+#include "sensors/sensor_format.h"
+#include "sensors/sensors_policy.h"
+#include "ui/theme/app_theme.h"
 
 #include <QLinearGradient>
 #include <QPainter>
@@ -27,7 +27,22 @@ LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent
 
 void LcdDisplayWidget::setReading(const SensorReading &reading) {
     m_reading = reading;
-    update();
+    // Compared with what was last drawn, so a repeated reading and a pending repaint both stay correct.
+    if (!m_hasPainted || displayStateFor(reading) != m_painted) {
+        update();
+    }
+}
+
+QRectF LcdDisplayWidget::barArea() const {
+    const qreal barTop = height() - AppTheme::kLcdPaddingY - AppTheme::kLcdBarHeight;
+    return {AppTheme::kLcdPaddingX, barTop, std::max<qreal>(width() - 2 * AppTheme::kLcdPaddingX, 1.0),
+            static_cast<qreal>(AppTheme::kLcdBarHeight)};
+}
+
+LcdDisplayWidget::DisplayState LcdDisplayWidget::displayStateFor(const SensorReading &reading) const {
+    return {SensorFormat::valueDigits(reading.unit, reading.value), sensorUnitSymbol(reading.unit),
+            litBarSegments(reading, static_cast<int>(barGraphSegments(barArea()).size())),
+            SensorsPolicy::isAlertState(reading)};
 }
 
 QSize LcdDisplayWidget::sizeHint() const {
@@ -45,7 +60,10 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
 
     // A shadow is invisible on a dark backplane; dark themes use a glow.
     const bool dark = hasDarkBase();
-    const bool alert = SensorsPolicy::isAlertState(m_reading);
+    const DisplayState state = displayStateFor(m_reading);
+    m_painted = state;
+    m_hasPainted = true;
+    const bool alert = state.alert;
     const QColor lit(dark ? (alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)
                           : (alert ? AppTheme::kLcdAlertRgb : AppTheme::kLcdNormalRgb));
     QColor ghost(dark ? AppTheme::kLcdNormalDarkRgb : AppTheme::kLcdNormalRgb);
@@ -53,19 +71,19 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const QColor shadow(0, 0, 0, AppTheme::kLcdSegmentShadowAlpha);
 
     // Everything scales with the widget; long readings shrink to fit the width.
-    const QString value = SensorFormat::valueDigits(m_reading.unit, m_reading.value);
-    const QString unit = sensorUnitSymbol(m_reading.unit);
+    const QString &value = state.digits;
+    const QString &unit = state.unit;
     // Digits fill the area above the range bar graph that runs along the bottom.
-    const qreal barTop = height() - AppTheme::kLcdPaddingY - AppTheme::kLcdBarHeight;
+    const QRectF bar = barArea();
+    const qreal barTop = bar.top();
     const qreal digitArea = barTop - AppTheme::kLcdBarGap - AppTheme::kLcdPaddingY;
     const qreal maxHeight = std::max<qreal>(digitArea, 1.0);
-    const qreal maxWidth = std::max<qreal>(width() - 2 * AppTheme::kLcdPaddingX, 1.0);
+    const qreal maxWidth = bar.width();
     const qreal digitHeight = LcdSegmentFont::fitHeight(value, unit, maxHeight, maxWidth);
     const auto layout = LcdSegmentFont::layoutText(value, unit, digitHeight);
     const qreal baselineOffset = AppTheme::kLcdPaddingY + maxHeight - digitHeight;
-    const QVector<QPolygonF> barSegments = barGraphSegments(QRectF(AppTheme::kLcdPaddingX, barTop,
-                                                                   maxWidth, AppTheme::kLcdBarHeight));
-    const int barLit = litBarSegments(m_reading, static_cast<int>(barSegments.size()));
+    const QVector<QPolygonF> barSegments = barGraphSegments(bar);
+    const int barLit = state.litSegments;
     // Lit segments float above the backplane and cast a faint offset shadow.
     const qreal shadowOffset = std::max<qreal>(0.7, digitHeight * 0.035);
 
@@ -157,9 +175,11 @@ bool LcdDisplayWidget::hasDarkBase() const {
 
 void LcdDisplayWidget::paintPanel(QPainter &painter) const {
     const auto blend = [](const QColor &a, const QColor &b, const qreal t) {
-        return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * t,
-                                a.greenF() + (b.greenF() - a.greenF()) * t,
-                                a.blueF() + (b.blueF() - a.blueF()) * t);
+        const auto mix = [t](const qreal from, const qreal to) {
+            return static_cast<float>(from + (to - from) * t);
+        };
+        return QColor::fromRgbF(mix(a.redF(), b.redF()), mix(a.greenF(), b.greenF()),
+                                mix(a.blueF(), b.blueF()));
     };
 
     // Backplane: palette base tinted towards the LCD green, so light and dark themes both work.

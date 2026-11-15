@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "sensors_panel.h"
-#include "collapsible_section.h"
-#include "sensor_identity.h"
-#include "sensor_value_widget.h"
-#include "theme/app_theme.h"
+#include "ui/panels/card_grid_plan.h"
+#include "ui/panels/sensors_panel.h"
+#include "ui/widgets/collapsible_section.h"
+#include "sensors/sensor_identity.h"
+#include "ui/widgets/sensor_value_widget.h"
+#include "ui/theme/app_theme.h"
 
 #include <QApplication>
 #include <algorithm>
+#include <QDropEvent>
 #include <QLayout>
+#include <QMimeData>
 #include <QPointer>
 #include <QSignalSpy>
 #include <QToolButton>
@@ -21,8 +24,7 @@ class SensorsPanelTest final : public QObject {
 
 private slots:
     void value_and_unit_updates_keep_widgets();
-    void relayout_with_same_columns_keeps_widgets();
-    void relayout_with_other_columns_rebuilds();
+    void resize_moves_cards_without_rebuild();
     void expand_state_roundtrip_and_apply();
     void structure_signal_on_new_category_not_on_values();
     void restored_state_dropped_for_other_chip_set();
@@ -32,10 +34,16 @@ private slots:
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
     void header_click_still_toggles_when_draggable();
+    void user_toggle_and_drop_are_announced_but_applying_state_is_not();
+    void drag_request_carries_the_pointer_position_in_the_section();
     void columns_go_to_category_with_most_rows();
     void columns_only_added_when_they_save_a_row();
     void card_width_spreads_spare_width_up_to_maximum();
-    void cards_fill_width_without_rebuild();
+    void cards_fill_width_with_one_shared_width();
+    void collapsed_chips_still_count_for_minimum_width();
+    void maximum_width_is_where_all_cards_reach_maximum();
+    void unreadable_sensor_is_a_value_update();
+    void chip_with_only_unreadable_sensors_keeps_its_cards();
 };
 
 namespace {
@@ -67,6 +75,15 @@ namespace {
         return names;
     }
 
+    // Shows the panel at @p width and lets all nested layouts run.
+    void layOut(SensorsPanel &panel, const int width) {
+        panel.resize(width, 900);
+        panel.show();
+        QCoreApplication::sendPostedEvents();
+        panel.layout()->activate();
+        QCoreApplication::sendPostedEvents();
+    }
+
     QToolButton *headerFor(const SensorsPanel &panel, const QString &chip) {
         for (QToolButton *button: panel.findChildren<QToolButton *>())
             if (button->text() == chip)
@@ -77,43 +94,48 @@ namespace {
 
 void SensorsPanelTest::value_and_unit_updates_keep_widgets() {
     SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
     const QList<SensorValueWidget *> before = cards(panel);
     QCOMPARE(before.size(), 3);
 
-    panel.setReadings(sampleReadings(55.0, SensorUnit::Milliampere), 800);
+    panel.setReadings(sampleReadings(55.0, SensorUnit::Milliampere));
     QCOMPARE(cards(panel), before);
 }
 
-void SensorsPanelTest::relayout_with_same_columns_keeps_widgets() {
-    SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 800);
-    const QList<SensorValueWidget *> before = cards(panel);
-
-    panel.relayout(810);
-    QCOMPARE(cards(panel), before);
-}
-
-void SensorsPanelTest::relayout_with_other_columns_rebuilds() {
+void SensorsPanelTest::resize_moves_cards_without_rebuild() {
     // Two sensors in one category so the column count matters.
     QVector<SensorReading> readings = sampleReadings(40.0);
     readings.append({.chip = QStringLiteral("chip-a"), .category = SensorCategory::Temperatures,
                      .feature = QStringLiteral("temp2"), .featureNumber = 2, .subfeatureNumber = 3,
                      .value = 41.0, .unit = SensorUnit::Celsius, .maxValue = 100.0});
     SensorsPanel panel;
-    panel.setReadings(readings, 300);
+    panel.setReadings(readings);
     // QPointer detects deletion reliably; raw addresses may be reused by new widgets.
-    const QPointer<SensorValueWidget> narrowCard = cards(panel).first();
+    QList<QPointer<SensorValueWidget>> before;
+    for (SensorValueWidget *card: cards(panel))
+        before.append(card);
 
-    panel.relayout(1600);
-    QVERIFY(narrowCard.isNull());
+    const auto temperatureColumns = [&panel] {
+        QSet<int> xs;
+        for (SensorValueWidget *card: cards(panel))
+            if (card->toolTip().contains(QStringLiteral("temp")))
+                xs.insert(card->x());
+        return xs.size();
+    };
+    layOut(panel, panel.minimumSizeHint().width());
+    QCOMPARE(temperatureColumns(), 1);
+    layOut(panel, 1600);
+    QCOMPARE(temperatureColumns(), 2);
+
+    for (const QPointer<SensorValueWidget> &card: before)
+        QVERIFY(!card.isNull());
     QCOMPARE(cards(panel).size(), 4);
 }
 
 void SensorsPanelTest::expand_state_roundtrip_and_apply() {
     SensorsPanel panel;
     panel.setChipExpandedState({{QStringLiteral("chip-b"), false}});
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
 
     QHash<QString, bool> state = panel.chipExpandedState();
     QCOMPARE(state.value(QStringLiteral("chip-a")), true);
@@ -136,10 +158,10 @@ void SensorsPanelTest::expand_state_roundtrip_and_apply() {
 void SensorsPanelTest::structure_signal_on_new_category_not_on_values() {
     SensorsPanel panel;
     QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
     QCOMPARE(spy.count(), 1);
 
-    panel.setReadings(sampleReadings(45.0), 800);
+    panel.setReadings(sampleReadings(45.0));
     QCOMPARE(spy.count(), 1);
 
     // Same chip set, but chip-b grows to three categories (more than chip-a's two).
@@ -150,23 +172,23 @@ void SensorsPanelTest::structure_signal_on_new_category_not_on_values() {
     readings.append({.chip = QStringLiteral("chip-b"), .category = SensorCategory::Power,
                      .feature = QStringLiteral("power1"), .featureNumber = 2, .subfeatureNumber = 3,
                      .value = 5.0, .unit = SensorUnit::Watt, .maxValue = 60.0});
-    const int widthBefore = panel.minimumRequiredWidth();
-    panel.setReadings(readings, 800);
+    const int widthBefore = panel.minimumSizeHint().width();
+    panel.setReadings(readings);
     QCOMPARE(spy.count(), 2);
-    QVERIFY(panel.minimumRequiredWidth() > widthBefore);
+    QVERIFY(panel.minimumSizeHint().width() > widthBefore);
 }
 
 void SensorsPanelTest::restored_state_dropped_for_other_chip_set() {
     SensorsPanel panel;
     QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
     panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QStringLiteral("old-chip"));
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
 
     QCOMPARE(spy.count(), 1);
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), true);
 
     // The check runs once; later polls do not reset again.
-    panel.setReadings(sampleReadings(41.0), 800);
+    panel.setReadings(sampleReadings(41.0));
     QCOMPARE(spy.count(), 1);
 }
 
@@ -175,7 +197,7 @@ void SensorsPanelTest::restored_state_kept_for_same_chip_set() {
     SensorsPanel panel;
     QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
     panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, SensorIdentity::chipFingerprint(readings));
-    panel.setReadings(readings, 800);
+    panel.setReadings(readings);
 
     QCOMPARE(spy.count(), 0);
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
@@ -187,21 +209,21 @@ void SensorsPanelTest::fingerprint_and_count_follow_readings() {
     QCOMPARE(panel.readingCount(), 0);
     QVERIFY(panel.chipFingerprint().isEmpty());
 
-    panel.setReadings(readings, 800);
+    panel.setReadings(readings);
     QCOMPARE(panel.readingCount(), 3);
     QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(readings));
 }
 
 void SensorsPanelTest::default_order_is_alphabetical() {
     SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
     QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
     QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
 }
 
 void SensorsPanelTest::move_chip_reorders_cards() {
     SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
 
     panel.moveChip(QStringLiteral("chip-b"), 0);
     QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
@@ -213,7 +235,7 @@ void SensorsPanelTest::move_chip_reorders_cards() {
 
     // The order survives value updates.
     panel.moveChip(QStringLiteral("chip-b"), 0);
-    panel.setReadings(sampleReadings(45.0), 800);
+    panel.setReadings(sampleReadings(45.0));
     QCOMPARE(cardOrder(panel), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
 
     panel.moveChip(QStringLiteral("unknown"), 0);
@@ -226,7 +248,7 @@ void SensorsPanelTest::preferred_order_puts_new_chips_last_and_keeps_absent_ones
                      .featureNumber = 0, .subfeatureNumber = 1, .value = 900.0, .unit = SensorUnit::Rpm});
     SensorsPanel panel;
     panel.setChipOrder({QStringLiteral("gone"), QStringLiteral("chip-b")});
-    panel.setReadings(readings, 800);
+    panel.setReadings(readings);
 
     QCOMPARE(cardOrder(panel),
              (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
@@ -237,7 +259,7 @@ void SensorsPanelTest::preferred_order_puts_new_chips_last_and_keeps_absent_ones
 
 void SensorsPanelTest::header_click_still_toggles_when_draggable() {
     SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 800);
+    panel.setReadings(sampleReadings(40.0));
     QToolButton *header = headerFor(panel, QStringLiteral("chip-a"));
     QCOMPARE(header->cursor().shape(), Qt::OpenHandCursor);
     QVERIFY(header->isChecked());
@@ -247,56 +269,204 @@ void SensorsPanelTest::header_click_still_toggles_when_draggable() {
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
 }
 
+void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_not() {
+    SensorsPanel panel;
+    QSignalSpy expandedSpy(&panel, &SensorsPanel::chipExpandedChanged);
+    QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
+
+    // Restoring before and after the cards exist, and reordering by code, are not user changes.
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QString());
+    panel.setChipOrder({QStringLiteral("chip-b"), QStringLiteral("chip-a")});
+    panel.setReadings(sampleReadings(40.0));
+    panel.setChipExpandedState({{QStringLiteral("chip-a"), true}});
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    panel.setReadings(sampleReadings(41.0));
+    QCOMPARE(expandedSpy.count(), 0);
+    QCOMPARE(orderSpy.count(), 0);
+
+    QTest::mouseClick(headerFor(panel, QStringLiteral("chip-a")), Qt::LeftButton);
+    QCOMPARE(expandedSpy.count(), 1);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+
+    // A drop that moves a chip announces the new order; one that keeps it does not.
+    const QStringList before = cardOrder(panel);
+    const auto drop = [&panel](const QString &chip, const int y) {
+        auto *mime = new QMimeData;
+        mime->setData(QStringLiteral("application/x-qsensors-chip"), chip.toUtf8());
+        // The window routes the events to the widget under the pointer, as for a real drag.
+        QWindow *window = panel.windowHandle();
+        const QPointF pos(10, y);
+        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &enter);
+        QDropEvent event(pos, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &event);
+        delete mime;
+    };
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    drop(before.first(), 0);
+    QCOMPARE(orderSpy.count(), 0);
+    drop(before.first(), panel.height());
+    QCOMPARE(orderSpy.count(), 1);
+    QCOMPARE(cardOrder(panel), (QStringList{before.last(), before.first()}));
+}
+
+void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section() {
+    CollapsibleSection section(QStringLiteral("chip"), true);
+    section.setDraggable(true);
+    section.resize(300, 100);
+    section.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&section));
+    QToolButton *header = section.findChild<QToolButton *>();
+    QSignalSpy spy(&section, &CollapsibleSection::dragRequested);
+
+    const QPoint press(20, header->height() / 2);
+    const QPoint moved = press + QPoint(QApplication::startDragDistance() + 10, 0);
+    QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+    QTest::mouseMove(header, moved);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().first().toPoint(), header->mapTo(&section, moved));
+}
+
 void SensorsPanelTest::columns_go_to_category_with_most_rows() {
-    const int base = SensorsPanel::categoriesWidth({1, 1, 1, 1});
+    const int base = CardGridPlan::categoriesWidth({1, 1, 1, 1});
     const int pitch = AppTheme::kCardMinWidth + AppTheme::kUnifiedHorizontalSpacing;
     const QVector<int> counts{1, 4, 2, 3};
 
-    QCOMPARE(SensorsPanel::columnsForCategories(counts, base), (QVector<int>{1, 1, 1, 1}));
-    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + pitch - 1), (QVector<int>{1, 1, 1, 1}));
-    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + pitch), (QVector<int>{1, 2, 1, 1}));
-    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + 2 * pitch), (QVector<int>{1, 2, 1, 2}));
+    QCOMPARE(CardGridPlan::columnsForCategories(counts, base), (QVector<int>{1, 1, 1, 1}));
+    QCOMPARE(CardGridPlan::columnsForCategories(counts, base + pitch - 1), (QVector<int>{1, 1, 1, 1}));
+    QCOMPARE(CardGridPlan::columnsForCategories(counts, base + pitch), (QVector<int>{1, 2, 1, 1}));
+    QCOMPARE(CardGridPlan::columnsForCategories(counts, base + 2 * pitch), (QVector<int>{1, 2, 1, 2}));
     // Ties go to the first category with the most rows.
-    QCOMPARE(SensorsPanel::columnsForCategories(counts, base + 3 * pitch), (QVector<int>{1, 2, 2, 2}));
-    QCOMPARE(SensorsPanel::categoriesWidth({1, 2, 2, 2}), base + 3 * pitch);
+    QCOMPARE(CardGridPlan::columnsForCategories(counts, base + 3 * pitch), (QVector<int>{1, 2, 2, 2}));
+    QCOMPARE(CardGridPlan::categoriesWidth({1, 2, 2, 2}), base + 3 * pitch);
 }
 
 void SensorsPanelTest::columns_only_added_when_they_save_a_row() {
     // 5 sensors: 3 columns give 2 rows; a 4th column would not save a row.
-    QCOMPARE(SensorsPanel::columnsForCategories({5}, 10000), (QVector<int>{3}));
-    QCOMPARE(SensorsPanel::columnsForCategories({1}, 10000), (QVector<int>{1}));
-    QCOMPARE(SensorsPanel::columnsForCategories({40}, 10000), (QVector<int>{AppTheme::kMaxColumnsPerCategory}));
+    QCOMPARE(CardGridPlan::columnsForCategories({5}, 10000), (QVector<int>{3}));
+    QCOMPARE(CardGridPlan::columnsForCategories({1}, 10000), (QVector<int>{1}));
+    QCOMPARE(CardGridPlan::columnsForCategories({40}, 10000), (QVector<int>{AppTheme::kMaxColumnsPerCategory}));
 }
 
 void SensorsPanelTest::card_width_spreads_spare_width_up_to_maximum() {
     const QVector<int> columns{1, 2};
-    const int base = SensorsPanel::categoriesWidth(columns);
-    QCOMPARE(SensorsPanel::cardWidthFor(columns, base), AppTheme::kCardMinWidth);
-    QCOMPARE(SensorsPanel::cardWidthFor(columns, base - 50), AppTheme::kCardMinWidth);
+    const int base = CardGridPlan::categoriesWidth(columns);
+    QCOMPARE(CardGridPlan::cardWidthFor(columns, base), AppTheme::kCardMinWidth);
+    QCOMPARE(CardGridPlan::cardWidthFor(columns, base - 50), AppTheme::kCardMinWidth);
     // 3 cards share 31 px: each gets 10, the remainder stays unused.
-    QCOMPARE(SensorsPanel::cardWidthFor(columns, base + 31), AppTheme::kCardMinWidth + 10);
-    QCOMPARE(SensorsPanel::cardWidthFor(columns, base + 10000), AppTheme::kCardMaxWidth);
-    QCOMPARE(SensorsPanel::cardWidthFor({}, 1000), AppTheme::kCardMinWidth);
+    QCOMPARE(CardGridPlan::cardWidthFor(columns, base + 31), AppTheme::kCardMinWidth + 10);
+    QCOMPARE(CardGridPlan::cardWidthFor(columns, base + 10000), AppTheme::kCardMaxWidth);
+    QCOMPARE(CardGridPlan::cardWidthFor({}, 1000), AppTheme::kCardMinWidth);
 }
 
-void SensorsPanelTest::cards_fill_width_without_rebuild() {
+void SensorsPanelTest::cards_fill_width_with_one_shared_width() {
     SensorsPanel panel;
-    panel.setReadings(sampleReadings(40.0), 360);
+    panel.setReadings(sampleReadings(40.0));
     const QList<SensorValueWidget *> before = cards(panel);
-    const int chrome = panel.minimumRequiredWidth() - SensorsPanel::categoriesWidth({1, 1});
+    const int chrome = panel.minimumSizeHint().width() - CardGridPlan::categoriesWidth({1, 1});
 
     const int width = 380;
-    panel.relayout(width);
+    layOut(panel, width);
     QCOMPARE(cards(panel), before);
 
     // chip-b alone could use the maximum; chip-a has less spare width and sets the
     // shared width for all cards.
-    const int chipAWidth = SensorsPanel::cardWidthFor({1, 1}, width - chrome);
-    QCOMPARE(SensorsPanel::cardWidthFor({1}, width - chrome), AppTheme::kCardMaxWidth);
+    const int chipAWidth = CardGridPlan::cardWidthFor({1, 1}, width - chrome);
+    QCOMPARE(CardGridPlan::cardWidthFor({1}, width - chrome), AppTheme::kCardMaxWidth);
     QVERIFY(chipAWidth > AppTheme::kCardMinWidth && chipAWidth < AppTheme::kCardMaxWidth);
     for (SensorValueWidget *card: cards(panel)) {
         QCOMPARE(card->width(), chipAWidth);
     }
+}
+
+void SensorsPanelTest::collapsed_chips_still_count_for_minimum_width() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0));
+    const int expanded = panel.minimumSizeHint().width();
+    // chip-a has two categories and sets the minimum; collapsing it must not narrow the window.
+    headerFor(panel, QStringLiteral("chip-a"))->toggle();
+    QCOMPARE(panel.minimumSizeHint().width(), expanded);
+}
+
+void SensorsPanelTest::maximum_width_is_where_all_cards_reach_maximum() {
+    CardGridPlan plan;
+    QCOMPARE(plan.maximumWidth(), 0);
+    // chip-a ends with {3, 1} columns (a 4th column would not save a row), chip-b with {3}.
+    plan.setChips({{QStringLiteral("chip-a"), {5, 1}}, {QStringLiteral("chip-b"), {3}}});
+    const int width = plan.maximumWidth();
+    QCOMPARE(width, CardGridPlan::categoriesWidth({3, 1}, AppTheme::kCardMaxWidth));
+
+    QCOMPARE(plan.columns(QStringLiteral("chip-a"), width), (QVector<int>{3, 1}));
+    QCOMPARE(plan.columns(QStringLiteral("chip-a"), 2 * width), (QVector<int>{3, 1}));
+    QCOMPARE(plan.cardWidth(width), AppTheme::kCardMaxWidth);
+    QVERIFY(plan.cardWidth(width - 1) < AppTheme::kCardMaxWidth);
+}
+
+void SensorsPanelTest::unreadable_sensor_is_a_value_update() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(spy.count(), 1);
+    layOut(panel, 900);
+    QList<QPointer<SensorValueWidget>> before;
+    for (SensorValueWidget *card: cards(panel))
+        before.append(card);
+    const QString fingerprint = panel.chipFingerprint();
+    const QSize minimum = panel.minimumSizeHint();
+    const auto tempCard = [&panel] {
+        for (SensorValueWidget *card: cards(panel))
+            if (card->toolTip().contains(QStringLiteral("temp1")))
+                return card;
+        return static_cast<SensorValueWidget *>(nullptr);
+    };
+    SensorValueWidget *temp = tempCard();
+    QVERIFY(temp);
+    const QRect geometry = temp->geometry();
+
+    QVector<SensorReading> unreadable = sampleReadings(40.0);
+    unreadable[0].value.reset();
+    panel.setReadings(unreadable);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(panel.chipFingerprint(), fingerprint);
+    QCOMPARE(panel.readingCount(), 3);
+    QCOMPARE(panel.minimumSizeHint(), minimum);
+    QCOMPARE(tempCard(), temp);
+    QVERIFY(temp->toolTip().contains(QStringLiteral("cannot be read")));
+    layOut(panel, 900);
+    QCOMPARE(temp->geometry(), geometry);
+
+    panel.setReadings(sampleReadings(42.0));
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(!temp->toolTip().contains(QStringLiteral("cannot be read")));
+    for (const QPointer<SensorValueWidget> &card: before)
+        QVERIFY(!card.isNull());
+    QCOMPARE(cards(panel).size(), 3);
+}
+
+void SensorsPanelTest::chip_with_only_unreadable_sensors_keeps_its_cards() {
+    // chip-b's only sensor cannot be read from the first poll on.
+    QVector<SensorReading> readings = sampleReadings(40.0);
+    readings[2].value.reset();
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::structureChanged);
+    panel.setReadings(readings);
+    QCOMPARE(spy.count(), 1);
+    QVERIFY(headerFor(panel, QStringLiteral("chip-b")));
+    QCOMPARE(cards(panel).size(), 3);
+    QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(sampleReadings(40.0)));
+
+    QList<QPointer<SensorValueWidget>> before;
+    for (SensorValueWidget *card: cards(panel))
+        before.append(card);
+    panel.setReadings(sampleReadings(41.0));
+    readings[0].value.reset();
+    readings[1].value.reset();
+    panel.setReadings(readings);
+    QCOMPARE(spy.count(), 1);
+    for (const QPointer<SensorValueWidget> &card: before)
+        QVERIFY(!card.isNull());
+    QCOMPARE(cards(panel).size(), 3);
 }
 
 QTEST_MAIN(SensorsPanelTest)

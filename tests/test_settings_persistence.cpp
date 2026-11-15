@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "app_config_store.h"
-#include "main_window_state_store.h"
-#include "settings_schema.h"
+#include "config/app_config_store.h"
+#include "ui/main_window_state_store.h"
+#include "config/settings_schema.h"
 
 #include <QtTest/QtTest>
 #include <QCoreApplication>
@@ -24,7 +24,10 @@ private slots:
     void runtime_config_temperatureUnit_invalid_fallbacks_to_celsius();
     void main_window_state_roundtrip();
     void main_window_state_chip_name_with_slash_roundtrip();
-    void schema_version_is_written();
+    void save_layout_keeps_stored_geometry();
+    void stores_do_not_write_schema_version();
+    void new_settings_get_current_schema_version();
+    void v1_settings_are_migrated_and_logged();
     void runtime_config_non_numeric_values_use_defaults();
     void runtime_config_out_of_range_values_are_clamped();
     void newer_schema_version_is_not_downgraded();
@@ -112,13 +115,47 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
     QCOMPARE(loaded.chipExpanded.size(), 3);
 }
 
-void SettingsPersistenceTest::schema_version_is_written() {
-    // Trigger both stores to ensure schema plumbing is exercised regardless of call-site order.
+void SettingsPersistenceTest::save_layout_keeps_stored_geometry() {
+    QVERIFY(MainWindowStateStore::save({.geometry = QByteArray("fake-geometry"), .chipExpanded = {}, .chipOrder = {}, .sensorFingerprint = {}}));
+
+    const QStringList order{QStringLiteral("chip-b"), QStringLiteral("chip-a")};
+    QVERIFY(MainWindowStateStore::saveLayout({.geometry = QByteArray("ignored"),
+                                              .chipExpanded = {{QStringLiteral("chip-a"), false}},
+                                              .chipOrder = order,
+                                              .sensorFingerprint = QStringLiteral("fp")}));
+    const MainWindowState loaded = MainWindowStateStore::load();
+    QCOMPARE(loaded.geometry, QByteArray("fake-geometry"));
+    QCOMPARE(loaded.chipOrder, order);
+    QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a"), true), false);
+    QCOMPARE(loaded.sensorFingerprint, QStringLiteral("fp"));
+}
+
+void SettingsPersistenceTest::stores_do_not_write_schema_version() {
+    // Migration happens once at startup; reading settings must not write anything.
     (void) AppConfigStore::loadRuntimeConfig();
     (void) MainWindowStateStore::load();
 
     QSettings s;
-    QCOMPARE(s.value(QStringLiteral("meta/schema_version")).toInt(), 2);
+    QVERIFY(s.allKeys().isEmpty());
+}
+
+void SettingsPersistenceTest::new_settings_get_current_schema_version() {
+    QSettings s;
+    SettingsSchema::ensureUpToDate(s);
+    QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
+}
+
+void SettingsPersistenceTest::v1_settings_are_migrated_and_logged() {
+    QSettings s;
+    s.setValue(QStringLiteral("meta/schema_version"), 1);
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), 3);
+
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v1 to v2")));
+    SettingsSchema::ensureUpToDate(s);
+
+    QCOMPARE(SettingsSchema::storedVersion(s), 2);
+    QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
+    QCOMPARE(s.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 3);
 }
 
 void SettingsPersistenceTest::runtime_config_non_numeric_values_use_defaults() {
@@ -148,6 +185,7 @@ void SettingsPersistenceTest::newer_schema_version_is_not_downgraded() {
     s.setValue(QStringLiteral("meta/schema_version"), SettingsSchema::kCurrentVersion + 1);
     s.sync();
 
+    SettingsSchema::ensureUpToDate(s);
     (void) AppConfigStore::loadRuntimeConfig();
     QVERIFY(AppConfigStore::saveRuntimeConfig(RuntimeConfig{}));
 

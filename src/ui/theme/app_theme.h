@@ -29,9 +29,6 @@ namespace AppTheme {
     inline constexpr int kChipCardFrameWidthTotal = 2; // 1px left + 1px right
     inline constexpr int kSensorsPanelVerticalSpacing = 10;
     inline constexpr int kCategoryBlockSpacing = 3;
-    // Extra width when fitting the window to its content on first show.
-    inline constexpr int kInitialWidthFitPadding = 24;
-    inline constexpr int kRestoredWidthFitPadding = 8;
     inline constexpr int kMaxColumnsPerCategory = 6;
     inline constexpr int kSectionInset = 8;
     inline constexpr int kNarrowGap = 2;

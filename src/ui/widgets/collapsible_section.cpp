@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
-#include "collapsible_section.h"
-#include "theme/app_theme.h"
+#include "ui/widgets/collapsible_section.h"
+#include "ui/theme/app_theme.h"
 
 #include <QApplication>
 #include <QMouseEvent>
@@ -92,7 +92,7 @@ bool CollapsibleSection::eventFilter(QObject *watched, QEvent *event) {
             // The drag's event loop swallows the release, so the header must not stay pressed.
             m_header->setDown(false);
             m_swallowRelease = true;
-            emit dragRequested();
+            emit dragRequested(m_header->mapTo(this, mouse->position().toPoint()));
             return true;
         }
     }
