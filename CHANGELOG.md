@@ -36,6 +36,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the firmware.
 - When libsensors cannot be initialized, the error stays in the status bar;
   changing a setting used to replace it with "No sensors found".
+- A sensor read that hangs (e.g. a blocked I2C bus) is shown in the status
+  bar: after three polling intervals, at least 10 s, it says that the sensors
+  are not responding and the values are outdated. The normal status returns
+  as soon as a read completes. Previously the old values stayed on screen as
+  if they were current.
+- Closing the window no longer hangs when a sensor read does not return. qsensors
+  waits up to 3 s for the read, logs a warning and exits.
+- The libsensors initialization error in the status bar includes the reason
+  from libsensors, not only the error number.
 
 ## [0.80.10] - 2026-09-27
 

@@ -58,7 +58,7 @@ private:
     /** Sets the permanent status bar text. */
     void setStatusMessage(const QString &text);
 
-    /** Permanent status: the source error, the reading count and refresh interval, or a hint when no sensors exist. */
+    /** Permanent status: the source error, a stalled read, the reading count and refresh interval, or a hint when no sensors exist. */
     void updateReadingsStatus();
 
     /** Shows @p text for a while instead of the permanent status. */

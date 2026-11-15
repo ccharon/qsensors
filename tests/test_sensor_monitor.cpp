@@ -3,11 +3,15 @@
 
 #include "sensors/sensor_monitor.h"
 
+#include <QElapsedTimer>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QSignalSpy>
 #include <QThread>
+#include <QWaitCondition>
 #include <QtTest/QtTest>
+
+#include <chrono>
 
 // Verifies that SensorMonitor keeps the source in a worker thread and emits display readings.
 class SensorMonitorTest final : public QObject {
@@ -19,7 +23,13 @@ private slots:
     void timer_polls_in_worker_thread();
     void display_setting_change_reprocesses_without_reading();
     void source_is_destroyed_in_its_own_thread();
+    void stall_timeout_scales_with_interval();
+    void stalled_read_is_reported_and_recovery_too();
+    void normal_read_is_not_reported_as_stalled();
+    void shutdown_with_blocked_read_returns_within_limit();
 };
+
+using namespace std::chrono_literals;
 
 namespace {
     /** What the fake source saw, shared with the test across threads. */
@@ -28,11 +38,41 @@ namespace {
         QThread *createdIn = nullptr;
         QThread *destroyedIn = nullptr;
         QList<QThread *> readIn;
+        QWaitCondition opened;
+        bool closed = false; // reads block while closed
+        int blockedReads = 0;
 
         int reads() {
             QMutexLocker lock(&mutex);
             return static_cast<int>(readIn.size());
         }
+
+        int blocked() {
+            QMutexLocker lock(&mutex);
+            return blockedReads;
+        }
+
+        QThread *destroyed() {
+            QMutexLocker lock(&mutex);
+            return destroyedIn;
+        }
+
+        void close() {
+            QMutexLocker lock(&mutex);
+            closed = true;
+        }
+
+        void open() {
+            QMutexLocker lock(&mutex);
+            closed = false;
+            opened.wakeAll();
+        }
+    };
+
+    /** Opens the log's gate when leaving the scope, so no worker stays blocked after a failed check. */
+    struct GateGuard {
+        std::shared_ptr<SourceLog> log;
+        ~GateGuard() { log->open(); }
     };
 
     class FakeSource final : public SensorSource {
@@ -53,6 +93,10 @@ namespace {
         [[nodiscard]] QVector<SensorReading> readAll() override {
             QMutexLocker lock(&m_log->mutex);
             m_log->readIn.append(QThread::currentThread());
+            ++m_log->blockedReads;
+            while (m_log->closed)
+                m_log->opened.wait(&m_log->mutex);
+            --m_log->blockedReads;
             const double value = 40.0 + static_cast<double>(m_log->readIn.size());
             return {{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
                      .feature = QStringLiteral("temp1"), .featureNumber = 0, .subfeatureNumber = 1,
@@ -144,6 +188,90 @@ void SensorMonitorTest::source_is_destroyed_in_its_own_thread() {
     }
     QVERIFY(log->createdIn != nullptr);
     QCOMPARE(log->destroyedIn, log->createdIn);
+}
+
+void SensorMonitorTest::stall_timeout_scales_with_interval() {
+    QCOMPARE(SensorMonitor::stallTimeoutFor(RuntimeConfigLimits::kMinPollingIntervalSec), SensorMonitor::kMinStallTimeout);
+    QCOMPARE(SensorMonitor::stallTimeoutFor(RuntimeConfigLimits::kMaxPollingIntervalSec),
+             std::chrono::milliseconds(std::chrono::seconds(RuntimeConfigLimits::kMaxPollingIntervalSec))
+                 * SensorMonitor::kStallIntervalFactor);
+    // No interval lets a read stall before it had a few intervals' time.
+    for (int sec = RuntimeConfigLimits::kMinPollingIntervalSec; sec <= RuntimeConfigLimits::kMaxPollingIntervalSec; ++sec)
+        QVERIFY(SensorMonitor::stallTimeoutFor(sec) >= std::chrono::seconds(sec) * 2);
+}
+
+void SensorMonitorTest::stalled_read_is_reported_and_recovery_too() {
+    const auto log = std::make_shared<SourceLog>();
+    SensorMonitor monitor(factory(log));
+    const GateGuard guard{log};
+    monitor.setStallTimeout(100ms);
+    QSignalSpy readings(&monitor, &SensorMonitor::readingsChanged);
+    QSignalSpy stalled(&monitor, &SensorMonitor::stalledChanged);
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(monitor.start(config));
+    QVERIFY(!monitor.isStalled());
+
+    log->close();
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("has not returned for 100 ms")));
+    QVERIFY(stalled.wait(3000));
+    QCOMPARE(stalled.count(), 1);
+    QCOMPARE(stalled.at(0).at(0).toBool(), true);
+    QVERIFY(monitor.isStalled());
+    QCOMPARE(readings.count(), 1);
+
+    // Further timer ticks while stalled request no further reads.
+    QTest::qWait(1200);
+    QCOMPARE(log->reads(), 2);
+
+    log->open();
+    QVERIFY(stalled.wait(3000));
+    QCOMPARE(stalled.count(), 2);
+    QCOMPARE(stalled.at(1).at(0).toBool(), false);
+    QVERIFY(!monitor.isStalled());
+    QCOMPARE(readings.count(), 2);
+    QCOMPARE(readingsAt(readings, 1).at(0).value, 42.0);
+}
+
+void SensorMonitorTest::normal_read_is_not_reported_as_stalled() {
+    const auto log = std::make_shared<SourceLog>();
+    SensorMonitor monitor(factory(log));
+    monitor.setStallTimeout(300ms);
+    QSignalSpy readings(&monitor, &SensorMonitor::readingsChanged);
+    QSignalSpy stalled(&monitor, &SensorMonitor::stalledChanged);
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(monitor.start(config));
+
+    QVERIFY(readings.wait(3000));
+    // Past the stall timeout of the poll that just returned, before the next poll.
+    QTest::qWait(500);
+    QCOMPARE(stalled.count(), 0);
+    QVERIFY(!monitor.isStalled());
+}
+
+void SensorMonitorTest::shutdown_with_blocked_read_returns_within_limit() {
+    const auto log = std::make_shared<SourceLog>();
+    const GateGuard guard{log};
+    auto monitor = std::make_unique<SensorMonitor>(factory(log));
+    monitor->setShutdownTimeout(200ms);
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(monitor->start(config));
+
+    log->close();
+    QTRY_COMPARE_WITH_TIMEOUT(log->blocked(), 1, 3000);
+    QElapsedTimer elapsed;
+    elapsed.start();
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("did not return within 200 ms")));
+    monitor.reset();
+    QVERIFY2(elapsed.elapsed() < 1500, qPrintable(QString::number(elapsed.elapsed())));
+    QCOMPARE(log->destroyed(), nullptr);
+
+    // Once the read returns, the abandoned worker still destroys the source in its own thread.
+    log->open();
+    QTRY_VERIFY_WITH_TIMEOUT(log->destroyed() != nullptr, 3000);
+    QCOMPARE(log->destroyed(), log->createdIn);
 }
 
 QTEST_GUILESS_MAIN(SensorMonitorTest)

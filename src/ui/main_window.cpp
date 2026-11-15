@@ -56,6 +56,7 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
     });
 
     connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
+    connect(m_monitor, &SensorMonitor::stalledChanged, this, &MainWindow::updateReadingsStatus);
     // Reads once before returning, so the first readings are shown before the window.
     if (!m_monitor->start(m_runtimeConfig)) {
         m_sourceError = m_monitor->lastError();
@@ -72,6 +73,11 @@ void MainWindow::updateReadingsStatus() {
     // Without a source there are no readings; the reason matters more than the count.
     if (!m_sourceError.isEmpty()) {
         setStatusMessage(tr("libsensors init failed: %1").arg(m_sourceError));
+        return;
+    }
+    // The panel still shows the last readings; the count would suggest they are current.
+    if (m_monitor->isStalled()) {
+        setStatusMessage(tr("Sensors are not responding; the values shown are outdated"));
         return;
     }
     const int count = m_sensorsPanel->readingCount();

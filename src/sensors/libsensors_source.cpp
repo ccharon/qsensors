@@ -3,6 +3,7 @@
 
 #include "sensors/libsensors_source.h"
 
+#include <sensors/error.h>
 #include <sensors/sensors.h>
 
 #include <QDebug>
@@ -235,7 +236,7 @@ LibsensorsSource::LibsensorsSource() : m_initialized(false) {
     // compute expressions affect values, so it must only be writable by root.
     const int rc = sensors_init(nullptr);
     if (rc != 0) {
-        m_lastError = QStringLiteral("sensors_init failed (%1)").arg(rc);
+        m_lastError = QStringLiteral("sensors_init failed: %1 (%2)").arg(QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
         g_backendActive = false;
         return;
     }

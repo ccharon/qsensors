@@ -34,7 +34,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `sensor_source.h`: interface for hardware access; a source reports raw values only (°C, V, RPM, A, W and firmware limits).
 - `libsensors_source.{h,cpp}`: the libsensors `SensorSource`: init/cleanup lifecycle, chip enumeration, reading native limits.
 - `reading_pipeline.{h,cpp}`: turns raw readings into display readings (mA/mW scaling with its per-sensor state, default ranges, temperature unit). A setting change re-processes the last raw readings without reading the hardware.
-- `sensor_monitor.{h,cpp}`: polls the source in a worker thread (source created, read and destroyed there only); the first read at startup is blocking so the window is sized to its content before it is shown; skips a poll while the previous one is still running.
+- `sensor_monitor.{h,cpp}`: polls the source in a worker thread (source created, read and destroyed there only); the first read at startup is blocking so the window is sized to its content before it is shown; skips a poll while the previous one is still running; reports a read outstanding for longer than `stallTimeoutFor()` (3 intervals, at least 10 s) via `stalledChanged()`, which `main_window` shows in the status; the destructor waits at most 3 s for the worker and otherwise leaks the thread, so source and poller still die in the worker if the read ever returns.
 - `sensors_policy.h`: rules applied to readings: mA/mW scaling, default bar graph ranges when firmware has no limits, alert state (firmware limits only, plus 100 °C for temperatures without a firmware maximum) and range fraction. `SensorReading` keeps the firmware limits (`firmwareMin/Max`, alert and tooltip) apart from the bar graph range (`minValue/maxValue`).
 - `sensor_format.{h,cpp}`: value formatting shared by the LCD and tooltips.
 - `sensor_identity.h`: widget keys and the chip fingerprint.
@@ -56,7 +56,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
-**`tests/`**: 13 unit test files covering the main window sizing (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 13 unit test files covering the main window sizing and status (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, stall reporting and bounded shutdown, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 

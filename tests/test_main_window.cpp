@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
+#include "config/app_config_store.h"
 #include "ui/main_window.h"
 #include "ui/theme/app_theme.h"
 #include "ui/widgets/collapsible_section.h"
 #include "ui/widgets/sensor_value_widget.h"
 #include "ui/widgets/status_line.h"
 
+#include <QMutex>
+#include <QMutexLocker>
 #include <QPointer>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -14,8 +17,10 @@
 #include <QSpinBox>
 #include <QTemporaryDir>
 #include <QToolButton>
+#include <QWaitCondition>
 #include <QtTest/QtTest>
 
+#include <chrono>
 #include <memory>
 
 // Verifies the window sizing with a fake sensor source: widths, card sizes and the height limit.
@@ -30,18 +35,53 @@ private slots:
     void height_limited_to_content_but_never_forced_smaller();
     void width_limited_to_full_layout();
     void source_error_stays_in_status_after_setting_change();
+    void stalled_read_shown_in_status_until_reads_resume();
 
 private:
     QTemporaryDir m_dir;
 };
 
 namespace {
+    /** Lets a test hold reads of the fake source until it opens the gate again. */
+    struct ReadGate {
+        QMutex mutex;
+        QWaitCondition opened;
+        bool closed = false;
+
+        void close() {
+            QMutexLocker lock(&mutex);
+            closed = true;
+        }
+
+        void open() {
+            QMutexLocker lock(&mutex);
+            closed = false;
+            opened.wakeAll();
+        }
+
+        void pass() {
+            QMutexLocker lock(&mutex);
+            while (closed)
+                opened.wait(&mutex);
+        }
+    };
+
+    /** Opens the gate when leaving the scope, so no worker stays blocked after a failed check. */
+    struct GateGuard {
+        std::shared_ptr<ReadGate> gate;
+        ~GateGuard() { gate->open(); }
+    };
+
     class FakeSource final : public SensorSource {
     public:
+        explicit FakeSource(std::shared_ptr<ReadGate> gate = {}) : m_gate(std::move(gate)) {}
+
         [[nodiscard]] bool isInitialized() const override { return true; }
         [[nodiscard]] QString lastError() const override { return {}; }
 
         [[nodiscard]] QVector<SensorReading> readAll() override {
+            if (m_gate)
+                m_gate->pass();
             QVector<SensorReading> readings;
             const auto add = [&readings](const QString &chip, const SensorCategory category, const int number,
                                          const SensorUnit unit, const double value) {
@@ -55,6 +95,9 @@ namespace {
                 add(QStringLiteral("chip-b"), SensorCategory::Voltages, i, SensorUnit::Volt, 1.0 + i);
             return readings;
         }
+
+    private:
+        std::shared_ptr<ReadGate> m_gate;
     };
 
     class BrokenSource final : public SensorSource {
@@ -220,6 +263,26 @@ void MainWindowTest::source_error_stays_in_status_after_setting_change() {
     for (QSpinBox *spin: window.findChildren<QSpinBox *>())
         spin->setValue(spin->value() == spin->maximum() ? spin->minimum() : spin->maximum());
     QVERIFY2(status->text().contains(QStringLiteral("sensors_init failed (4)")), qPrintable(status->text()));
+}
+
+void MainWindowTest::stalled_read_shown_in_status_until_reads_resume() {
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(AppConfigStore::saveRuntimeConfig(config));
+    const auto gate = std::make_shared<ReadGate>();
+    MainWindow window([gate] { return std::make_unique<FakeSource>(gate); });
+    // Declared after the window, so the gate opens before the window waits for the worker.
+    const GateGuard guard{gate};
+    window.findChild<SensorMonitor *>()->setStallTimeout(std::chrono::milliseconds(100));
+    const StatusLine *status = window.findChild<StatusLine *>();
+    QVERIFY2(status->text().startsWith(QStringLiteral("Readings: 8")), qPrintable(status->text()));
+
+    gate->close();
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("not responding")), 3000);
+    QVERIFY2(!status->text().contains(QStringLiteral("Readings")), qPrintable(status->text()));
+
+    gate->open();
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Readings: 8")), 3000);
 }
 
 QTEST_MAIN(MainWindowTest)

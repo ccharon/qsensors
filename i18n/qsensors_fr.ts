@@ -23,6 +23,10 @@
         <translation>Aucun capteur trouvé. Exécutez sensors-detect et vérifiez la configuration de lm-sensors.</translation>
     </message>
     <message>
+        <source>Sensors are not responding; the values shown are outdated</source>
+        <translation>Les capteurs ne répondent pas ; les valeurs affichées sont obsolètes</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Mesures : %1 | Actualisation : %2s</translation>
     </message>

@@ -23,6 +23,10 @@
         <translation>No se encontraron sensores. Ejecute sensors-detect y revise la configuración de lm-sensors.</translation>
     </message>
     <message>
+        <source>Sensors are not responding; the values shown are outdated</source>
+        <translation>Los sensores no responden; los valores mostrados están desactualizados</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Lecturas: %1 | Actualización: %2s</translation>
     </message>
