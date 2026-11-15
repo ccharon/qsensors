@@ -92,7 +92,7 @@ bool CollapsibleSection::eventFilter(QObject *watched, QEvent *event) {
             // The drag's event loop swallows the release, so the header must not stay pressed.
             m_header->setDown(false);
             m_swallowRelease = true;
-            emit dragRequested();
+            emit dragRequested(m_header->mapTo(this, mouse->position().toPoint()));
             return true;
         }
     }

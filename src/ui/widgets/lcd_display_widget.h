@@ -6,6 +6,8 @@
 #include "sensors/sensor_reading.h"
 
 #include <QPolygonF>
+#include <QRectF>
+#include <QString>
 #include <QVector>
 #include <QWidget>
 
@@ -19,7 +21,7 @@ public:
     /** Creates the display showing @p reading. */
     explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Shows @p reading and schedules a repaint. */
+    /** Shows @p reading; schedules a repaint only if the drawn digits, unit, lit bar segments or alert state change. */
     void setReading(const SensorReading &reading);
 
     /** Card width with digits, bar graph and padding at their default height. */
@@ -35,6 +37,21 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
+    /** Everything the display draws that depends on the reading; equal states paint identically. */
+    struct DisplayState {
+        QString digits;
+        QString unit;
+        int litSegments = 0;
+        bool alert = false;
+        bool operator==(const DisplayState &) const = default;
+    };
+
+    /** Bar graph area for the current widget size. */
+    [[nodiscard]] QRectF barArea() const;
+
+    /** State of @p reading at the current widget width. */
+    [[nodiscard]] DisplayState displayStateFor(const SensorReading &reading) const;
+
     /** Recessed, slightly tinted LCD backplane behind the segments. */
     void paintPanel(QPainter &painter) const;
 
@@ -42,4 +59,6 @@ private:
     [[nodiscard]] bool hasDarkBase() const;
 
     SensorReading m_reading;
+    DisplayState m_painted; // state of the last paint; compared by setReading()
+    bool m_hasPainted = false;
 };

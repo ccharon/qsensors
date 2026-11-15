@@ -8,6 +8,13 @@
 #include "ui/widgets/sensor_value_widget.h"
 #include "ui/widgets/status_line.h"
 
+#include "config/settings_keys.h"
+#include "ui/main_window_state_store.h"
+
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
@@ -15,6 +22,7 @@
 #include <QScrollBar>
 #include <QSettings>
 #include <QSpinBox>
+#include <QStatusBar>
 #include <QTemporaryDir>
 #include <QToolButton>
 #include <QWaitCondition>
@@ -36,6 +44,9 @@ private slots:
     void width_limited_to_full_layout();
     void source_error_stays_in_status_after_setting_change();
     void stalled_read_shown_in_status_until_reads_resume();
+    void long_status_text_does_not_change_window_width_limits();
+    void expand_state_is_saved_when_the_user_changes_it_not_on_startup();
+    void failed_layout_write_is_reported();
 
 private:
     QTemporaryDir m_dir;
@@ -102,9 +113,14 @@ namespace {
 
     class BrokenSource final : public SensorSource {
     public:
+        explicit BrokenSource(QString error = QStringLiteral("sensors_init failed (4)")) : m_error(std::move(error)) {}
+
         [[nodiscard]] bool isInitialized() const override { return false; }
-        [[nodiscard]] QString lastError() const override { return QStringLiteral("sensors_init failed (4)"); }
+        [[nodiscard]] QString lastError() const override { return m_error; }
         [[nodiscard]] QVector<SensorReading> readAll() override { return {}; }
+
+    private:
+        QString m_error;
     };
 
     std::unique_ptr<MainWindow> showWindow() {
@@ -283,6 +299,72 @@ void MainWindowTest::stalled_read_shown_in_status_until_reads_resume() {
 
     gate->open();
     QTRY_VERIFY_WITH_TIMEOUT(status->text().startsWith(QStringLiteral("Readings: 8")), 3000);
+}
+
+void MainWindowTest::long_status_text_does_not_change_window_width_limits() {
+    // QMainWindow does not take the status bar's minimum size hint into account.
+    const auto shortError = [] { return std::make_unique<BrokenSource>(QStringLiteral("x")); };
+    const auto longError = [] {
+        return std::make_unique<BrokenSource>(QStringLiteral("this error text is much longer than a narrow window ").repeated(6));
+    };
+    MainWindow shortWindow(shortError);
+    MainWindow longWindow(longError);
+    shortWindow.show();
+    longWindow.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&shortWindow));
+    QVERIFY(QTest::qWaitForWindowExposed(&longWindow));
+    QTest::qWait(50);
+
+    QCOMPARE(longWindow.minimumSizeHint().width(), shortWindow.minimumSizeHint().width());
+    QCOMPARE(longWindow.minimumWidth(), shortWindow.minimumWidth());
+    resizeWindow(longWindow, 50, 400);
+    QCOMPARE(longWindow.width(), shortWindow.minimumSizeHint().width());
+    // Guard: the status bar itself asks for far more width than the window; the window must ignore it.
+    QVERIFY(longWindow.findChild<QStatusBar *>()->minimumSizeHint().width() > longWindow.width());
+}
+
+void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_startup() {
+    {
+        const auto window = showWindow();
+        // Starting, restoring and polling write no layout state.
+        QVERIFY(!QSettings().contains(SettingsKeys::kSensorFingerprint));
+        QVERIFY(!QSettings().contains(SettingsKeys::kChipOrder));
+
+        section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+        // Written without closing the window, and without the window geometry.
+        const MainWindowState state = MainWindowStateStore::load();
+        QCOMPARE(state.chipExpanded.value(QStringLiteral("chip-a"), true), false);
+        QCOMPARE(state.chipOrder, (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
+        QVERIFY(!state.sensorFingerprint.isEmpty());
+        QVERIFY(state.geometry.isEmpty());
+        window->close();
+    }
+    QVERIFY(!MainWindowStateStore::load().geometry.isEmpty());
+
+    // The saved state is restored without being written again.
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_dir.path());
+    const QString file = QSettings().fileName();
+    const QDateTime before = QFileInfo(file).lastModified();
+    QTest::qWait(1100);
+    const auto window = showWindow();
+    QVERIFY(!section(*window, QStringLiteral("chip-a"))->isExpanded());
+    QCOMPARE(QFileInfo(file).lastModified(), before);
+}
+
+void MainWindowTest::failed_layout_write_is_reported() {
+    const auto window = showWindow();
+    const StatusLine *status = window->findChild<StatusLine *>();
+    QVERIFY(!status->isShowingNotice());
+
+    QFile file(QSettings().fileName());
+    QVERIFY(file.exists() || QSettings().status() == QSettings::NoError);
+    // A directory in place of the settings file cannot be written.
+    QSettings().sync();
+    QVERIFY(QFile::remove(file.fileName()));
+    QVERIFY(QDir().mkdir(file.fileName()));
+    section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+    QVERIFY(status->isShowingNotice());
+    QVERIFY(QDir().rmdir(file.fileName()));
 }
 
 QTEST_MAIN(MainWindowTest)

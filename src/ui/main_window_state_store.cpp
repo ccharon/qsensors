@@ -38,21 +38,37 @@ MainWindowState MainWindowStateStore::load() {
     return state;
 }
 
+namespace {
+    void writeLayout(QSettings &settings, const MainWindowState &state) {
+        settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
+        settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);
+        settings.beginGroup(SettingsKeys::kChipExpandedGroup);
+        settings.remove(QString());
+        for (auto it = state.chipExpanded.constBegin(); it != state.chipExpanded.constEnd(); ++it) {
+            settings.setValue(encodeChipKey(it.key()), it.value());
+        }
+        settings.endGroup();
+    }
+
+    bool commit(QSettings &settings) {
+        settings.sync();
+        if (settings.status() != QSettings::NoError) {
+            qWarning("qsensors: could not write window state to %s", qPrintable(settings.fileName()));
+            return false;
+        }
+        return true;
+    }
+}
+
 bool MainWindowStateStore::save(const MainWindowState &state) {
     QSettings settings;
     settings.setValue(SettingsKeys::kWindowGeometry, state.geometry);
-    settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
-    settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);
-    settings.beginGroup(SettingsKeys::kChipExpandedGroup);
-    settings.remove(QString());
-    for (auto it = state.chipExpanded.constBegin(); it != state.chipExpanded.constEnd(); ++it) {
-        settings.setValue(encodeChipKey(it.key()), it.value());
-    }
-    settings.endGroup();
-    settings.sync();
-    if (settings.status() != QSettings::NoError) {
-        qWarning("qsensors: could not write window state to %s", qPrintable(settings.fileName()));
-        return false;
-    }
-    return true;
+    writeLayout(settings, state);
+    return commit(settings);
+}
+
+bool MainWindowStateStore::saveLayout(const MainWindowState &state) {
+    QSettings settings;
+    writeLayout(settings, state);
+    return commit(settings);
 }

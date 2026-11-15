@@ -23,6 +23,9 @@ namespace MainWindowStateStore {
     /** Loads the stored window state; missing entries stay empty. */
     [[nodiscard]] MainWindowState load();
 
-    /** Writes the window state to disk; returns false (and logs) if it could not be stored. */
+    /** Writes the whole window state to disk; returns false (and logs) if it could not be stored. */
     [[nodiscard]] bool save(const MainWindowState &state);
+
+    /** Writes chip order, expand state and fingerprint of @p state, leaving the stored geometry untouched. */
+    [[nodiscard]] bool saveLayout(const MainWindowState &state);
 }

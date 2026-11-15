@@ -48,10 +48,6 @@ void SettingsPanel::setTemperatureUnit(const TemperatureUnit unit) {
     m_temperatureUnitCombo->setCurrentIndex(index >= 0 ? index : 0);
 }
 
-int SettingsPanel::minimumRequiredWidth() const {
-    return minimumSizeHint().width();
-}
-
 namespace {
     // Emits valueChanged only on commit (Enter/focus loss), not per keystroke.
     QSpinBox *createSpinBox(QWidget *parent, const int min, const int max, const int step) {

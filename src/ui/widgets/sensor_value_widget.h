@@ -6,6 +6,7 @@
 #include "sensors/sensor_reading.h"
 
 #include <QWidget>
+#include <optional>
 
 class LcdDisplayWidget;
 class QLabel;
@@ -18,7 +19,7 @@ public:
     /** Creates the card for @p reading with fixed height and theme width limits. */
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Refreshes title, details tooltip and LCD (value and range bar graph). */
+    /** Refreshes title, LCD (value and range bar graph) and, if its inputs changed, the details tooltip. */
     void setReading(const SensorReading &reading);
 
     /**
@@ -34,7 +35,21 @@ private:
     /** Long sensor names are elided; the full name is shown in the details tooltip. */
     void updateElidedTitle();
 
+    /** The reading fields detailsToolTip() shows; the tooltip is rebuilt only when they change. */
+    struct ToolTipInputs {
+        QString chip;
+        QString feature;
+        SensorUnit unit = SensorUnit::Unknown;
+        bool hasValue = false;
+        std::optional<double> firmwareMin;
+        std::optional<double> firmwareMax;
+        bool operator==(const ToolTipInputs &) const = default;
+        [[nodiscard]] static ToolTipInputs of(const SensorReading &reading);
+    };
+
     QLabel *m_title;
     LcdDisplayWidget *m_lcdValue;
     QString m_fullTitle;
+    ToolTipInputs m_toolTipInputs;
+    bool m_hasToolTip = false;
 };

@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   migration is logged; reading the settings no longer writes to the file.
 
 ### Fixed
+- The order of the chips and which chips are collapsed are saved as soon as
+  you change them, not only when the window closes. They were lost when
+  qsensors was killed, crashed or the session ended. A failed write is
+  reported in the status bar. The window size is still saved on close.
 - Sensors no longer show an alert because of a limit qsensors made up. When
   the firmware reports only a maximum (e.g. a GPU power cap or a USB-C port's
   maximum current), the bar graph assumes a minimum of 20 % of it; values

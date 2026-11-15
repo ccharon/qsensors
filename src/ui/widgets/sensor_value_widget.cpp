@@ -40,10 +40,17 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         updateElidedTitle();
     }
     // Set on the card itself so hovering title or LCD shows the same details.
-    const QString details = detailsToolTip(reading);
-    if (toolTip() != details)
-        setToolTip(details);
+    const ToolTipInputs inputs = ToolTipInputs::of(reading);
+    if (!m_hasToolTip || inputs != m_toolTipInputs) {
+        setToolTip(detailsToolTip(reading));
+        m_toolTipInputs = inputs;
+        m_hasToolTip = true;
+    }
     m_lcdValue->setReading(reading);
+}
+
+SensorValueWidget::ToolTipInputs SensorValueWidget::ToolTipInputs::of(const SensorReading &reading) {
+    return {reading.chip, reading.feature, reading.unit, reading.hasValue(), reading.firmwareMin, reading.firmwareMax};
 }
 
 QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {

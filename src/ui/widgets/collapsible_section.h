@@ -36,8 +36,11 @@ signals:
     /** Emitted when the content is shown or hidden, by the user or via setExpanded(). */
     void expandedChanged(bool expanded);
 
-    /** The header was dragged past the start distance; the owner runs the drag. */
-    void dragRequested();
+    /**
+     * The header was dragged past the start distance; the owner runs the drag.
+     * @p grabPos is the pointer position in this section's coordinates.
+     */
+    void dragRequested(const QPoint &grabPos);
 
 protected:
     bool eventFilter(QObject *watched, QEvent *event) override;

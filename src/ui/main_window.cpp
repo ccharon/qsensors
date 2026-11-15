@@ -98,6 +98,18 @@ void MainWindow::persistRuntimeConfig() {
     }
 }
 
+void MainWindow::persistChipLayout() {
+    const bool saved = MainWindowStateStore::saveLayout({
+        .geometry = {},
+        .chipExpanded = m_sensorsPanel->chipExpandedState(),
+        .chipOrder = m_sensorsPanel->chipOrder(),
+        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
+    });
+    if (!saved) {
+        showNotice(tr("Settings could not be saved"));
+    }
+}
+
 void MainWindow::setupUi() {
     setWindowTitle(QStringLiteral("%1 %2").arg(QApplication::applicationName(), QApplication::applicationVersion()));
     resize(AppTheme::kInitialWindowWidth, AppTheme::kInitialWindowHeight);
@@ -115,6 +127,8 @@ void MainWindow::setupUi() {
 
     m_sensorsPanel = new SensorsPanel(content);
     m_settingsPanel = new SettingsPanel(content);
+    connect(m_sensorsPanel, &SensorsPanel::chipOrderChanged, this, &MainWindow::persistChipLayout);
+    connect(m_sensorsPanel, &SensorsPanel::chipExpandedChanged, this, &MainWindow::persistChipLayout);
     connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
         showNotice(tr("Sensor layout changed: UI config reset"));
     });

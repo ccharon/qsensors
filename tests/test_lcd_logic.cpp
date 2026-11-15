@@ -7,7 +7,7 @@
 
 #include <QtTest/QtTest>
 
-// Verifies LCD bar graph geometry and the sensor card tooltip independent of painting.
+// Verifies LCD bar graph geometry, the sensor card tooltip and when the LCD repaints.
 class LcdLogicTest final : public QObject {
     Q_OBJECT
 
@@ -16,6 +16,9 @@ private slots:
     void detailsToolTip_lists_chip_and_limits_in_display_units();
     void detailsToolTip_omits_placeholder_firmware_limits();
     void missing_value_lights_no_bar_and_tooltip_says_so();
+    void lcd_repaints_only_when_the_drawn_state_changes();
+    void lcd_repaints_on_resize_and_palette_change();
+    void tooltip_follows_the_fields_it_shows_not_every_poll();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -120,5 +123,127 @@ void LcdLogicTest::missing_value_lights_no_bar_and_tooltip_says_so() {
     QVERIFY(!SensorValueWidget::detailsToolTip(fan).contains(QStringLiteral("cannot be read")));
 }
 
-QTEST_APPLESS_MAIN(LcdLogicTest)
+namespace {
+    /** Counts the paint events a widget receives. */
+    class PaintCounter final : public QObject {
+    public:
+        explicit PaintCounter(QWidget *widget) { widget->installEventFilter(this); }
+        int count = 0;
+
+    protected:
+        bool eventFilter(QObject *, QEvent *event) override {
+            if (event->type() == QEvent::Paint)
+                ++count;
+            return false;
+        }
+    };
+
+    SensorReading volts(const double value) {
+        return {.chip = QStringLiteral("chip"), .feature = QStringLiteral("in0"), .value = value,
+                .unit = SensorUnit::Volt, .minValue = 0.0, .maxValue = 20.0, .firmwareMin = 0.0, .firmwareMax = 12.0};
+    }
+
+    // Lets pending paints run, then forgets them.
+    void settle(PaintCounter &counter) {
+        QTest::qWait(30);
+        counter.count = 0;
+    }
+
+    // True when a paint follows setReading() within a generous wait.
+    bool repaintsAfter(LcdDisplayWidget &lcd, PaintCounter &counter, const SensorReading &reading) {
+        counter.count = 0;
+        lcd.setReading(reading);
+        QTest::qWait(30);
+        return counter.count > 0;
+    }
+}
+
+void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
+    LcdDisplayWidget lcd(volts(5.0));
+    lcd.resize(160, 40);
+    PaintCounter counter(&lcd);
+    lcd.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&lcd));
+    settle(counter);
+
+    // The same reading again, and a change below the displayed digits and bar resolution: nothing to draw.
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.001)));
+
+    // Changed digits.
+    QVERIFY(repaintsAfter(lcd, counter, volts(5.5)));
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.5)));
+
+    // Changed unit with the same digits.
+    SensorReading milli = volts(5.5);
+    milli.unit = SensorUnit::Ampere;
+    QVERIFY(repaintsAfter(lcd, counter, milli));
+
+    // Same digits, but the value crosses the firmware maximum: only the alert state differs.
+    QVERIFY(repaintsAfter(lcd, counter, volts(12.0)));
+    QVERIFY(repaintsAfter(lcd, counter, volts(12.001)));
+    QVERIFY(repaintsAfter(lcd, counter, volts(12.0)));
+
+    // Same digits, but another number of lit bar segments: no repaint request is lost.
+    SensorReading wide = volts(12.0);
+    wide.maxValue = 24.0;
+    QVERIFY(repaintsAfter(lcd, counter, wide));
+
+    // A value that cannot be read differs from one that can.
+    SensorReading unreadable = wide;
+    unreadable.value.reset();
+    QVERIFY(repaintsAfter(lcd, counter, unreadable));
+    QVERIFY(!repaintsAfter(lcd, counter, unreadable));
+}
+
+void LcdLogicTest::lcd_repaints_on_resize_and_palette_change() {
+    LcdDisplayWidget lcd(volts(5.0));
+    lcd.resize(160, 40);
+    PaintCounter counter(&lcd);
+    lcd.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&lcd));
+    settle(counter);
+
+    lcd.resize(260, 40);
+    QTest::qWait(30);
+    QVERIFY(counter.count > 0);
+    // After the resize the unchanged reading is still not repainted.
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
+
+    QPalette dark = lcd.palette();
+    dark.setColor(QPalette::Base, Qt::black);
+    counter.count = 0;
+    lcd.setPalette(dark);
+    QTest::qWait(30);
+    QVERIFY(counter.count > 0);
+}
+
+void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
+    SensorReading reading = volts(5.0);
+    SensorValueWidget card(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.value = 6.0;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.firmwareMax = 13.0;
+    card.setReading(reading);
+    QVERIFY(card.toolTip().contains(QStringLiteral("13")));
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.value.reset();
+    card.setReading(reading);
+    QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
+
+    reading.unit = SensorUnit::Milliampere;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.feature = QStringLiteral("renamed");
+    card.setReading(reading);
+    QVERIFY(card.toolTip().contains(QStringLiteral("renamed")));
+}
+
+QTEST_MAIN(LcdLogicTest)
 #include "test_lcd_logic.moc"

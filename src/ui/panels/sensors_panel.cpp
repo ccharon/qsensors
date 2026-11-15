@@ -11,7 +11,6 @@
 #include "ui/widgets/collapsible_section.h"
 
 #include <QCoreApplication>
-#include <QCursor>
 #include <QDrag>
 #include <QDragEnterEvent>
 #include <QMimeData>
@@ -107,10 +106,13 @@ QStringList SensorsPanel::displayOrder() const {
 
 void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_chipExpanded = state;
+    // Only the user's clicks are announced, not the state applied here.
+    m_applyingExpandedState = true;
     for (auto it = m_chipSections.begin(); it != m_chipSections.end(); ++it) {
         it->card->setExpanded(state.value(it.key(), true));
         m_chipExpanded.insert(it.key(), it->card->isExpanded());
     }
+    m_applyingExpandedState = false;
 }
 
 void SensorsPanel::restoreChipExpandedState(const QHash<QString, bool> &state, const QString &chipFingerprint) {
@@ -243,9 +245,11 @@ SensorsPanel::ChipSection *SensorsPanel::createChipSection(const QString &chipNa
 
     connect(section.card, &CollapsibleSection::expandedChanged, this, [this, chipName](const bool expanded) {
         m_chipExpanded[chipName] = expanded;
+        if (!m_applyingExpandedState)
+            emit chipExpandedChanged();
     });
     section.card->setDraggable(true);
-    connect(section.card, &CollapsibleSection::dragRequested, this, [this, chipName] { startChipDrag(chipName); });
+    connect(section.card, &CollapsibleSection::dragRequested, this, [this, chipName](const QPoint &grabPos) { startChipDrag(chipName, grabPos); });
 
     m_chipExpanded.insert(chipName, section.card->isExpanded());
     m_chipSections.insert(chipName, section);
@@ -306,7 +310,7 @@ int SensorsPanel::chipChromeWidth() const {
     return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins;
 }
 
-void SensorsPanel::startChipDrag(const QString &chip) {
+void SensorsPanel::startChipDrag(const QString &chip, const QPoint &grabPos) {
     const auto it = m_chipSections.constFind(chip);
     if (it == m_chipSections.cend())
         return;
@@ -327,7 +331,7 @@ void SensorsPanel::startChipDrag(const QString &chip) {
     auto *drag = new QDrag(this);
     drag->setMimeData(mime);
     drag->setPixmap(pixmap);
-    drag->setHotSpot(it->card->mapFromGlobal(QCursor::pos()));
+    drag->setHotSpot(grabPos);
     drag->exec(Qt::MoveAction);
     m_dropIndicator->hide();
 }
@@ -377,6 +381,9 @@ void SensorsPanel::dropEvent(QDropEvent *event) {
     if (!event->mimeData()->hasFormat(kChipMimeType))
         return;
     const QString chip = QString::fromUtf8(event->mimeData()->data(kChipMimeType));
+    const QStringList before = displayOrder();
     moveChip(chip, dropIndexAt(event->position().toPoint().y()));
+    if (displayOrder() != before)
+        emit chipOrderChanged();
     event->acceptProposedAction();
 }

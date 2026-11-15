@@ -24,6 +24,7 @@ private slots:
     void runtime_config_temperatureUnit_invalid_fallbacks_to_celsius();
     void main_window_state_roundtrip();
     void main_window_state_chip_name_with_slash_roundtrip();
+    void save_layout_keeps_stored_geometry();
     void stores_do_not_write_schema_version();
     void new_settings_get_current_schema_version();
     void v1_settings_are_migrated_and_logged();
@@ -112,6 +113,21 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("normal-chip-isa-0000")), true);
     // No group separator artifacts: exactly the three names come back.
     QCOMPARE(loaded.chipExpanded.size(), 3);
+}
+
+void SettingsPersistenceTest::save_layout_keeps_stored_geometry() {
+    QVERIFY(MainWindowStateStore::save({.geometry = QByteArray("fake-geometry"), .chipExpanded = {}, .chipOrder = {}, .sensorFingerprint = {}}));
+
+    const QStringList order{QStringLiteral("chip-b"), QStringLiteral("chip-a")};
+    QVERIFY(MainWindowStateStore::saveLayout({.geometry = QByteArray("ignored"),
+                                              .chipExpanded = {{QStringLiteral("chip-a"), false}},
+                                              .chipOrder = order,
+                                              .sensorFingerprint = QStringLiteral("fp")}));
+    const MainWindowState loaded = MainWindowStateStore::load();
+    QCOMPARE(loaded.geometry, QByteArray("fake-geometry"));
+    QCOMPARE(loaded.chipOrder, order);
+    QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a"), true), false);
+    QCOMPARE(loaded.sensorFingerprint, QStringLiteral("fp"));
 }
 
 void SettingsPersistenceTest::stores_do_not_write_schema_version() {

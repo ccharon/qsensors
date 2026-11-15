@@ -67,6 +67,9 @@ private:
     /** Saves the runtime config right away and reports a failed write. */
     void persistRuntimeConfig();
 
+    /** Saves chip order, expand state and chip fingerprint right away and reports a failed write. */
+    void persistChipLayout();
+
     /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
     void loadSettings();
 

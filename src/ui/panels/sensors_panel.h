@@ -88,8 +88,18 @@ protected:
     void dropEvent(QDropEvent *event) override;
 
 signals:
-    /** Chips or sensors changed, as opposed to new values of the same sensors. */
+    /**
+     * Chips or sensors changed, as opposed to new values of the same sensors. The
+     * application does not listen; tests use it to check the structural versus
+     * value update separation.
+     */
     void structureChanged();
+
+    /** The user dropped a chip at a new place; not emitted by moveChip() or setChipOrder(). */
+    void chipOrderChanged();
+
+    /** The user collapsed or expanded a chip; not emitted when a state is applied by code. */
+    void chipExpandedChanged();
 
     /** A restored expand state did not match the current chips and was dropped. */
     void layoutStateReset();
@@ -132,8 +142,8 @@ private:
     /** Puts the chip cards into the layout in displayOrder() when it differs. */
     void applyChipOrder();
 
-    /** Starts dragging the card of @p chip; the drop reorders via moveChip(). */
-    void startChipDrag(const QString &chip);
+    /** Starts dragging the card of @p chip, grabbed at @p grabPos in the card; the drop reorders via moveChip(). */
+    void startChipDrag(const QString &chip, const QPoint &grabPos);
 
     /** Insert position among the shown chips for a drop at @p y. */
     [[nodiscard]] int dropIndexAt(int y) const;
@@ -158,4 +168,5 @@ private:
     QHash<QString, bool> m_chipExpanded;
     // Set by restoreChipExpandedState() until the first readings confirm or reject it.
     QString m_restoredFingerprint;
+    bool m_applyingExpandedState = false;
 };

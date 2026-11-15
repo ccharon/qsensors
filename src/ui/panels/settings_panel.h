@@ -25,9 +25,6 @@ public:
     /** Applies persisted temperature unit without re-emitting change signals. */
     void setTemperatureUnit(TemperatureUnit unit);
 
-    /** Minimum width required so settings content is fully visible. */
-    [[nodiscard]] int minimumRequiredWidth() const;
-
 signals:
     /** User committed a new polling interval in seconds. */
     void pollingIntervalChanged(int seconds);

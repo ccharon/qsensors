@@ -10,7 +10,9 @@
 
 #include <QApplication>
 #include <algorithm>
+#include <QDropEvent>
 #include <QLayout>
+#include <QMimeData>
 #include <QPointer>
 #include <QSignalSpy>
 #include <QToolButton>
@@ -32,6 +34,8 @@ private slots:
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
     void header_click_still_toggles_when_draggable();
+    void user_toggle_and_drop_are_announced_but_applying_state_is_not();
+    void drag_request_carries_the_pointer_position_in_the_section();
     void columns_go_to_category_with_most_rows();
     void columns_only_added_when_they_save_a_row();
     void card_width_spreads_spare_width_up_to_maximum();
@@ -263,6 +267,65 @@ void SensorsPanelTest::header_click_still_toggles_when_draggable() {
     QTest::mouseClick(header, Qt::LeftButton);
     QVERIFY(!header->isChecked());
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+}
+
+void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_not() {
+    SensorsPanel panel;
+    QSignalSpy expandedSpy(&panel, &SensorsPanel::chipExpandedChanged);
+    QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
+
+    // Restoring before and after the cards exist, and reordering by code, are not user changes.
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QString());
+    panel.setChipOrder({QStringLiteral("chip-b"), QStringLiteral("chip-a")});
+    panel.setReadings(sampleReadings(40.0));
+    panel.setChipExpandedState({{QStringLiteral("chip-a"), true}});
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    panel.setReadings(sampleReadings(41.0));
+    QCOMPARE(expandedSpy.count(), 0);
+    QCOMPARE(orderSpy.count(), 0);
+
+    QTest::mouseClick(headerFor(panel, QStringLiteral("chip-a")), Qt::LeftButton);
+    QCOMPARE(expandedSpy.count(), 1);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+
+    // A drop that moves a chip announces the new order; one that keeps it does not.
+    const QStringList before = cardOrder(panel);
+    const auto drop = [&panel](const QString &chip, const int y) {
+        auto *mime = new QMimeData;
+        mime->setData(QStringLiteral("application/x-qsensors-chip"), chip.toUtf8());
+        // The window routes the events to the widget under the pointer, as for a real drag.
+        QWindow *window = panel.windowHandle();
+        const QPointF pos(10, y);
+        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &enter);
+        QDropEvent event(pos, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &event);
+        delete mime;
+    };
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    drop(before.first(), 0);
+    QCOMPARE(orderSpy.count(), 0);
+    drop(before.first(), panel.height());
+    QCOMPARE(orderSpy.count(), 1);
+    QCOMPARE(cardOrder(panel), (QStringList{before.last(), before.first()}));
+}
+
+void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section() {
+    CollapsibleSection section(QStringLiteral("chip"), true);
+    section.setDraggable(true);
+    section.resize(300, 100);
+    section.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&section));
+    QToolButton *header = section.findChild<QToolButton *>();
+    QSignalSpy spy(&section, &CollapsibleSection::dragRequested);
+
+    const QPoint press(20, header->height() / 2);
+    const QPoint moved = press + QPoint(QApplication::startDragDistance() + 10, 0);
+    QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+    QTest::mouseMove(header, moved);
+    QCOMPARE(spy.count(), 1);
+    QCOMPARE(spy.first().first().toPoint(), header->mapTo(&section, moved));
 }
 
 void SensorsPanelTest::columns_go_to_category_with_most_rows() {

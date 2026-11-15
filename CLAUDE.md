@@ -43,20 +43,20 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 
 **`src/ui/`**: presentation only; business rules live in `src/sensors/`.
 - `main_window`: gets the sensor source factory from `main.cpp` (libsensors) and runs it in a `SensorMonitor`; size limits (rule in `window_sizing.h`, re-evaluated on `LayoutRequest`): at most as tall as the content and at most as wide as the full layout (all columns, all cards at maximum width, scrollbar room included), never forced smaller, lifted when maximized; the first start without saved geometry fits both. Minimum widths need no code here: they follow from the layouts.
-- `panels/sensors_panel`: chip-grouped layout; owns the chip expand state, the drag-and-drop chip order and the `CardGridPlan`; rebuilds a chip's cards only when its sensors change. Its minimum width ignores chip headers and collapsed state (one column per category for the chip with most categories).
+- `panels/sensors_panel`: chip-grouped layout; owns the chip expand state, the drag-and-drop chip order and the `CardGridPlan`; rebuilds a chip's cards only when its sensors change. It emits `chipOrderChanged()` / `chipExpandedChanged()` for user changes only (not for restored state), and `main_window` saves them right away through `MainWindowStateStore::saveLayout()`; geometry is written on close only. `structureChanged()` is not connected in the app; it documents and tests the structural-versus-value-update split. Its minimum width ignores chip headers and collapsed state (one column per category for the chip with most categories).
 - `panels/card_grid_plan`: column planning without widgets: columns per category (most rows first), the one card width shared by all chips (so all cards always have the same size), and the minimum and maximum useful widths.
 - `panels/category_row_layout`: `QLayout` per chip placing category titles and cards by the plan; `heightForWidth`, so a resize only moves cards.
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/vertical_scroll_area`: vertical-only scroll area whose minimum width is the content's plus the scrollbar, and whose size hint height is the content height at the current width.
-- `widgets/collapsible_section`: framed card with toggle header (optionally draggable), used by both panels.
+- `widgets/collapsible_section`: framed card with toggle header (optionally draggable; `dragRequested(pos)` carries the pointer position in the card, used as drag hotspot because Wayland clients cannot query the global cursor), used by both panels.
 - `widgets/status_line`: status bar text with timed notices on top of the permanent status.
-- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip, a line when the sensor cannot be read, and limits).
-- `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph).
+- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip, a line when the sensor cannot be read, and limits; rebuilt only when one of those fields changes).
+- `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph); repaints only when the digits, unit, lit bar segments or alert state differ from the last paint.
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
-**`tests/`**: 13 unit test files covering the main window sizing and status (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, stall reporting and bounded shutdown, with a fake source), LCD logic, segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel, the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
+**`tests/`**: 13 unit test files covering the main window sizing and status (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, stall reporting and bounded shutdown, with a fake source), LCD logic (including repaint behaviour), segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel (including chip layout signals and the drag position), the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 
 ## Non-Goals
 
