@@ -18,8 +18,9 @@
 /**
  * libsensors wrapper: initializes the library and reads all chips into raw SensorReadings.
  * libsensors enumerates chips once, in sensors_init(); when the hwmon devices change, the
- * next readAll() re-initializes it. A failed re-init leaves the source uninitialized,
- * with lastError() explaining why.
+ * next readAll() re-initializes it. A failed (re-)init leaves the source uninitialized,
+ * with lastError() explaining why; recover() initializes it again on the next hwmon change
+ * or when the time-based retry is due.
  */
 class LibsensorsSource final : public SensorSource {
 public:
@@ -51,12 +52,26 @@ public:
 
     [[nodiscard]] QVector<SensorReading> readAll() override;
 
+    /** Retries the init when @p retryDue or when the hwmon devices changed since the last attempt. */
+    [[nodiscard]] bool recover(bool retryDue) override;
+
 private:
-    /** sensors_cleanup() + sensors_init(); false (and uninitialized) when the init fails. */
+    /** Claims the process-wide backend, then initialize(); false when another instance holds it. */
+    bool acquireAndInitialize(bool afterStart);
+
+    /**
+     * Takes the hwmon snapshot and runs sensors_init() with the backend claimed; false (and
+     * uninitialized, backend released) when it fails. @p afterStart only words the error.
+     */
+    bool initialize(bool afterStart);
+
+    /** sensors_cleanup() + initialize(); false (and uninitialized) when the init fails. */
     bool reinitialize();
 
     HwmonWatch m_hwmonWatch;
-    bool m_initialized;
+    bool m_initialized = false;
+    // The source had been initialized once; a later failure followed a hardware change.
+    bool m_wasInitialized = false;
     QString m_lastError;
     // Problems already logged, so a failing sensor does not flood the log every poll.
     QSet<QString> m_reportedProblems;
