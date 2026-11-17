@@ -16,9 +16,11 @@ private slots:
     void digits_show_ghost_segments_units_do_not();
     void unknown_characters_are_rejected();
     void every_segment_has_geometry_inside_cell();
-    void layout_places_unit_after_value_on_shared_baseline();
+    void layout_cells_right_aligns_the_value();
+    void layout_cells_attach_decimal_point_to_previous_cell();
+    void layout_cells_grow_for_long_values();
+    void cells_width_and_fit_agree();
     void layout_skips_unsupported_characters();
-    void fit_height_shrinks_only_when_too_wide();
 };
 
 void GlyphModelTest::digits_use_seven_segment_masks() {
@@ -26,7 +28,8 @@ void GlyphModelTest::digits_use_seven_segment_masks() {
     QCOMPARE(glyphFor(u'1')->lit, SegmentMask(B | C));
     QCOMPARE(glyphFor(u'-')->lit, SegmentMask(G1 | G2));
     QCOMPARE(glyphFor(u' ')->lit, SegmentMask(0));
-    QCOMPARE(glyphFor(u'.')->lit, SegmentMask(DP));
+    QVERIFY(!glyphFor(u'.').has_value());
+    QVERIFY(supports(u"-12.10"));
     for (char c = '0'; c <= '9'; ++c) {
         const auto glyph = glyphFor(QChar::fromLatin1(c));
         QVERIFY(glyph.has_value());
@@ -57,26 +60,68 @@ void GlyphModelTest::every_segment_has_geometry_inside_cell() {
         QVERIFY2(polygon.size() >= 4, qPrintable(QString::number(bit)));
         const QRectF box = polygon.boundingRect();
         QVERIFY2(box.width() > 0 && box.height() > 0, qPrintable(QString::number(bit)));
+        if (bit == DP) {
+            // The decimal point sits in the gap to the next cell, on the baseline.
+            QVERIFY(box.left() > cell.width());
+            QVERIFY(box.right() < kDigitAdvance * cell.height());
+            QCOMPARE(box.bottom(), cell.height());
+            continue;
+        }
         QVERIFY2(bounds.contains(box), qPrintable(QString::number(bit)));
     }
 }
 
-void GlyphModelTest::layout_places_unit_after_value_on_shared_baseline() {
+void GlyphModelTest::layout_cells_right_aligns_the_value() {
     constexpr qreal height = 30.0;
-    const auto layout = layoutText(u"  1.23", u"mW", height);
-    QCOMPARE(layout.size(), 8);
+    const auto cells = layoutCells(u"880", 7, 5, height);
+    QCOMPARE(cells.size(), 7);
+    QCOMPARE(cells.at(6).symbol, QChar(u'0'));
+    QCOMPARE(cells.at(4).symbol, QChar(u'8'));
+    QCOMPARE(cells.at(3).glyph.lit, SegmentMask(0));
+    // Unused cells are ghost digits.
+    QCOMPARE(cells.at(0).glyph.ghost & kSevenSegments, kSevenSegments);
+    // Fixed pitch, so equal cell counts put every digit at the same place.
+    for (int i = 0; i < cells.size(); ++i) {
+        QCOMPARE(cells.at(i).cell.left(), i * kDigitAdvance * height);
+        QCOMPARE(cells.at(i).cell.width(), kDigitWidth * height);
+        QCOMPARE(cells.at(i).cell.height(), height);
+    }
+    // The last digit ends in the same cell for any value.
+    QCOMPARE(layoutCells(u"-12.35", 7, 5, height).last().cell, cells.last().cell);
+}
 
-    const QRectF lastDigit = layout.at(5).cell;
-    const QRectF unitM = layout.at(6).cell;
-    QCOMPARE(lastDigit.height(), height);
-    QCOMPARE(unitM.height(), height * kUnitScale);
-    QCOMPARE(unitM.bottom(), lastDigit.bottom());
-    QVERIFY(unitM.left() > lastDigit.right());
-    QVERIFY(layout.at(7).cell.left() > unitM.right());
+void GlyphModelTest::layout_cells_attach_decimal_point_to_previous_cell() {
+    const auto cells = layoutCells(u"1.052", 6, 5, 30.0);
+    QCOMPARE(cells.size(), 6);
+    QCOMPARE(cells.at(2).symbol, QChar(u'1'));
+    QVERIFY(cells.at(2).glyph.lit & DP);
+    QVERIFY(!(cells.at(3).glyph.lit & DP));
+    // Faint points between the value cells only; none after the last cell and none in extra ghost cells.
+    QVERIFY(cells.at(3).glyph.ghost & DP);
+    QVERIFY(cells.at(1).glyph.ghost & DP);
+    QVERIFY(!(cells.at(0).glyph.ghost & DP));
+    QVERIFY(!(cells.last().glyph.ghost & DP));
+    // Dashes of a missing value keep the decimal point of their scale.
+    const auto missing = layoutCells(u"----.-", 5, 5, 30.0);
+    QCOMPARE(missing.size(), 5);
+    QVERIFY(missing.at(3).glyph.lit & DP);
+    QCOMPARE(missing.at(4).glyph.lit, SegmentMask(G1 | G2));
+}
 
-    // RPM is the widest unit; it must still fit the default card-sized display.
-    QVERIFY(layoutWidth(layoutText(u" 1534", u"RPM", height)) <= 150.0);
-    QVERIFY(layoutWidth(layoutText(u"  1.23", u"V", height)) <= 150.0);
+void GlyphModelTest::layout_cells_grow_for_long_values() {
+    const auto cells = layoutCells(u"123456", 5, 5, 30.0);
+    QCOMPARE(cells.size(), 6);
+    QCOMPARE(cells.first().symbol, QChar(u'1'));
+}
+
+void GlyphModelTest::cells_width_and_fit_agree() {
+    constexpr qreal height = 28.0;
+    QCOMPARE(cellsWidth(0, height), 0.0);
+    QCOMPARE(cellsWidth(1, height), (kDigitWidth + kSlant) * height);
+    for (int count = 1; count <= 8; ++count) {
+        QCOMPARE(cellsThatFit(cellsWidth(count, height), height), count);
+        QCOMPARE(cellsThatFit(cellsWidth(count, height) - 0.1, height), count - 1);
+    }
 }
 
 void GlyphModelTest::layout_skips_unsupported_characters() {
@@ -85,15 +130,6 @@ void GlyphModelTest::layout_skips_unsupported_characters() {
     QCOMPARE(layout.at(0).symbol, QChar(u'1'));
     QCOMPARE(layout.at(1).symbol, QChar(u'2'));
     QCOMPARE(layout.at(1).cell.left(), layout.at(0).glyph.advance * 30.0);
-}
-
-void GlyphModelTest::fit_height_shrinks_only_when_too_wide() {
-    constexpr qreal height = 28.0;
-    QCOMPARE(fitHeight(u"  1.23", u"V", height, 500.0), height);
-
-    const qreal fitted = fitHeight(u"-12345.67", u"mW", height, 120.0);
-    QVERIFY(fitted < height);
-    QVERIFY(layoutWidth(layoutText(u"-12345.67", u"mW", fitted)) <= 120.0 + 1e-6);
 }
 
 QTEST_APPLESS_MAIN(GlyphModelTest)

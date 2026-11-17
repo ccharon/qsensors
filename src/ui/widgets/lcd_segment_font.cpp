@@ -16,8 +16,7 @@ namespace LcdSegmentFont {
         constexpr qreal kGap = 0.25; // relative to thickness
         constexpr qreal kDiagonalThickness = 0.85; // relative to thickness
 
-        constexpr qreal kDigitWidth = 0.50;
-        constexpr qreal kDigitAdvance = 0.62;
+        constexpr qreal kDecimalPointSize = 0.10; // square, relative to the cell height
         constexpr qreal kLetterWidth = 0.62;
         constexpr qreal kLetterAdvance = 0.72;
 
@@ -43,7 +42,6 @@ namespace LcdSegmentFont {
                 {u'9', digit(A | B | C | D | F | G1 | G2)},
                 {u'-', digit(G1 | G2)},
                 {u' ', digit(0)},
-                {u'.', {DP, 0, 0.16, 0.20}},
                 {u'O', digit(A | B | C | D | E | F)}, // overload: "OL"
                 {u'L', digit(D | E | F)},
 
@@ -166,7 +164,9 @@ namespace LcdSegmentFont {
     }
 
     bool supports(const QStringView text) {
-        return std::all_of(text.begin(), text.end(), [](const QChar c) { return glyphFor(c).has_value(); });
+        // A '.' is the decimal point of the preceding digit cell.
+        return std::all_of(text.begin(), text.end(),
+                           [](const QChar c) { return c == u'.' || glyphFor(c).has_value(); });
     }
 
     QPolygonF segmentPolygon(const Segment segment, const QSizeF &cellSize) {
@@ -198,11 +198,64 @@ namespace LcdSegmentFont {
             case J: return diagonal({ir, it}, {xc, imt}, td);
             case K: return diagonal({il, ib}, {xc, imb}, td);
             case M: return diagonal({ir, ib}, {xc, imb}, td);
-            case DP: return QPolygonF(QRectF(xc - t / 2.0, y1 - t / 2.0, t, t));
+            case DP: {
+                // In the gap after the cell, on the baseline, like the point of a real LCD digit.
+                const qreal size = kDecimalPointSize * h;
+                const qreal x = w + (kDigitAdvance - kDigitWidth) * h / 2.0 - size / 2.0;
+                return QPolygonF(QRectF(x, h - size, size, size));
+            }
             case N: return lowerStroke({xc}, {}, w, h, t, g);
             case O: return lowerStroke({w * 0.27, w * 0.73}, {xc}, w, h, t, g);
         }
         return {};
+    }
+
+    qreal cellsWidth(const int cellCount, const qreal height) {
+        if (cellCount <= 0)
+            return 0.0;
+        return ((cellCount - 1) * kDigitAdvance + kDigitWidth + kSlant) * height;
+    }
+
+    int cellsThatFit(const qreal width, const qreal height) {
+        // The tolerance keeps an exact fit from losing a cell to rounding.
+        constexpr qreal kTolerance = 1e-9;
+        const qreal spare = width - cellsWidth(1, height) + kTolerance;
+        if (height <= 0.0 || spare < 0.0)
+            return 0;
+        return 1 + static_cast<int>(spare / (kDigitAdvance * height));
+    }
+
+    QVector<PlacedGlyph> layoutCells(const QStringView digits, const int cellCount, const int valueCells,
+                                     const qreal height) {
+        // Characters with a cell; a '.' lights the decimal point of the cell before it.
+        QVector<Glyph> value;
+        QVector<QChar> symbols;
+        for (const QChar c: digits) {
+            if (c == u'.') {
+                if (!value.isEmpty())
+                    value.last().lit |= DP;
+                continue;
+            }
+            if (const auto glyph = glyphFor(c); glyph && (glyph->ghost & kSevenSegments) == kSevenSegments) {
+                value.append(*glyph);
+                symbols.append(c);
+            }
+        }
+
+        const int count = std::max<int>(cellCount, static_cast<int>(value.size()));
+        const int firstValueCell = count - std::max<int>(valueCells, static_cast<int>(value.size()));
+        const int firstDigit = count - static_cast<int>(value.size());
+        QVector<PlacedGlyph> placed;
+        placed.reserve(count);
+        for (int i = 0; i < count; ++i) {
+            Glyph glyph = i >= firstDigit ? value.at(i - firstDigit) : *glyphFor(u' ');
+            // Value cells show a faint decimal point between them; the last one has none after it.
+            if (i >= firstValueCell && i < count - 1)
+                glyph.ghost |= DP;
+            const QRectF cell(i * kDigitAdvance * height, 0.0, kDigitWidth * height, height);
+            placed.append({i >= firstDigit ? symbols.at(i - firstDigit) : QChar(u' '), glyph, cell});
+        }
+        return placed;
     }
 
     QVector<PlacedGlyph> layoutText(const QStringView value, const QStringView unit, const qreal height) {
@@ -233,13 +286,5 @@ namespace LcdSegmentFont {
         for (const PlacedGlyph &p: layout)
             right = std::max(right, p.cell.right() + kSlant * p.cell.height());
         return right;
-    }
-
-    qreal fitHeight(const QStringView value, const QStringView unit, const qreal maxHeight, const qreal maxWidth) {
-        // Layout width scales linearly with height, so one measurement is enough.
-        const qreal width = layoutWidth(layoutText(value, unit, maxHeight));
-        if (width <= maxWidth || width <= 0.0)
-            return maxHeight;
-        return maxHeight * std::max<qreal>(maxWidth, 0.0) / width;
     }
 }

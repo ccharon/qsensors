@@ -54,6 +54,10 @@ namespace AppTheme {
     inline constexpr int kLcdBarGap = 3;
     inline constexpr qreal kLcdBarSegmentWidth = 3.5;
     inline constexpr qreal kLcdBarSegmentSpacing = 1.5;
+    // Unit field at the right edge of the LCD, relative to the digit height: height of
+    // the unit symbols and gap between the value and the field.
+    inline constexpr qreal kLcdUnitScale = 0.5;
+    inline constexpr qreal kLcdUnitGap = 0.2;
 
     /** Frame of a CollapsibleSection (object name "sectionCard"). */
     [[nodiscard]] QString sectionCardStyle();

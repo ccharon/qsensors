@@ -6,6 +6,7 @@
 #include "sensors/sensor_reading.h"
 
 #include <QString>
+#include <QStringList>
 #include <QVector>
 #include <optional>
 
@@ -37,6 +38,9 @@ namespace SensorFormat {
 
     /** Display symbol for @p unit with @p prefix, e.g. "°C" or "mA"; empty for Unknown. */
     [[nodiscard]] QString unitSymbol(SensorUnit unit, SiPrefix prefix = SiPrefix::None);
+
+    /** Every symbol the unit table can show, each once; e.g. to size a unit field. */
+    [[nodiscard]] QStringList allUnitSymbols();
 
     /** One display scale of a quantity and the values it is made for. */
     struct ScaleRange {

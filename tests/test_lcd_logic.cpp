@@ -2,6 +2,8 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/reading_pipeline.h"
+#include "sensors/sensor_format.h"
+#include "ui/theme/app_theme.h"
 #include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 
@@ -19,6 +21,9 @@ private slots:
     void lcd_repaints_only_when_the_drawn_state_changes();
     void lcd_repaints_on_resize_and_palette_change();
     void tooltip_follows_the_fields_it_shows_not_every_poll();
+    void layout_puts_cells_and_unit_field_at_fixed_places();
+    void layout_fits_full_height_digits_into_the_smallest_card();
+    void layout_shrinks_only_below_the_minimum_width();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -247,6 +252,41 @@ void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
     reading.feature = QStringLiteral("renamed");
     card.setReading(reading);
     QVERIFY(card.toolTip().contains(QStringLiteral("renamed")));
+}
+
+void LcdLogicTest::layout_puts_cells_and_unit_field_at_fixed_places() {
+    const QSizeF size(AppTheme::kCardMinWidth, 41);
+    const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor(size);
+    // The unit field ends at the right padding and the value ends a fixed gap before it.
+    QCOMPARE(layout.unitBox.right(), size.width() - AppTheme::kLcdPaddingX);
+    QCOMPARE(layout.unitBox.width(), LcdDisplayWidget::unitFieldWidth(layout.digitHeight));
+    QCOMPARE(layout.cells.right(), layout.unitBox.left() - AppTheme::kLcdUnitGap * layout.digitHeight);
+    QVERIFY(layout.cellCount >= SensorFormat::kValueCells);
+    QVERIFY(layout.cells.left() >= AppTheme::kLcdPaddingX);
+    // Every symbol of the unit table fits the field.
+    QVERIFY(layout.unitBox.width() > 0.0);
+
+    // Extra width goes to ghost cells on the left; the value cells keep their size and the unit its field.
+    const LcdDisplayWidget::Layout wide = LcdDisplayWidget::layoutFor({AppTheme::kCardMaxWidth, 41});
+    QCOMPARE(wide.digitHeight, layout.digitHeight);
+    QVERIFY(wide.cellCount > layout.cellCount);
+    QCOMPARE(wide.unitBox.width(), layout.unitBox.width());
+    QCOMPARE(wide.unitBox.right(), AppTheme::kCardMaxWidth - AppTheme::kLcdPaddingX);
+}
+
+void LcdLogicTest::layout_fits_full_height_digits_into_the_smallest_card() {
+    // All cards share one width, at least kCardMinWidth: that width must show the full digit height.
+    QVERIFY(LcdDisplayWidget::minimumFullHeightWidth() <= AppTheme::kCardMinWidth);
+    const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor({AppTheme::kCardMinWidth, 41});
+    QCOMPARE(layout.digitHeight, 41.0 - AppTheme::kLcdBarGap - AppTheme::kLcdBarHeight - 2 * AppTheme::kLcdPaddingY);
+}
+
+void LcdLogicTest::layout_shrinks_only_below_the_minimum_width() {
+    const LcdDisplayWidget::Layout narrow = LcdDisplayWidget::layoutFor({90, 41});
+    const LcdDisplayWidget::Layout normal = LcdDisplayWidget::layoutFor({AppTheme::kCardMinWidth, 41});
+    QVERIFY(narrow.digitHeight < normal.digitHeight);
+    QCOMPARE(narrow.cellCount, SensorFormat::kValueCells);
+    QVERIFY(narrow.cells.left() >= AppTheme::kLcdPaddingX - 1e-6);
 }
 
 QTEST_MAIN(LcdLogicTest)

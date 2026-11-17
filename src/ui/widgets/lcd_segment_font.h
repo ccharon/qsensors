@@ -73,11 +73,15 @@ namespace LcdSegmentFont {
     /** Returns glyph for a supported character, std::nullopt otherwise. */
     [[nodiscard]] std::optional<Glyph> glyphFor(QChar c);
 
-    /** True when every character of @p text has a glyph. */
+    /** True when every character of @p text has a glyph or is a decimal point. */
     [[nodiscard]] bool supports(QStringView text);
 
     /** Horizontal shear applied to every cell (x offset per unit of height above baseline). */
     inline constexpr qreal kSlant = 0.10;
+
+    /** Drawable width of a digit cell and the pitch between cells, relative to the digit height. */
+    inline constexpr qreal kDigitWidth = 0.50;
+    inline constexpr qreal kDigitAdvance = 0.66;
 
     /** Unit symbols are rendered at this fraction of the digit height, baseline aligned. */
     inline constexpr qreal kUnitScale = 0.70;
@@ -98,15 +102,25 @@ namespace LcdSegmentFont {
     /**
      * Lays out @p value at full @p height followed by @p unit at kUnitScale,
      * sharing one baseline at @p height. Unsupported characters are skipped.
+     * Used for the unit symbols; values use layoutCells().
      */
     [[nodiscard]] QVector<PlacedGlyph> layoutText(QStringView value, QStringView unit, qreal height);
 
     /** Total horizontal extent of a layout, including slant overhang. */
     [[nodiscard]] qreal layoutWidth(const QVector<PlacedGlyph> &layout);
 
+    /** Width of @p cellCount digit cells at @p height, slant overhang included. */
+    [[nodiscard]] qreal cellsWidth(int cellCount, qreal height);
+
+    /** Number of digit cells at @p height that fit into @p width. */
+    [[nodiscard]] int cellsThatFit(qreal width, qreal height);
+
     /**
-     * Largest digit height <= @p maxHeight at which value and unit fit into
-     * @p maxWidth; long readings shrink so nothing is clipped.
+     * Lays out @p digits (digit characters, '-', ' ', "OL", with '.' lighting the decimal
+     * point of the preceding cell) right-aligned in @p cellCount cells starting at x = 0.
+     * Unused cells on the left are ghost digits. The rightmost @p valueCells cells form
+     * the value field and show faint decimal points between them. Cells grow to the left
+     * if @p digits needs more than @p cellCount.
      */
-    [[nodiscard]] qreal fitHeight(QStringView value, QStringView unit, qreal maxHeight, qreal maxWidth);
+    [[nodiscard]] QVector<PlacedGlyph> layoutCells(QStringView digits, int cellCount, int valueCells, qreal height);
 }

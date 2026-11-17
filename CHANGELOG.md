@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   decimals. Milliamperes and milliwatts are whole numbers. The range comes from
   the firmware limit when there is one; otherwise it is kept between polls so
   the unit does not flicker. Temperatures keep one decimal, fans none.
+- The LCD is laid out like a multimeter: every value is right-aligned in the
+  same five digit cells, with the unit in a fixed field at the right edge, so
+  digits, decimal points and units line up across all cards. A wider card
+  shows more unlit digits on the left instead of moving the value. Decimal
+  points sit between the digit cells.
 
 ### Fixed
 - A value no longer takes more digit cells than the others: `-2000 mA` and

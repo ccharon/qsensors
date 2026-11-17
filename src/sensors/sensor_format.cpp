@@ -109,6 +109,19 @@ QString SensorFormat::unitSymbol(const SensorUnit unit, const SiPrefix prefix) {
     return symbol;
 }
 
+QStringList SensorFormat::allUnitSymbols() {
+    QStringList symbols;
+    for (int u = static_cast<int>(SensorUnit::Celsius); u <= static_cast<int>(SensorUnit::Unknown); ++u) {
+        const auto unit = static_cast<SensorUnit>(u);
+        for (const ScaleRange &range: scaleRanges(unit)) {
+            const QString symbol = unitSymbol(unit, range.scale.prefix);
+            if (!symbol.isEmpty() && !symbols.contains(symbol))
+                symbols.append(symbol);
+        }
+    }
+    return symbols;
+}
+
 const QVector<SensorFormat::ScaleRange> &SensorFormat::scaleRanges(const SensorUnit unit) {
     static const auto build = [](const SensorUnit u) { return buildRanges(quantityFormat(u)); };
     static const QVector<ScaleRange> kCelsius = build(SensorUnit::Celsius);
