@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step, the file is written once the changes stop (and on close).
 
 ### Fixed
+- Sensor names and status text are always shown as plain text; a sensor label
+  that looks like HTML is no longer rendered as rich text.
 - The height of a sensor card follows a font change instead of staying at the
   value computed at creation.
 - Status notices no longer replace each other: when several appear at once

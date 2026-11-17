@@ -6,6 +6,8 @@
 #include <QTimer>
 
 StatusLine::StatusLine(QWidget *parent) : QLabel(parent), m_noticeTimer(new QTimer(this)) {
+    // Shows text from libsensors (e.g. init errors); never interpreted as rich text.
+    setTextFormat(Qt::PlainText);
     m_noticeTimer->setSingleShot(true);
     connect(m_noticeTimer, &QTimer::timeout, this, [this] {
         if (m_queue.isEmpty()) {

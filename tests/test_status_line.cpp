@@ -13,6 +13,7 @@ private slots:
     void permanent_text_is_shown();
     void notice_hides_permanent_updates_until_expired();
     void notice_before_show_is_not_overlapped();
+    void markup_in_text_is_shown_literally();
     void notices_are_shown_one_after_another();
     void permanent_text_waits_for_all_queued_notices();
 };
@@ -45,6 +46,14 @@ void StatusLineTest::notice_before_show_is_not_overlapped() {
     line.setPermanentText(QStringLiteral("Readings: 3"));
     line.show();
     QCOMPARE(line.text(), QStringLiteral("Sensor layout changed"));
+}
+
+void StatusLineTest::markup_in_text_is_shown_literally() {
+    StatusLine line;
+    QCOMPARE(line.textFormat(), Qt::PlainText);
+    line.setPermanentText(QStringLiteral("<b>x</b>"));
+    QCOMPARE(line.text(), QStringLiteral("<b>x</b>"));
+    QVERIFY(!line.sizeHint().isEmpty());
 }
 
 void StatusLineTest::notices_are_shown_one_after_another() {

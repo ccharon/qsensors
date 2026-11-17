@@ -17,6 +17,8 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     setMaximumWidth(AppTheme::kCardMaxWidth);
 
     // The LCD panel is the card; the title is plain theme text above it.
+    // Hardware-supplied text: never interpreted as rich text.
+    m_title->setTextFormat(Qt::PlainText);
     updateTitleFont();
     m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     m_title->setContentsMargins(AppTheme::kCardTitleInset, 0, 0, 0);

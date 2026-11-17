@@ -15,6 +15,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLabel>
 #include <QLayout>
 #include <QMutex>
 #include <QMutexLocker>
@@ -50,6 +51,7 @@ private slots:
     void failed_layout_write_is_reported();
     void spin_box_steps_are_saved_once_after_the_last_step();
     void pending_setting_change_is_saved_when_the_window_closes();
+    void sensor_title_with_markup_is_shown_literally();
     void sensor_card_height_follows_font_changes();
     void sensor_card_tooltip_follows_every_displayed_field();
     void newer_schema_settings_survive_a_session_and_are_reported();
@@ -443,6 +445,19 @@ void MainWindowTest::pending_setting_change_is_saved_when_the_window_closes() {
         QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
     }
     QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMinPollingIntervalSec);
+}
+
+void MainWindowTest::sensor_title_with_markup_is_shown_literally() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("<b>x</b>"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.resize(300, card.height());
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const QLabel *title = card.findChild<QLabel *>();
+    QVERIFY(title != nullptr);
+    QCOMPARE(title->textFormat(), Qt::PlainText);
+    QCOMPARE(title->text(), QStringLiteral("<b>x</b>:"));
 }
 
 void MainWindowTest::sensor_card_height_follows_font_changes() {
