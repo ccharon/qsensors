@@ -57,8 +57,16 @@ public:
      */
     void setChipOrder(const QStringList &order);
 
-    /** Current chip order for persistence; includes preferred chips not present right now. */
+    /**
+     * Current chip order for persistence. Preferred chips not present right now keep
+     * their place before the shown chip they preceded; at most kMaxAbsentChipsInOrder of
+     * them are kept (the first ones in the order). Without any shown chip the preferred
+     * order is returned unchanged.
+     */
     [[nodiscard]] QStringList chipOrder() const;
+
+    /** Absent chips kept in the saved order, so it does not grow with every chip ever seen. */
+    static constexpr int kMaxAbsentChipsInOrder = 16;
 
     /** Moves @p chip to position @p targetIndex among the shown chips (insert position before the move). */
     void moveChip(const QString &chip, int targetIndex);
@@ -170,6 +178,12 @@ private:
 
     /** Shows the insert line before position @p index. */
     void showDropIndicator(int index);
+
+    /**
+     * @p shown (present chips, in their new order) with the absent chips of @p preferred
+     * re-inserted, each before the shown chip it preceded; see chipOrder().
+     */
+    [[nodiscard]] static QStringList mergeChipOrder(const QStringList &preferred, const QStringList &shown);
 
     [[nodiscard]] static ChipGroups groupReadingsByChip(const QVector<SensorReading> &readings);
     [[nodiscard]] static QString chipStructureFingerprint(const CategoryGroups &categories);

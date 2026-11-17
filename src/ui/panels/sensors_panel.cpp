@@ -64,12 +64,34 @@ void SensorsPanel::setChipOrder(const QStringList &order) {
 }
 
 QStringList SensorsPanel::chipOrder() const {
-    QStringList order = displayOrder();
-    for (const QString &chip: m_preferredOrder) {
-        if (!order.contains(chip))
-            order.append(chip);
+    // Without any chip shown (no readings yet, or an empty read) nothing is known about absence.
+    if (m_groups.isEmpty())
+        return m_preferredOrder;
+    return mergeChipOrder(m_preferredOrder, displayOrder());
+}
+
+QStringList SensorsPanel::mergeChipOrder(const QStringList &preferred, const QStringList &shown) {
+    // Each absent chip is kept right before the shown chip that followed it in @p preferred.
+    QHash<QString, QStringList> absentBefore;
+    QStringList pending;
+    int absentKept = 0;
+    for (const QString &chip: preferred) {
+        if (shown.contains(chip)) {
+            if (!pending.isEmpty())
+                absentBefore.insert(chip, std::exchange(pending, {}));
+        } else if (absentKept < kMaxAbsentChipsInOrder && !pending.contains(chip)) {
+            pending.append(chip);
+            ++absentKept;
+        }
     }
-    return order;
+
+    QStringList merged;
+    for (const QString &chip: shown) {
+        merged += absentBefore.value(chip);
+        merged.append(chip);
+    }
+    merged += pending;
+    return merged;
 }
 
 void SensorsPanel::moveChip(const QString &chip, int targetIndex) {
@@ -84,11 +106,7 @@ void SensorsPanel::moveChip(const QString &chip, int targetIndex) {
     order.insert(targetIndex, chip);
 
     // Absent chips keep their preference so they return to their place.
-    for (const QString &known: std::as_const(m_preferredOrder)) {
-        if (!order.contains(known))
-            order.append(known);
-    }
-    m_preferredOrder = order;
+    m_preferredOrder = mergeChipOrder(m_preferredOrder, order);
     applyChipOrder();
 }
 

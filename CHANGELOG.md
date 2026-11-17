@@ -20,6 +20,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   longer changes the cards during the drag: the change is applied when the
   drag ends, so the dragged card cannot be deleted under the pointer. Values
   keep updating during the drag.
+- A sensor chip that is missing for a while (e.g. an unplugged USB device)
+  keeps its place in the chip order instead of moving to the end, also when
+  other chips are dragged; it returns where it was. The saved chip order
+  keeps at most 16 missing chips, so it no longer grows with every chip ever
+  seen.
 
 ## [0.80.11] - 2026-11-15
 

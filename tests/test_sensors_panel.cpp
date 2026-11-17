@@ -36,6 +36,8 @@ private slots:
     void default_order_is_alphabetical();
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
+    void absent_chips_keep_their_place_across_moves_and_returns();
+    void saved_order_keeps_a_bounded_number_of_absent_chips();
     void header_click_still_toggles_when_draggable();
     void user_toggle_and_drop_are_announced_but_applying_state_is_not();
     void drag_request_carries_the_pointer_position_in_the_section();
@@ -351,9 +353,66 @@ void SensorsPanelTest::preferred_order_puts_new_chips_last_and_keeps_absent_ones
 
     QCOMPARE(cardOrder(panel),
              (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
-    // A chip that is currently missing keeps its saved preference.
-    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"),
-                                             QStringLiteral("chip-c"), QStringLiteral("gone")}));
+    // A chip that is currently missing keeps its place: before the chip it preceded.
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("gone"), QStringLiteral("chip-b"),
+                                             QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
+}
+
+void SensorsPanelTest::absent_chips_keep_their_place_across_moves_and_returns() {
+    // Saved order [chip-a, usb, chip-b]; usb is unplugged.
+    SensorsPanel panel;
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")});
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")}));
+
+    // A drag moves the chip together with the absent chip saved right before it.
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("usb"), QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+    // An absent chip at the end stays at the end.
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("chip-b"), QStringLiteral("usb")});
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("usb")}));
+
+    // When it returns, it is shown at its saved place.
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")});
+    QVector<SensorReading> withUsb = sampleReadings(40.0);
+    withUsb.append({.chip = QStringLiteral("usb"), .category = SensorCategory::Power, .feature = QStringLiteral("power1"),
+                    .featureNumber = 0, .subfeatureNumber = 1, .value = 5.0, .unit = SensorUnit::Watt});
+    panel.setReadings(withUsb);
+    QCOMPARE(cardOrder(panel),
+             (QStringList{QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")}));
+}
+
+void SensorsPanelTest::saved_order_keeps_a_bounded_number_of_absent_chips() {
+    QStringList saved;
+    for (int i = 0; i < SensorsPanel::kMaxAbsentChipsInOrder + 5; ++i)
+        saved.append(QStringLiteral("gone-%1").arg(i));
+    saved.append(QStringLiteral("chip-b"));
+
+    SensorsPanel panel;
+    panel.setChipOrder(saved);
+    // Without readings nothing is known about absence: the order is kept as it is.
+    QCOMPARE(panel.chipOrder(), saved);
+    panel.setReadings({});
+    QCOMPARE(panel.chipOrder(), saved);
+
+    // The first absent chips in the order are kept, up to the limit.
+    panel.setReadings(sampleReadings(40.0));
+    const QStringList order = panel.chipOrder();
+    QCOMPARE(order.size(), SensorsPanel::kMaxAbsentChipsInOrder + 2);
+    QCOMPARE(order.first(), QStringLiteral("gone-0"));
+    QCOMPARE(order.at(SensorsPanel::kMaxAbsentChipsInOrder - 1),
+             QStringLiteral("gone-%1").arg(SensorsPanel::kMaxAbsentChipsInOrder - 1));
+    QCOMPARE(order.mid(SensorsPanel::kMaxAbsentChipsInOrder),
+             (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+
+    // A move stores the pruned order.
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    QCOMPARE(panel.chipOrder().size(), SensorsPanel::kMaxAbsentChipsInOrder + 2);
 }
 
 void SensorsPanelTest::header_click_still_toggles_when_draggable() {
