@@ -229,6 +229,10 @@ QSize MainWindow::availableScreenSize() const {
 }
 
 void MainWindow::updateSizeLimits() {
+    // On Wayland the maximum size goes to the compositor (xdg_toplevel.set_max_size), which
+    // may use it to allow or refuse maximizing. KWin 6.7 maximizes and quick-tiles to the
+    // full area anyway, both on showMaximized() and on its own maximize action, and the
+    // limit is lifted here once the maximized state arrives (tested in kwin_wayland --virtual).
     if (isMaximized() || isFullScreen()) {
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         return;
