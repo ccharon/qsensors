@@ -28,6 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   complaint but find no chip set there, so they skip their expand state check.
 - Building needs CMake 3.21 or newer instead of 4.2. Qt 6.8 or newer, the
   version the AppImages are built with, is now checked at configure time.
+- The app icon shows `°C` in the LCD's new unit lettering, matching the
+  display.
 - Values are shown with four significant digits, and the unit prefix follows the
   sensor's range: `880 mV`, `1.052 V`, `12.10 V`, `230.1 V`, `396 mA`,
   `1.234 kW`. Voltages below 1 V now use mV, power and current from 1000 use kW
