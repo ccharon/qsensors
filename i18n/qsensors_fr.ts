@@ -36,7 +36,7 @@
     </message>
     <message>
         <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
-        <translation>Les paramètres proviennent d'une version plus récente de qsensors ; les modifications ne sont pas enregistrées dans cette session</translation>
+        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors ; les modifications ne sont pas enregistrées dans cette session</translation>
     </message>
 </context>
 <context>
