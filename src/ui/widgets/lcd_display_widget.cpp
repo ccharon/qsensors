@@ -40,7 +40,8 @@ QRectF LcdDisplayWidget::barArea() const {
 }
 
 LcdDisplayWidget::DisplayState LcdDisplayWidget::displayStateFor(const SensorReading &reading) const {
-    return {SensorFormat::valueDigits(reading), SensorFormat::unitSymbol(reading),
+    const SensorFormat::DisplayValue shown = SensorFormat::display(reading);
+    return {shown.digits, shown.symbol,
             litBarSegments(reading, static_cast<int>(barGraphSegments(barArea()).size())),
             SensorsPolicy::isAlertState(reading)};
 }

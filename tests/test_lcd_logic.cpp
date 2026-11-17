@@ -168,7 +168,7 @@ void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
 
     // The same reading again, and a change below the displayed digits and bar resolution: nothing to draw.
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
-    QVERIFY(!repaintsAfter(lcd, counter, volts(5.001)));
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.0004)));
 
     // Changed digits.
     QVERIFY(repaintsAfter(lcd, counter, volts(5.5)));

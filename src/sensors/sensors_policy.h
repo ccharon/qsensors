@@ -12,10 +12,11 @@
 
 /** Rules applied to raw readings: display prefix, default ranges and alert state. */
 namespace SensorsPolicy {
-    /** Milli-unit readings at or above this no longer fit the six-cell LCD value ("9999.9"). */
-    inline constexpr double kMilliUnitOverflow = 10000.0;
-    /** Base-unit readings below this lose too much precision at two decimals ("0.04"). */
-    inline constexpr double kBaseUnitUnderflow = 0.1;
+    /**
+     * Factor by which a value may leave its latched scale range before the scale changes:
+     * a latched "mA" holds up to 9999 mA, a latched "1.052 V" down to 0.100 V.
+     */
+    inline constexpr double kScaleHysteresis = 10.0;
     /**
      * Upper bar graph limit, and alert threshold, for temperatures whose firmware
      * reports no maximum (°C).
@@ -74,49 +75,65 @@ namespace SensorsPolicy {
             max.reset();
     }
 
+    /** Scale range a sensor keeps between polls, see chooseScale(). */
+    struct ScaleLatch {
+        int rangeIndex = 0; // into SensorFormat::scaleRanges()
+        bool fromLimit = false; // taken from a firmware limit
+
+        bool operator==(const ScaleLatch &) const = default;
+    };
+
     /**
-     * Display prefix of a quantity whose unit table allows milli (current, power): milli for
-     * sub-1 sensors. A nonzero firmware limit decides when present (a zero limit carries no
-     * scale); otherwise @p latched carries the prefix between polls with hysteresis (milli
-     * below kBaseUnitUnderflow, base from kMilliUnitOverflow) to avoid flicker. Without a
-     * finite value the latched prefix is kept, or the base unit is used when nothing is
-     * latched yet; the latch is left unchanged. Values and limits stay in the base unit.
+     * Display scale (SI prefix and decimals) of a reading: one of SensorFormat::scaleRanges().
+     * The sensor's range decides, not the momentary value alone, so the display does not
+     * flicker between scales:
+     * - a nonzero firmware limit (the maximum, else the minimum; a zero limit carries no
+     *   scale) gives the range it belongs to, and @p latch takes it over: while the limit is
+     *   missing (a failed limit read) that range is kept;
+     * - otherwise the latched range moves only when the value leaves it by a factor of
+     *   kScaleHysteresis (up from ten times its upper bound, down below a tenth of its lower
+     *   bound), to the range the value belongs to;
+     * - the first value without a latch picks its own range.
+     * Without a finite value the latched range is kept, or the base range is used when nothing
+     * is latched yet; the latch is left unchanged. Expects values and limits in display units;
+     * the formatter still falls back when a value does not fit the chosen scale.
      */
-    [[nodiscard]] inline SiPrefix chooseMilliPrefix(
+    [[nodiscard]] inline SensorScale chooseScale(
         const SensorUnit unit,
         const std::optional<double> value,
         const std::optional<double> min,
         const std::optional<double> max,
-        std::optional<SiPrefix> *latched = nullptr
+        std::optional<ScaleLatch> *latch = nullptr
     ) {
-        if (SensorFormat::quantityFormat(unit).smallestPrefix != SiPrefix::Milli) {
-            return SiPrefix::None;
-        }
-
-        constexpr double kMilliScale = 1000.0;
+        const QVector<SensorFormat::ScaleRange> &ranges = SensorFormat::scaleRanges(unit);
+        const int last = static_cast<int>(ranges.size()) - 1;
         const auto isScaleReference = [](const std::optional<double> &limit) {
-            return limit.has_value() && *limit != 0.0;
+            return limit.has_value() && std::isfinite(*limit) && *limit != 0.0;
         };
-        const bool latchedMilli = latched && latched->has_value() && **latched == SiPrefix::Milli;
-        bool useMilli = false;
+        std::optional<ScaleLatch> latched;
+        if (latch && latch->has_value() && (*latch)->rangeIndex >= 0 && (*latch)->rangeIndex <= last)
+            latched = *latch;
+
+        ScaleLatch next;
         if (isScaleReference(max) || isScaleReference(min)) {
             const double reference = isScaleReference(max) ? *max : *min;
-            useMilli = std::isfinite(reference) && std::abs(reference) < 1.0;
+            next = {SensorFormat::naturalRangeIndex(unit, std::abs(reference)), true};
         } else if (!value || !std::isfinite(*value)) {
-            useMilli = latchedMilli;
+            return ranges.at(latched ? latched->rangeIndex : SensorFormat::baseRangeIndex(unit)).scale;
+        } else if (latched && latched->fromLimit) {
+            next = *latched;
         } else {
             const double magnitude = std::abs(*value);
-            if (latched && latched->has_value()) {
-                useMilli = latchedMilli ? magnitude * kMilliScale < kMilliUnitOverflow
-                                        : magnitude < kBaseUnitUnderflow;
-            } else {
-                useMilli = magnitude < 1.0;
-            }
-            if (latched) {
-                *latched = useMilli ? SiPrefix::Milli : SiPrefix::None;
-            }
+            const int index = latched ? latched->rangeIndex : -1;
+            const bool aboveRange = index >= 0 && index < last
+                                    && magnitude >= ranges.at(index).upperBound * kScaleHysteresis;
+            const bool belowRange = index > 0 && magnitude < ranges.at(index - 1).upperBound / kScaleHysteresis;
+            next = {index < 0 || aboveRange || belowRange ? SensorFormat::naturalRangeIndex(unit, magnitude) : index,
+                    false};
         }
-        return useMilli ? SiPrefix::Milli : SiPrefix::None;
+        if (latch)
+            *latch = next;
+        return ranges.at(next.rangeIndex).scale;
     }
 
     /**
@@ -130,9 +147,16 @@ namespace SensorsPolicy {
         std::optional<double> &max,
         const int fanDefaultMaxRpm
     ) {
+        const auto repairInverted = [&min, &max] {
+            if (min.has_value() && max.has_value() && *max <= *min) {
+                *max = *min + std::max(1.0, std::abs(*min) * 0.5);
+            }
+        };
         if (!value || !std::isfinite(*value)) {
             if (!min.has_value()) min = 0.0;
             if (!max.has_value()) max = 1.0;
+            // A lone firmware minimum above 1 must not leave the range inverted.
+            repairInverted();
             return;
         }
         const double measuredValue = *value;
@@ -186,9 +210,7 @@ namespace SensorsPolicy {
             }
         }
 
-        if (min.has_value() && max.has_value() && *max <= *min) {
-            *max = *min + std::max(1.0, std::abs(*min) * 0.5);
-        }
+        repairInverted();
     }
 
     /**

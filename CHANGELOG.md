@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Values are shown with four significant digits, and the unit prefix follows the
+  sensor's range: `880 mV`, `1.052 V`, `12.10 V`, `230.1 V`, `396 mA`,
+  `1.234 kW`. Voltages below 1 V now use mV, power and current from 1000 use kW
+  and kA, and the 1 mV resolution of voltage inputs is no longer cut to two
+  decimals. Milliamperes and milliwatts are whole numbers. The range comes from
+  the firmware limit when there is one; otherwise it is kept between polls so
+  the unit does not flicker. Temperatures keep one decimal, fans none.
+
+### Fixed
+- A value no longer takes more digit cells than the others: `-2000 mA` and
+  values that round up to the next decade drop a decimal or switch to the next
+  unit instead of shrinking the digits of that one card.
+- A value just below zero is shown as `0.0`, not `-0.0`.
+- A current or power sensor whose firmware limit could not be read for one poll
+  no longer switches between A and mA (or W and mW) for that poll.
+
 ## [0.80.11] - 2026-11-15
 
 ### Added

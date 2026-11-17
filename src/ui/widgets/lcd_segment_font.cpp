@@ -44,6 +44,8 @@ namespace LcdSegmentFont {
                 {u'-', digit(G1 | G2)},
                 {u' ', digit(0)},
                 {u'.', {DP, 0, 0.16, 0.20}},
+                {u'O', digit(A | B | C | D | E | F)}, // overload: "OL"
+                {u'L', digit(D | E | F)},
 
                 {u'A', letter(A | B | C | E | F | G1 | G2)},
                 {u'C', letter(A | D | E | F)},
@@ -53,6 +55,7 @@ namespace LcdSegmentFont {
                 {u'R', letter(A | B | E | F | G1 | G2 | M)},
                 {u'V', letter(F | B | N)},
                 {u'W', {F | B | O, 0, 0.86, 0.96}}, // wide: two Vs
+                {u'k', letter(E | F | G1 | J | M)},
                 {u'm', letter(C | E | G1 | G2 | L)},
                 {QChar(0x00B0), {A | B | F | G1 | G2, 0, 0.46, 0.52}}, // degree sign
             };

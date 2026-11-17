@@ -34,6 +34,9 @@ private slots:
     void missing_first_value_uses_base_unit();
     void non_finite_value_is_missing();
     void reprocessing_with_missing_values_is_stable();
+    void scale_follows_the_range_table();
+    void scale_from_a_limit_survives_a_missing_limit();
+    void temperature_scale_in_both_units();
 };
 
 namespace {
@@ -447,6 +450,46 @@ void ReadingPipelineTest::reprocessing_with_missing_values_is_stable() {
         QCOMPARE(second[i].firmwareMax, first[i].firmwareMax);
     }
     QCOMPARE(first[1].firmwareMin, std::optional(500.0));
+}
+
+void ReadingPipelineTest::scale_follows_the_range_table() {
+    const auto scaleOf = [](const SensorReading &raw) { return processOne(raw).scale; };
+    QCOMPARE(scaleOf(voltage(0.88, std::nullopt, std::nullopt)), std::optional(SensorScale{SiPrefix::Milli, 0}));
+    QCOMPARE(scaleOf(voltage(1.052, std::nullopt, std::nullopt)), std::optional(SensorScale{SiPrefix::None, 3}));
+    QCOMPARE(scaleOf(voltage(12.1, std::nullopt, std::nullopt)), std::optional(SensorScale{SiPrefix::None, 2}));
+    QCOMPARE(scaleOf(voltage(230.1, std::nullopt, std::nullopt)), std::optional(SensorScale{SiPrefix::None, 1}));
+    QCOMPARE(scaleOf(power(1234.0)), std::optional(SensorScale{SiPrefix::Kilo, 3}));
+    QCOMPARE(scaleOf(fan(1534.0, std::nullopt, std::nullopt)), std::optional(SensorScale{SiPrefix::None, 0}));
+    // The firmware range decides, not the value: a 1.2 V limit gives volts with three decimals.
+    QCOMPARE(scaleOf(voltage(0.88, 0.5, 1.2)), std::optional(SensorScale{SiPrefix::None, 3}));
+    // Values and limits stay in the base unit.
+    const SensorReading shown = processOne(voltage(0.88, 0.5, 0.95));
+    QCOMPARE(shown.scale, std::optional(SensorScale{SiPrefix::Milli, 0}));
+    QCOMPARE(shown.value, std::optional(0.88));
+    QCOMPARE(shown.firmwareMax, std::optional(0.95));
+}
+
+void ReadingPipelineTest::scale_from_a_limit_survives_a_missing_limit() {
+    ReadingPipeline pipeline;
+    const RuntimeConfig config;
+    const std::optional<SensorScale> amps = SensorScale{SiPrefix::None, 3};
+    QCOMPARE(pipeline.process({current(0.05, std::nullopt, 2.0)}, config)[0].scale, amps);
+    // One poll fails to read curr1_max: the card stays in A instead of switching to "50 mA".
+    QCOMPARE(pipeline.process({current(0.05, std::nullopt, std::nullopt)}, config)[0].scale, amps);
+    QCOMPARE(pipeline.process({current(0.05, std::nullopt, 2.0)}, config)[0].scale, amps);
+}
+
+void ReadingPipelineTest::temperature_scale_in_both_units() {
+    ReadingPipeline pipeline;
+    RuntimeConfig config;
+    const std::optional<SensorScale> oneDecimal = SensorScale{SiPrefix::None, 1};
+    QCOMPARE(pipeline.process({temperature(40.0, 80.0)}, config)[0].scale, oneDecimal);
+    config.temperatureUnit = TemperatureUnit::Fahrenheit;
+    const SensorReading fahrenheit = pipeline.process({temperature(40.0)}, config)[0];
+    QCOMPARE(fahrenheit.unit, SensorUnit::Fahrenheit);
+    QCOMPARE(fahrenheit.scale, oneDecimal);
+    config.temperatureUnit = TemperatureUnit::Celsius;
+    QCOMPARE(pipeline.process({temperature(40.0)}, config)[0].scale, oneDecimal);
 }
 
 QTEST_APPLESS_MAIN(ReadingPipelineTest)
