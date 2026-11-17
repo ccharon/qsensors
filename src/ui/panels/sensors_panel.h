@@ -173,6 +173,9 @@ private:
     /** Starts dragging the card of @p chip, grabbed at @p grabPos in the card; the drop reorders via moveChip(). */
     void startChipDrag(const QString &chip, const QPoint &grabPos);
 
+    /** True if @p event carries a chip dragged from this panel. */
+    [[nodiscard]] bool isOwnChipDrag(const QDropEvent *event) const;
+
     /** Insert position among the shown chips for a drop at @p y. */
     [[nodiscard]] int dropIndexAt(int y) const;
 

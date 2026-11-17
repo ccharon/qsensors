@@ -441,13 +441,21 @@ void SensorsPanel::showDropIndicator(const int index) {
     m_dropIndicator->show();
 }
 
+bool SensorsPanel::isOwnChipDrag(const QDropEvent *event) const {
+    // Only a chip dragged from this panel: the same MIME data from another qsensors
+    // instance must not reorder (and persist) this one. A drag of this panel is exactly
+    // one that arrives while its QDrag::exec() runs, which is what event->source() == this
+    // tells as well; the flag also works when tests stand in for exec().
+    return m_dragActive && event->mimeData()->hasFormat(kChipMimeType);
+}
+
 void SensorsPanel::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat(kChipMimeType))
+    if (isOwnChipDrag(event))
         event->acceptProposedAction();
 }
 
 void SensorsPanel::dragMoveEvent(QDragMoveEvent *event) {
-    if (!event->mimeData()->hasFormat(kChipMimeType))
+    if (!isOwnChipDrag(event))
         return;
     showDropIndicator(dropIndexAt(event->position().toPoint().y()));
     event->acceptProposedAction();
@@ -460,7 +468,7 @@ void SensorsPanel::dragLeaveEvent(QDragLeaveEvent *event) {
 
 void SensorsPanel::dropEvent(QDropEvent *event) {
     m_dropIndicator->hide();
-    if (!event->mimeData()->hasFormat(kChipMimeType))
+    if (!isOwnChipDrag(event))
         return;
     const QString chip = QString::fromUtf8(event->mimeData()->data(kChipMimeType));
     const QStringList before = displayOrder();

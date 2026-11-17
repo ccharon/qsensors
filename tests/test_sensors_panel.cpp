@@ -11,6 +11,7 @@
 
 #include <QApplication>
 #include <algorithm>
+#include <QDrag>
 #include <QDropEvent>
 #include <QLayout>
 #include <QMimeData>
@@ -40,6 +41,7 @@ private slots:
     void saved_order_keeps_a_bounded_number_of_absent_chips();
     void header_click_still_toggles_when_draggable();
     void user_toggle_and_drop_are_announced_but_applying_state_is_not();
+    void drop_from_another_drag_is_rejected();
     void drag_request_carries_the_pointer_position_in_the_section();
     void structural_update_waits_for_the_end_of_a_drag();
     void columns_go_to_category_with_most_rows();
@@ -133,6 +135,31 @@ namespace {
             if (button->text() == chip)
                 return button;
         return nullptr;
+    }
+
+    // Drags @p mime over the panel's window and drops it at height @p y; returns whether the drop was accepted.
+    bool dropOnWindow(SensorsPanel &panel, const QMimeData &mime, const int y) {
+        // The window routes the events to the widget under the pointer, as for a real drag.
+        QWindow *window = panel.windowHandle();
+        const QPointF pos(10, y);
+        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &enter);
+        QDropEvent drop(pos, Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &drop);
+        return drop.isAccepted();
+    }
+
+    // Drags @p chip by its header and drops it at height @p y, as the user would; returns whether the drop was accepted.
+    bool dragChipTo(SensorsPanel &panel, const QString &chip, const int y) {
+        bool accepted = false;
+        panel.setDragExecutor([&](QDrag &drag) { accepted = dropOnWindow(panel, *drag.mimeData(), y); });
+        QToolButton *header = headerFor(panel, chip);
+        const QPoint press(20, header->height() / 2);
+        QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+        QTest::mouseMove(header, press + QPoint(QApplication::startDragDistance() + 10, 0));
+        QTest::mouseRelease(header, Qt::LeftButton, Qt::NoModifier, press);
+        panel.setDragExecutor({});
+        return accepted;
     }
 }
 
@@ -448,25 +475,29 @@ void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_
 
     // A drop that moves a chip announces the new order; one that keeps it does not.
     const QStringList before = cardOrder(panel);
-    const auto drop = [&panel](const QString &chip, const int y) {
-        auto *mime = new QMimeData;
-        mime->setData(QStringLiteral("application/x-qsensors-chip"), chip.toUtf8());
-        // The window routes the events to the widget under the pointer, as for a real drag.
-        QWindow *window = panel.windowHandle();
-        const QPointF pos(10, y);
-        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
-        QCoreApplication::sendEvent(window, &enter);
-        QDropEvent event(pos, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
-        QCoreApplication::sendEvent(window, &event);
-        delete mime;
-    };
     panel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&panel));
-    drop(before.first(), 0);
+    QCOMPARE(dragChipTo(panel, before.first(), 0), true);
     QCOMPARE(orderSpy.count(), 0);
-    drop(before.first(), panel.height());
+    QCOMPARE(dragChipTo(panel, before.first(), panel.height()), true);
     QCOMPARE(orderSpy.count(), 1);
     QCOMPARE(cardOrder(panel), (QStringList{before.last(), before.first()}));
+}
+
+void SensorsPanelTest::drop_from_another_drag_is_rejected() {
+    SensorsPanel panel;
+    QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
+    panel.setReadings(sampleReadings(40.0));
+    const QStringList before = cardOrder(panel);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+
+    // Same MIME type and chip name, but not dragged from this panel (e.g. another qsensors).
+    QMimeData mime;
+    mime.setData(QStringLiteral("application/x-qsensors-chip"), before.first().toUtf8());
+    QCOMPARE(dropOnWindow(panel, mime, panel.height()), false);
+    QCOMPARE(orderSpy.count(), 0);
+    QCOMPARE(cardOrder(panel), before);
 }
 
 void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section() {
