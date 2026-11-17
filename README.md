@@ -25,6 +25,7 @@ cmake --build build -j
 | `BUILD_TESTING` | `ON` | Builds the tests (needs Qt Test); run them with `ctest --test-dir build` |
 | `QSENSORS_WARNINGS_AS_ERRORS` | `OFF` | Treats compiler warnings in qsensors code as errors |
 | `QSENSORS_SANITIZE` | `OFF` | Builds with AddressSanitizer and UndefinedBehaviorSanitizer |
+| `QSENSORS_HARDENING` | `ON` | Hardening flags for qsensors' own targets: PIE, `-fstack-protector-strong`, `-fstack-clash-protection`, `-fcf-protection` (x86), `-D_FORTIFY_SOURCE=3` (optimized builds, not with `QSENSORS_SANITIZE`), full RELRO; each is probed and skipped if unsupported |
 
 ## Run
 

@@ -16,6 +16,9 @@ cmake -S . -B build -DBUILD_TESTING=ON
 cmake -S . -B build -DQSENSORS_WARNINGS_AS_ERRORS=ON
 cmake -S . -B build-asan -DQSENSORS_SANITIZE=ON -DCMAKE_BUILD_TYPE=Debug
 
+# Hardening flags (PIE, stack protector, FORTIFY_SOURCE, RELRO) default ON; to disable
+cmake -S . -B build -DQSENSORS_HARDENING=OFF
+
 # Build
 cmake --build build -j
 
@@ -60,7 +63,7 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 
 **Build targets**: the link graph enforces the layering. `qsensors_model` (static, `src/config` and `src/sensors` without the libsensors source, links only `Qt::Core`) is used by `qsensors_ui` (static, `src/ui`, adds `Qt::Widgets`), which is used by the app (`main.cpp` and the libsensors source). Tests link the lowest library they need. New sources go into `QSENSORS_MODEL_SOURCES`, `QSENSORS_UI_SOURCES` or `QSENSORS_APP_SOURCES` in `CMakeLists.txt`; all lists are also scanned for translations. Includes are relative to `src/` (`#include "sensors/sensor_reading.h"`).
 
-**Build options**: the INTERFACE library `qsensors_build_options` carries the warning flags (`-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wold-style-cast`; `-Wno-missing-field-initializers` because designated initializers rely on default member initializers) and the sanitizer flags. It is linked only into `qsensors_model`, `qsensors_ui`, `qsensors` and the tests, so nothing leaks to consumers. `QSENSORS_WARNINGS_AS_ERRORS` adds `-Werror`; `QSENSORS_SANITIZE` adds ASan + UBSan (`test_sensor_monitor` deliberately leaks one QThread in its shutdown-timeout case, which LeakSanitizer reports). Qt Test is required only when `BUILD_TESTING` is on. Keep the code warning-free.
+**Build options**: the INTERFACE library `qsensors_build_options` carries the warning flags (`-Wall -Wextra -Wpedantic -Wshadow -Wconversion -Wold-style-cast`; `-Wno-missing-field-initializers` because designated initializers rely on default member initializers) the sanitizer flags and the hardening flags. It is linked only into `qsensors_model`, `qsensors_ui`, `qsensors` and the tests, so nothing leaks to consumers. `QSENSORS_WARNINGS_AS_ERRORS` adds `-Werror`; `QSENSORS_SANITIZE` adds ASan + UBSan (`test_sensor_monitor` deliberately leaks one QThread in its shutdown-timeout case, which LeakSanitizer reports). `QSENSORS_HARDENING` (default ON) adds PIE (`CMAKE_POSITION_INDEPENDENT_CODE` after `check_pie_supported`), `-fstack-protector-strong`, `-fstack-clash-protection`, `-fcf-protection` (each probed, so unsupported ones such as `-fcf-protection` on arm64 are skipped), `-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=3` (Release, RelWithDebInfo and MinSizeRel only, and not together with `QSENSORS_SANITIZE`) and `-Wl,-z,relro,-z,now`; the `-U` keeps toolchains that define it themselves warning-free. Qt Test is required only when `BUILD_TESTING` is on. Keep the code warning-free.
 
 **`tests/`**: 13 unit test files covering the main window sizing and status (fake source), range policy and rules, the reading pipeline, the sensor monitor (worker thread, stall reporting and bounded shutdown, with a fake source), LCD logic (including repaint behaviour), segment glyph model, sensor contracts and formatting, settings persistence/migration, sensor identity, the sensors panel (including chip layout signals and the drag position), the status line, window sizing and runtime theme refresh. Treat failing tests as blockers.
 

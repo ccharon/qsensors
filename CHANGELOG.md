@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- The build enables hardening flags for the project's own targets
+  (position independent executable, stack protector, stack clash protection,
+  `-fcf-protection` on x86, `_FORTIFY_SOURCE` in optimized builds, full RELRO).
+  The new CMake option `QSENSORS_HARDENING` (default `ON`) turns them off.
+- The AppImage build installs its Python tools (cmake, ninja, aqtinstall) from a
+  hash-locked requirements file, pins the build container images by digest and
+  the GitHub Actions by commit SHA, and no longer persists checkout credentials.
+
 ## [0.80.11] - 2026-11-15
 
 ### Added
