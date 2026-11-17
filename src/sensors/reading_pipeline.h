@@ -26,6 +26,9 @@ public:
      */
     [[nodiscard]] QVector<SensorReading> process(const QVector<SensorReading> &raw, const RuntimeConfig &config);
 
+    /** Number of sensors with a kept display scale; sensors missing from a non-empty read are dropped. */
+    [[nodiscard]] qsizetype latchedSensorCount() const;
+
 private:
     // Scale range per "chip:feature", see SensorsPolicy::chooseScale(); kept with its unit,
     // so a °C/°F switch starts over.

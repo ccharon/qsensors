@@ -16,6 +16,7 @@ private slots:
     void fahrenheit_converts_value_and_limits();
     void fan_fallback_follows_config();
     void milli_scale_is_latched_per_sensor();
+    void latch_of_a_removed_sensor_is_dropped();
     void firmware_limits_follow_milli_scale();
     void reprocessing_same_raw_readings_is_stable();
     void zero_voltage_limits_are_ignored();
@@ -148,6 +149,22 @@ void ReadingPipelineTest::milli_scale_is_latched_per_sensor() {
 
     // 10 W or more goes back to W.
     QCOMPARE(prefixOf(pipeline.process({power(10.0)}, config)[0]), SiPrefix::None);
+}
+
+void ReadingPipelineTest::latch_of_a_removed_sensor_is_dropped() {
+    ReadingPipeline pipeline;
+    const RuntimeConfig config;
+    QCOMPARE(prefixOf(pipeline.process({power(0.5), power(2.0, 4)}, config)[0]), SiPrefix::Milli);
+    QCOMPARE(pipeline.latchedSensorCount(), 2);
+
+    // An empty read (failed source) keeps both latches.
+    QVERIFY(pipeline.process({}, config).isEmpty());
+    QCOMPARE(pipeline.latchedSensorCount(), 2);
+
+    // Feature 3 is gone: its latch goes, so it starts over when it returns.
+    (void) pipeline.process({power(2.0, 4)}, config);
+    QCOMPARE(pipeline.latchedSensorCount(), 1);
+    QCOMPARE(prefixOf(pipeline.process({power(1.5), power(2.0, 4)}, config)[0]), SiPrefix::None);
 }
 
 void ReadingPipelineTest::firmware_limits_follow_milli_scale() {

@@ -4,6 +4,8 @@
 #include "sensors/reading_pipeline.h"
 #include "sensors/sensors_policy.h"
 
+#include <QSet>
+
 #include <cmath>
 #include <optional>
 
@@ -27,8 +29,11 @@ namespace {
 
 QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &raw, const RuntimeConfig &config) {
     QVector<SensorReading> readings = raw;
+    QSet<QString> listed;
+    listed.reserve(readings.size());
     for (SensorReading &reading: readings) {
         const QString latchKey = reading.chip + QLatin1Char(':') + QString::number(reading.featureNumber);
+        listed.insert(latchKey);
         const auto latchIt = m_scaleLatch.constFind(latchKey);
         std::optional<SensorsPolicy::ScaleLatch> latch;
         if (latchIt != m_scaleLatch.cend() && latchIt->unit == reading.unit)
@@ -52,5 +57,15 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
             m_scaleLatch.insert(latchKey, {reading.unit, *latch});
         }
     }
+    // Sensors that are gone (unplugged devices, renamed chips) give up their latch, so it
+    // does not grow with every sensor ever seen. An empty read (a failed source) says
+    // nothing about the sensors and keeps everything.
+    if (!readings.isEmpty()) {
+        m_scaleLatch.removeIf([&listed](const auto &entry) { return !listed.contains(entry.key()); });
+    }
     return readings;
+}
+
+qsizetype ReadingPipeline::latchedSensorCount() const {
+    return m_scaleLatch.size();
 }
