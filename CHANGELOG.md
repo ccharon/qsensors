@@ -8,136 +8,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Fan control outputs (`pwm*`) are shown in the Fans column as a duty cycle
-  in percent. libsensors 3.6.2 reports them divided by 2 instead of 2.55;
-  qsensors shows the duty cycle the kernel reports.
-- Power sensors that only report an average (`power*_average`, e.g. the PPT
-  of AMD GPUs) now get a card in the Power column.
-- Energy meters (`energy*_input`, in J, kJ, MJ or GJ) in the Power column,
-  humidity (`humidity*_input`, %RH) and frequency inputs (`freq*_input`, Hz,
-  kHz or MHz) in the Other column. Energy counters and frequencies have no
-  natural range and show no bar graph.
+- New sensor types: fan control outputs (`pwm*`, duty cycle in percent) in the
+  Fans column, average-only power sensors (`power*_average`, e.g. the PPT of
+  AMD GPUs) and energy meters (`energy*_input`) in the Power column, humidity
+  (`humidity*_input`) and frequency inputs (`freq*_input`) in the Other column.
+  Energy and frequency have no bar graph.
+- Hardware that appears or disappears while qsensors runs (USB devices, NVMe
+  drives, GPUs after a driver reload) is picked up: libsensors is
+  re-initialized when the hwmon devices change.
+- A failed libsensors initialization, at startup or after a hardware change, is
+  retried on the next hwmon change and on a timer (doubling delays up to once a
+  minute) instead of needing a restart. The status line shows "Sensors
+  unavailable, retrying: …" until it succeeds.
 
 ### Changed
-- The status line says "Sensors unavailable, retrying: …" while the sensors
-  cannot be read, instead of "libsensors init failed: …", which was also shown
-  when a running source stopped working.
-- The settings schema is now v3. The migration removes the unused
-  `sensors/fingerprint` key (the saved chip set, which nothing reads any more)
-  and is logged at startup. qsensors 0.80.11 and older read a v3 file without
-  complaint but find no chip set there, so they skip their expand state check.
-- Building needs CMake 3.21 or newer instead of 4.2. Qt 6.8 or newer, the
-  version the AppImages are built with, is now checked at configure time.
-- The app icon shows `°C` in the LCD's new unit lettering, matching the
-  display.
-- Values are shown with four significant digits, and the unit prefix follows the
-  sensor's range: `880 mV`, `1.052 V`, `12.10 V`, `230.1 V`, `396 mA`,
-  `1.234 kW`. Voltages below 1 V now use mV, power and current from 1000 use kW
-  and kA, and the 1 mV resolution of voltage inputs is no longer cut to two
-  decimals. Milliamperes and milliwatts are whole numbers. The range comes from
-  the firmware limit when there is one; otherwise it is kept between polls so
-  the unit does not flicker. Temperatures keep one decimal, fans none.
-- The LCD is laid out like a multimeter: every value is right-aligned in the
-  same five digit cells, with the unit in a fixed field at the right edge, so
-  digits, decimal points and units line up across all cards. A wider card
-  shows more unlit digits on the left instead of moving the value. Decimal
-  points sit between the digit cells.
-- Units are drawn as LCD symbols in a bold, narrow face instead of segment
-  letters, with the same slant, colour and shadow or glow as the digits.
-  "RPM" no longer reads like "APM", and `%`, `%RH`, `kHz` and `MHz` can be
-  shown. The symbols are built into qsensors and need no installed font.
-- An alert no longer depends on colour alone: a small `HI` or `LO` lights up
-  under the unit when the value is above the firmware maximum or below the
-  minimum. The bar graph ends before it.
-- Changing the polling interval or fan fallback with the spin box arrows no
-  longer rewrites the settings file on every step: the display follows each
-  step, the file is written once the changes stop (and on close).
-- Sensor labels and firmware limits are read once and then cached instead of
-  on every poll, which cuts device I/O per poll (limits of NVMe drives and
-  `drivetemp` disks are device commands). They are read again after a
-  hardware change and once a minute, so a limit changed at runtime shows up
-  within a minute; a limit that could not be read is retried on the next poll.
+- Values use four significant digits and a unit prefix that follows the
+  sensor's range (`880 mV`, `1.052 V`, `12.10 V`, `1.234 kW`). The range comes
+  from the firmware limit, or is kept between polls so the unit does not
+  flicker.
+- The LCD is laid out like a multimeter: values right-aligned in five digit
+  cells, the unit in a fixed field at the right edge, so digits and units line
+  up across all cards. Units are drawn as built-in LCD symbols ("RPM" no longer
+  reads like "APM"), and an alert lights a `HI` or `LO` under the unit instead
+  of relying on colour alone. The app icon uses the same lettering.
+- Sensor labels and firmware limits are cached and re-read once a minute and
+  after a hardware change, which cuts device I/O per poll (NVMe and `drivetemp`
+  limits are device commands).
+- The spin boxes write the settings file once the changes stop, not on every
+  step.
+- The settings schema is now v3; the logged migration removes the unused
+  `sensors/fingerprint` key.
+- Building needs CMake 3.21 or newer (was 4.2) and Qt 6.8 or newer, checked at
+  configure time.
 
 ### Fixed
-- A chip name containing `&` is shown as is in the chip card header; the
-  character was dropped and the next letter underlined as a shortcut.
-- A poll whose readings only change values no longer repaints the whole
-  sensors panel: only the LCDs whose display changed are redrawn. The panel
-  still batches its repaint when chips or sensors appear, disappear or move.
-- A start with a different set of sensor chips no longer resets the expand
-  state of all chips: only the entries of chips that are gone are dropped,
-  and a read without any chip decides nothing. The status bar names the
-  missing chips whose collapsed state was dropped, instead of reporting a
-  reset of the UI configuration.
-- A chip that appears or disappears while a chip card is being dragged no
-  longer changes the cards during the drag: the change is applied when the
-  drag ends, so the dragged card cannot be deleted under the pointer. Values
-  keep updating during the drag.
-- A sensor chip that is missing for a while (e.g. an unplugged USB device)
-  keeps its place in the chip order instead of moving to the end, also when
-  other chips are dragged; it returns where it was. The saved chip order
-  keeps at most 16 missing chips, so it no longer grows with every chip ever
-  seen.
-- A chip card dragged from another qsensors window is no longer accepted as
-  a drop, so it cannot reorder (and save) the chip order of this window.
-- Sensor names and status text are always shown as plain text; a sensor label
-  that looks like HTML is no longer rendered as rich text.
-- The height of a sensor card follows a font change instead of staying at the
-  value computed at creation.
-- Status notices no longer replace each other: when several appear at once
-  (for example at startup) they are shown one after another.
-- Settings written by a newer qsensors version are no longer overwritten: this
-  version reads them (clamping out-of-range values in memory only), does not
-  write any setting, layout or window state back during the session, and says
-  so in a status notice.
-- A setting too large for a 32-bit integer is clamped to its range like any
-  other out-of-range value instead of being replaced by the default.
-- A garbled settings schema version is logged and treated as unversioned, and
-  a failed write of the migrated schema version is logged and shown as a
-  notice instead of passing silently.
-- Sensor hardware that appears or disappears while qsensors runs (USB
-  devices, NVMe drives, GPUs after a driver reload) is now picked up: when the
-  hwmon devices change, libsensors is re-initialized, so new devices get cards
-  and removed ones lose theirs. Before, a removed device kept a card of dashes,
-  and a device that reused its hwmon index could show its values under the old
-  chip's name. A failed re-initialization is shown in the status line.
-- A failed libsensors initialization, at startup or after a hardware change,
-  no longer needs a restart of qsensors. It is retried on the next change of
-  the hwmon devices and on a timer, first after one polling interval, then
-  with doubling delays up to once a minute. The status line shows the error
-  until a retry succeeds, then the readings return with the notice "Sensors
-  are available again". The log names the failure once, a different error
-  again, and the recovery.
-- Two chips with the same name (for example two ACPI fans, both
-  `acpi_fan-acpi-0`) no longer share one set of cards, where one card froze
-  and the other jumped between both sensors. The second and further chips of
-  that name are shown as `acpi_fan-acpi-0 #2` and so on, numbered by their
-  device path so the numbering stays the same across restarts. Chips with a
-  unique name keep their name and their saved order and expand state.
-- A driver that hangs at startup no longer keeps the window from appearing.
-  If the first sensor read takes longer than 10 seconds, the window opens
-  without readings and the status line says the sensors are not responding;
-  the readings appear as soon as the read returns. On a first start without a
-  saved window size, the window is then fitted to them as on a normal start,
-  unless it was resized or maximized in the meantime.
-- Closing qsensors while a sensor read hangs can no longer crash at exit: when
-  the read has not returned within the shutdown timeout, the process now ends
-  without tearing down Qt under the still running sensor thread.
-- A value no longer takes more digit cells than the others: `-2000 mA` and
-  values that round up to the next decade drop a decimal or switch to the next
-  unit instead of shrinking the digits of that one card.
-- A value just below zero is shown as `0.0`, not `-0.0`.
-- A current or power sensor whose firmware limit could not be read for one poll
-  no longer switches between A and mA (or W and mW) for that poll.
+- Two chips with the same name (e.g. two `acpi_fan-acpi-0`) no longer share one
+  set of cards; the second is shown as `… #2`, numbered stably by device path.
+- A driver that hangs at startup no longer keeps the window from appearing
+  (after 10 s it opens without readings and says so), and closing qsensors
+  while a read hangs no longer crashes at exit.
+- Settings written by a newer qsensors version are no longer overwritten: they
+  are read, but nothing is written back during the session, and a notice says
+  so. Values too large for 32 bits are clamped instead of reset, and a garbled
+  schema version or a failed write is reported instead of passing silently.
+- A changed set of chips at startup no longer resets the expand state of all
+  chips; only missing chips are dropped, and the collapsed ones are named in
+  the status bar.
+- A temporarily missing chip keeps its place in the chip order (at most 16
+  missing chips are kept).
+- Dragging chip cards: chips appearing or disappearing during a drag are
+  applied after it, and drops from another qsensors window are refused.
+- A value update repaints only the LCDs whose display changed, not the whole
+  panel.
+- Values always fit the five digit cells, `-0.0` is shown as `0.0`, and a
+  failed limit read no longer switches A/mA or W/mW for one poll.
+- Chip names with `&` and sensor labels that look like HTML are shown as plain
+  text; card heights follow font changes; status notices arriving together are
+  queued instead of replacing each other.
 
 ### Security
-- The build enables hardening flags for the project's own targets
-  (position independent executable, stack protector, stack clash protection,
-  `-fcf-protection` on x86, `_FORTIFY_SOURCE` in optimized builds, full RELRO).
-  The new CMake option `QSENSORS_HARDENING` (default `ON`) turns them off.
-- The AppImage build installs its Python tools (cmake, ninja, aqtinstall) from a
-  hash-locked requirements file, pins the build container images by digest and
-  the GitHub Actions by commit SHA, and no longer persists checkout credentials.
+- Hardened builds by default (PIE, stack protector, stack clash protection,
+  `-fcf-protection` on x86, `_FORTIFY_SOURCE`, full RELRO); the CMake option
+  `QSENSORS_HARDENING` turns them off.
+- The AppImage build pins its inputs: Python tools by hash, container images by
+  digest, GitHub Actions by commit SHA; checkout credentials are not persisted.
 
 ## [0.80.11] - 2026-11-15
 
