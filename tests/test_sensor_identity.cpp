@@ -5,14 +5,11 @@
 
 #include <QtTest/QtTest>
 
-// Verifies SensorIdentity::chipFingerprint and SensorIdentity::sensorKey.
+// Verifies SensorIdentity::sensorKey.
 class SensorIdentityTest final : public QObject {
     Q_OBJECT
 
 private slots:
-    void chipFingerprint_deduplicates_chips();
-    void chipFingerprint_is_order_independent();
-    void chipFingerprint_empty_readings();
     void sensorKey_same_reading_same_key();
     void sensorKey_different_subfeature_different_key();
     void sensorKey_different_category_different_key();
@@ -36,35 +33,6 @@ namespace {
             return keys.at(i);
         }
     };
-}
-
-void SensorIdentityTest::chipFingerprint_deduplicates_chips() {
-    QVector<SensorReading> readings;
-    readings.push_back({.chip = QStringLiteral("coretemp-isa-0000")});
-    readings.push_back({.chip = QStringLiteral("coretemp-isa-0000")});
-    readings.push_back({.chip = QStringLiteral("nct6798d-isa-0290")});
-
-    const QString fp = SensorIdentity::chipFingerprint(readings);
-    const QStringList lines = fp.split(QStringLiteral("\n"));
-    QCOMPARE(lines.size(), 2);
-    QVERIFY(lines.contains(QStringLiteral("coretemp-isa-0000")));
-    QVERIFY(lines.contains(QStringLiteral("nct6798d-isa-0290")));
-}
-
-void SensorIdentityTest::chipFingerprint_is_order_independent() {
-    QVector<SensorReading> order1;
-    order1.push_back({.chip = QStringLiteral("chip-a")});
-    order1.push_back({.chip = QStringLiteral("chip-b")});
-
-    QVector<SensorReading> order2;
-    order2.push_back({.chip = QStringLiteral("chip-b")});
-    order2.push_back({.chip = QStringLiteral("chip-a")});
-
-    QCOMPARE(SensorIdentity::chipFingerprint(order1), SensorIdentity::chipFingerprint(order2));
-}
-
-void SensorIdentityTest::chipFingerprint_empty_readings() {
-    QCOMPARE(SensorIdentity::chipFingerprint({}), QString());
 }
 
 void SensorIdentityTest::sensorKey_same_reading_same_key() {
@@ -184,7 +152,6 @@ void SensorIdentityTest::uniqueChipNames_separates_sensor_keys() {
     SensorReading b = a;
     b.chip = unique.at(1);
     QVERIFY(SensorIdentity::sensorKey(a) != SensorIdentity::sensorKey(b));
-    QCOMPARE(SensorIdentity::chipFingerprint({a, b}).split(QLatin1Char('\n')).size(), 2);
 }
 
 QTEST_APPLESS_MAIN(SensorIdentityTest)

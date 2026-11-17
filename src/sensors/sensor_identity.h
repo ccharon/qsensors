@@ -16,22 +16,6 @@
 
 /** Stable identification of sensors and chips, independent of the UI. */
 namespace SensorIdentity {
-    /** Fingerprint of a chip set; order and duplicates do not matter. */
-    [[nodiscard]] inline QString chipSetFingerprint(QStringList chips) {
-        chips.removeDuplicates();
-        chips.sort();
-        return chips.join(QLatin1Char('\n'));
-    }
-
-    /** Fingerprint of the chips in @p readings; changes when chips appear or disappear. */
-    [[nodiscard]] inline QString chipFingerprint(const QVector<SensorReading> &readings) {
-        QStringList chips;
-        chips.reserve(readings.size());
-        for (const SensorReading &r: readings)
-            chips.push_back(r.chip);
-        return chipSetFingerprint(std::move(chips));
-    }
-
     /**
      * Names for the chips of one read, in the order of @p names. A unique name stays as it
      * is, so saved chip order and expand state keep working. Chips sharing a name (virtual

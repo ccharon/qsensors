@@ -34,7 +34,7 @@ private slots:
     void restored_state_dropped_only_for_missing_chips();
     void restored_state_kept_when_all_chips_present();
     void empty_first_read_keeps_restored_state();
-    void fingerprint_and_count_follow_readings();
+    void count_follows_readings();
     void default_order_is_alphabetical();
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
@@ -336,15 +336,13 @@ void SensorsPanelTest::empty_first_read_keeps_restored_state() {
     QVERIFY(!headerFor(panel, QStringLiteral("chip-b"))->isChecked());
 }
 
-void SensorsPanelTest::fingerprint_and_count_follow_readings() {
+void SensorsPanelTest::count_follows_readings() {
     const QVector<SensorReading> readings = sampleReadings(40.0);
     SensorsPanel panel;
     QCOMPARE(panel.readingCount(), 0);
-    QVERIFY(panel.chipFingerprint().isEmpty());
 
     panel.setReadings(readings);
     QCOMPARE(panel.readingCount(), 3);
-    QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(readings));
 }
 
 void SensorsPanelTest::default_order_is_alphabetical() {
@@ -658,7 +656,6 @@ void SensorsPanelTest::unreadable_sensor_is_a_value_update() {
     QList<QPointer<SensorValueWidget>> before;
     for (SensorValueWidget *card: cards(panel))
         before.append(card);
-    const QString fingerprint = panel.chipFingerprint();
     const QSize minimum = panel.minimumSizeHint();
     const auto tempCard = [&panel] {
         for (SensorValueWidget *card: cards(panel))
@@ -674,7 +671,6 @@ void SensorsPanelTest::unreadable_sensor_is_a_value_update() {
     unreadable[0].value.reset();
     panel.setReadings(unreadable);
     QCOMPARE(spy.count(), 1);
-    QCOMPARE(panel.chipFingerprint(), fingerprint);
     QCOMPARE(panel.readingCount(), 3);
     QCOMPARE(panel.minimumSizeHint(), minimum);
     QCOMPARE(tempCard(), temp);
@@ -700,7 +696,6 @@ void SensorsPanelTest::chip_with_only_unreadable_sensors_keeps_its_cards() {
     QCOMPARE(spy.count(), 1);
     QVERIFY(headerFor(panel, QStringLiteral("chip-b")));
     QCOMPARE(cards(panel).size(), 3);
-    QCOMPARE(panel.chipFingerprint(), SensorIdentity::chipFingerprint(sampleReadings(40.0)));
 
     QList<QPointer<SensorValueWidget>> before;
     for (SensorValueWidget *card: cards(panel))

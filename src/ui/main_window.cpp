@@ -128,7 +128,6 @@ void MainWindow::persistChipLayout() {
         .geometry = {},
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
         .chipOrder = m_sensorsPanel->chipOrder(),
-        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
     });
     if (!saved) {
         showNotice(tr("Settings could not be saved"));
@@ -310,7 +309,6 @@ void MainWindow::saveSettings() const {
         .geometry = saveGeometry(),
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
         .chipOrder = m_sensorsPanel->chipOrder(),
-        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
     });
 }
 

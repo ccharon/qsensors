@@ -15,7 +15,6 @@ struct MainWindowState {
     QByteArray geometry;
     QHash<QString, bool> chipExpanded;
     QStringList chipOrder; // user-arranged order; empty means alphabetical
-    QString sensorFingerprint; // chip set the expand state belongs to
 };
 
 /** Reads/writes persisted main-window state via QSettings. */
@@ -26,6 +25,6 @@ namespace MainWindowStateStore {
     /** Writes the whole window state to disk; returns false (and logs) if it could not be stored. */
     [[nodiscard]] bool save(const MainWindowState &state);
 
-    /** Writes chip order, expand state and fingerprint of @p state, leaving the stored geometry untouched. */
+    /** Writes chip order and expand state of @p state, leaving the stored geometry untouched. */
     [[nodiscard]] bool saveLayout(const MainWindowState &state);
 }

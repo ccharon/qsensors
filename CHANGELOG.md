@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The settings schema is now v3. The migration removes the unused
+  `sensors/fingerprint` key (the saved chip set, which nothing reads any more)
+  and is logged at startup. qsensors 0.80.11 and older read a v3 file without
+  complaint but find no chip set there, so they skip their expand state check.
+
 ### Added
 - Fan control outputs (`pwm*`) are shown in the Fans column as a duty cycle
   in percent. libsensors 3.6.2 reports them divided by 2 instead of 2.55;

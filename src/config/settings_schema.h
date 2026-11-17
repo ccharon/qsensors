@@ -8,7 +8,7 @@ class QSettings;
 /** Versioned layout of the persisted settings and its migrations. */
 namespace SettingsSchema {
     /** Schema version written by this build. */
-    constexpr int kCurrentVersion = 2;
+    constexpr int kCurrentVersion = 3;
 
     /** Schema version stored in @p settings; 0 when none was written yet or the marker is garbled. */
     [[nodiscard]] int storedVersion(const QSettings &settings);
