@@ -230,38 +230,46 @@ namespace SensorsPolicy {
     }
 
     /**
-     * True when the reading violates its firmware limits: fans below min, temperatures
-     * above max, electrical values, humidity and frequency outside [min, max]; PWM outputs
-     * and energy counters never alert. Default ranges never alert, except
-     * that temperatures without a firmware maximum alert above kDefaultTemperatureMaxC.
-     * A reading without a value never alerts.
+     * Which firmware limit the reading violates: fans below min (Low), temperatures above
+     * max (High), electrical values, humidity and frequency below min (Low) or above max
+     * (High); PWM outputs and energy counters never alert. Default ranges never alert,
+     * except that temperatures without a firmware maximum are High above
+     * kDefaultTemperatureMaxC. A reading without a value never alerts.
      */
-    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
+    [[nodiscard]] inline AlertState alertState(const SensorReading &reading) {
         if (!reading.value) {
-            return false;
+            return AlertState::None;
         }
         const double value = *reading.value;
         const bool belowMin = reading.firmwareMin && value < *reading.firmwareMin;
         const bool aboveMax = reading.firmwareMax && value > *reading.firmwareMax;
+        const auto state = [](const bool low, const bool high) {
+            return high ? AlertState::High : low ? AlertState::Low : AlertState::None;
+        };
         switch (reading.unit) {
             case SensorUnit::Rpm:
-                return belowMin;
+                return state(belowMin, false);
             case SensorUnit::Celsius:
-                return value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC);
+                return state(false, value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC));
             case SensorUnit::Fahrenheit:
-                return value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0);
+                return state(false, value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0));
             case SensorUnit::Volt:
             case SensorUnit::Ampere:
             case SensorUnit::Watt:
             case SensorUnit::RelativeHumidity:
             case SensorUnit::Hertz:
-                return belowMin || aboveMax;
+                return state(belowMin, aboveMax);
             case SensorUnit::Percent:
             case SensorUnit::Joule:
             case SensorUnit::Unknown:
                 break;
         }
-        return false;
+        return AlertState::None;
+    }
+
+    /** True when alertState() reports a violated firmware limit. */
+    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
+        return alertState(reading) != AlertState::None;
     }
 
     /** Position of the value within its limits (0..1); nullopt without limits or value. */

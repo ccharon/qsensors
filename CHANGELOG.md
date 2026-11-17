@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   letters, with the same slant, colour and shadow or glow as the digits.
   "RPM" no longer reads like "APM", and `%`, `%RH`, `kHz` and `MHz` can be
   shown. The symbols are built into qsensors and need no installed font.
+- An alert no longer depends on colour alone: a small `HI` or `LO` lights up
+  under the unit when the value is above the firmware maximum or below the
+  minimum. The bar graph ends before it.
 
 ### Fixed
 - A value no longer takes more digit cells than the others: `-2000 mA` and

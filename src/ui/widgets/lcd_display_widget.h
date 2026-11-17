@@ -17,7 +17,7 @@ class QPainter;
 /**
  * Paints an xsensors-inspired segment LCD in the style of a multimeter: the value
  * right-aligned in a fixed number of digit cells, the unit in a fixed field at the right
- * edge, and a range bar graph along the bottom. Every card of the same width puts its
+ * edge with a HI/LO annunciator under it, and a range bar graph along the bottom. Every card of the same width puts its
  * cells, decimal points and units at the same place; extra width adds ghost digits on
  * the left.
  */
@@ -28,7 +28,10 @@ public:
     /** Creates the display showing @p reading. */
     explicit LcdDisplayWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Shows @p reading; schedules a repaint only if the drawn digits, unit, lit bar segments or alert state change. */
+    /**
+     * Shows @p reading; schedules a repaint only if the drawn digits, unit, lit bar segments
+     * or alert state (including which annunciator, HI or LO) change.
+     */
     void setReading(const SensorReading &reading);
 
     /** Card width with digits, bar graph and padding at their default height. */
@@ -46,7 +49,8 @@ public:
         int cellCount = 0; // digit cells, at least SensorFormat::kValueCells
         QRectF cells; // unslanted box of all digit cells, widget coordinates
         QRectF unitBox; // unslanted box of the unit symbol; symbols are left-aligned in it
-        QRectF bar; // range bar graph
+        QRectF stateBox; // unslanted box of the HI/LO annunciator under the unit
+        QRectF bar; // range bar graph, ending before the state annunciator
     };
 
     /** Layout for a display of @p size. */
@@ -54,6 +58,9 @@ public:
 
     /** Width the unit field needs at @p digitHeight: the widest unit symbol of the unit table. */
     [[nodiscard]] static qreal unitFieldWidth(qreal digitHeight);
+
+    /** Annunciator text for @p alert: "HI", "LO" or empty. LCD symbols, not translated. */
+    [[nodiscard]] static QString stateSymbol(AlertState alert);
 
     /** Smallest display width that shows the value cells and the unit field at full digit height. */
     [[nodiscard]] static int minimumFullHeightWidth();
@@ -67,7 +74,7 @@ private:
         QString digits;
         QString unit;
         int litSegments = 0;
-        bool alert = false;
+        AlertState alert = AlertState::None;
         bool operator==(const DisplayState &) const = default;
     };
 

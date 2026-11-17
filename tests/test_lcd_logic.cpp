@@ -3,7 +3,9 @@
 
 #include "sensors/reading_pipeline.h"
 #include "sensors/sensor_format.h"
+#include "sensors/sensors_policy.h"
 #include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_symbol_font.h"
 #include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 
@@ -24,6 +26,7 @@ private slots:
     void layout_puts_cells_and_unit_field_at_fixed_places();
     void layout_fits_full_height_digits_into_the_smallest_card();
     void layout_shrinks_only_below_the_minimum_width();
+    void layout_puts_state_annunciator_under_the_unit();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -194,6 +197,20 @@ void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
     wide.maxValue = 24.0;
     QVERIFY(repaintsAfter(lcd, counter, wide));
 
+    // Same digits and colour, but the other limit is crossed: HI turns into LO.
+    SensorReading high = volts(13.0);
+    high.firmwareMin = 13.5;
+    high.firmwareMax = 12.0; // inconsistent on purpose: only the annunciator may differ
+    SensorReading low = high;
+    low.firmwareMax.reset();
+    QCOMPARE(SensorsPolicy::alertState(high), AlertState::High);
+    QCOMPARE(SensorsPolicy::alertState(low), AlertState::Low);
+    QCOMPARE(LcdDisplayWidget::litBarSegments(high, 20), LcdDisplayWidget::litBarSegments(low, 20));
+    QVERIFY(repaintsAfter(lcd, counter, high));
+    QVERIFY(!repaintsAfter(lcd, counter, high));
+    QVERIFY(repaintsAfter(lcd, counter, low));
+    QVERIFY(!repaintsAfter(lcd, counter, low));
+
     // A value that cannot be read differs from one that can.
     SensorReading unreadable = wide;
     unreadable.value.reset();
@@ -287,6 +304,30 @@ void LcdLogicTest::layout_shrinks_only_below_the_minimum_width() {
     QVERIFY(narrow.digitHeight < normal.digitHeight);
     QCOMPARE(narrow.cellCount, SensorFormat::kValueCells);
     QVERIFY(narrow.cells.left() >= AppTheme::kLcdPaddingX - 1e-6);
+}
+
+void LcdLogicTest::layout_puts_state_annunciator_under_the_unit() {
+    for (const int width: {AppTheme::kCardMinWidth, AppTheme::kCardMaxWidth}) {
+        const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor({static_cast<qreal>(width), 41});
+        QCOMPARE(layout.stateBox.left(), layout.unitBox.left());
+        QVERIFY(layout.stateBox.top() > layout.unitBox.bottom());
+        // On the bar graph row, which ends before it.
+        QCOMPARE(layout.stateBox.bottom(), layout.bar.bottom());
+        QVERIFY(layout.bar.right() < layout.stateBox.left());
+        QVERIFY(LcdDisplayWidget::barGraphSegments(layout.bar).size() >= 15);
+        // The unit stays within the digit row.
+        QVERIFY(layout.unitBox.top() >= layout.cells.top());
+        QVERIFY(layout.unitBox.bottom() <= layout.cells.bottom());
+        // HI and LO fit the field.
+        for (const AlertState alert: {AlertState::High, AlertState::Low}) {
+            const QString symbol = LcdDisplayWidget::stateSymbol(alert);
+            QVERIFY(LcdSymbolFont::supports(symbol));
+            QVERIFY(LcdSymbolFont::width(symbol, layout.stateBox.height()) <= layout.stateBox.width());
+        }
+    }
+    QCOMPARE(LcdDisplayWidget::stateSymbol(AlertState::High), QStringLiteral("HI"));
+    QCOMPARE(LcdDisplayWidget::stateSymbol(AlertState::Low), QStringLiteral("LO"));
+    QVERIFY(LcdDisplayWidget::stateSymbol(AlertState::None).isEmpty());
 }
 
 QTEST_MAIN(LcdLogicTest)

@@ -44,6 +44,7 @@ private slots:
     void energy_and_frequency_get_no_default_range();
     void new_quantities_scale_and_alert();
     void pwmDutyPercent_maps_full_scale();
+    void alertState_tells_which_limit_was_crossed();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
@@ -565,6 +566,31 @@ void SensorsPolicyTest::pwmDutyPercent_maps_full_scale() {
     // Out of range values (e.g. a sensors.conf compute statement) are clamped.
     QCOMPARE(SensorsPolicy::pwmDutyPercent(300.0), 100.0);
     QCOMPARE(SensorsPolicy::pwmDutyPercent(-1.0), 0.0);
+}
+
+void SensorsPolicyTest::alertState_tells_which_limit_was_crossed() {
+    const auto state = [](const SensorUnit unit, const double value, const std::optional<double> min,
+                          const std::optional<double> max) {
+        return SensorsPolicy::alertState({.value = value, .unit = unit, .firmwareMin = min, .firmwareMax = max});
+    };
+    QCOMPARE(state(SensorUnit::Volt, 13.0, 11.0, 12.6), AlertState::High);
+    QCOMPARE(state(SensorUnit::Volt, 10.9, 11.0, 12.6), AlertState::Low);
+    QCOMPARE(state(SensorUnit::Volt, 12.0, 11.0, 12.6), AlertState::None);
+    QCOMPARE(state(SensorUnit::Ampere, -2.5, -2.0, 2.0), AlertState::Low);
+    QCOMPARE(state(SensorUnit::Watt, 0.55, std::nullopt, 0.5), AlertState::High);
+    QCOMPARE(state(SensorUnit::RelativeHumidity, 5.0, 10.0, 90.0), AlertState::Low);
+    QCOMPARE(state(SensorUnit::Hertz, 60.0, 45.0, 55.0), AlertState::High);
+    // Fans only alert low, temperatures only high.
+    QCOMPARE(state(SensorUnit::Rpm, 120.0, 300.0, std::nullopt), AlertState::Low);
+    QCOMPARE(state(SensorUnit::Rpm, 9000.0, 300.0, 5000.0), AlertState::None);
+    QCOMPARE(state(SensorUnit::Celsius, 92.3, 0.0, 85.0), AlertState::High);
+    QCOMPARE(state(SensorUnit::Celsius, -45.0, -40.0, -10.0), AlertState::None);
+    QCOMPARE(state(SensorUnit::Celsius, 101.0, std::nullopt, std::nullopt), AlertState::High);
+    QCOMPARE(state(SensorUnit::Fahrenheit, 213.0, std::nullopt, std::nullopt), AlertState::High);
+    QCOMPARE(state(SensorUnit::Percent, 100.0, std::nullopt, 50.0), AlertState::None);
+    // isAlertState() is the same rule.
+    QVERIFY(SensorsPolicy::isAlertState({.value = 10.9, .unit = SensorUnit::Volt, .firmwareMin = 11.0}));
+    QCOMPARE(SensorsPolicy::alertState({.unit = SensorUnit::Volt, .firmwareMin = 11.0}), AlertState::None);
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

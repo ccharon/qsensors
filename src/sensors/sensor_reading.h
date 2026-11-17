@@ -34,7 +34,7 @@ enum class SensorUnit {
     RelativeHumidity, // %RH
     Joule,
     Hertz,
-    Unknown
+    Unknown // stays last: the unit table iterates up to it
 };
 
 /** SI prefix of a displayed value; the power of ten is three times the enum value. */
@@ -44,6 +44,13 @@ enum class SiPrefix {
     Kilo = 1,
     Mega = 2,
     Giga = 3,
+};
+
+/** Which firmware limit a reading violates, if any; see SensorsPolicy::alertState(). */
+enum class AlertState {
+    None,
+    Low, // below the minimum
+    High, // above the maximum
 };
 
 /** How a value is displayed: SI prefix and number of decimals. */

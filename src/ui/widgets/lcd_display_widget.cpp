@@ -90,9 +90,17 @@ LcdDisplayWidget::Layout LcdDisplayWidget::layoutFor(const QSizeF &size) {
     const qreal baseline = barTop - AppTheme::kLcdBarGap;
     layout.cells = QRectF(valueRight - cellsWidth, baseline - h, cellsWidth, h);
 
+    // The state annunciator sits on the bar graph row; the unit sits above it, no lower
+    // than the digit baseline.
+    const qreal barBottom = barTop + AppTheme::kLcdBarHeight;
+    const qreal stateHeight = AppTheme::kLcdStateScale * h;
+    layout.stateBox = QRectF(right - unitWidth, barBottom - stateHeight, unitWidth, stateHeight);
     const qreal unitHeight = AppTheme::kLcdUnitScale * h;
-    layout.unitBox = QRectF(right - unitWidth, baseline - unitHeight, unitWidth, unitHeight);
-    layout.bar = QRectF(AppTheme::kLcdPaddingX, barTop, innerWidth, AppTheme::kLcdBarHeight);
+    const qreal unitBottom = std::min(baseline, layout.stateBox.top() - AppTheme::kLcdStateGap * h);
+    layout.unitBox = QRectF(right - unitWidth, unitBottom - unitHeight, unitWidth, unitHeight);
+    const qreal barRight = layout.stateBox.left() - AppTheme::kLcdUnitGap * h;
+    layout.bar = QRectF(AppTheme::kLcdPaddingX, barTop, std::max<qreal>(barRight - AppTheme::kLcdPaddingX, 1.0),
+                        AppTheme::kLcdBarHeight);
     return layout;
 }
 
@@ -108,7 +116,16 @@ LcdDisplayWidget::DisplayState LcdDisplayWidget::displayStateFor(const SensorRea
     const Layout layout = layoutFor(size());
     return {shown.digits, shown.symbol,
             litBarSegments(reading, static_cast<int>(barGraphSegments(layout.bar).size())),
-            SensorsPolicy::isAlertState(reading)};
+            SensorsPolicy::alertState(reading)};
+}
+
+QString LcdDisplayWidget::stateSymbol(const AlertState alert) {
+    switch (alert) {
+        case AlertState::High: return QStringLiteral("HI");
+        case AlertState::Low: return QStringLiteral("LO");
+        case AlertState::None: break;
+    }
+    return {};
 }
 
 QSize LcdDisplayWidget::sizeHint() const {
@@ -129,8 +146,9 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const DisplayState state = displayStateFor(m_reading);
     m_painted = state;
     m_hasPainted = true;
-    const QColor lit(dark ? (state.alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)
-                          : (state.alert ? AppTheme::kLcdAlertRgb : AppTheme::kLcdNormalRgb));
+    const bool alert = state.alert != AlertState::None;
+    const QColor lit(dark ? (alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)
+                          : (alert ? AppTheme::kLcdAlertRgb : AppTheme::kLcdNormalRgb));
     QColor ghost(dark ? AppTheme::kLcdNormalDarkRgb : AppTheme::kLcdNormalRgb);
     ghost.setAlpha(dark ? AppTheme::kLcdGhostAlphaDark : AppTheme::kLcdGhostAlpha);
     const QColor shadow(0, 0, 0, AppTheme::kLcdSegmentShadowAlpha);
@@ -156,6 +174,8 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
         }
     }
     appendSymbol(shapes, state.unit, layout.unitBox);
+    // The alert does not depend on colour alone.
+    appendSymbol(shapes, stateSymbol(state.alert), layout.stateBox);
     const QVector<QPolygonF> barSegments = barGraphSegments(layout.bar);
     for (int i = 0; i < barSegments.size(); ++i) {
         QPainterPath path;
