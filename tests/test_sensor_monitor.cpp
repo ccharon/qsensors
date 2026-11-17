@@ -26,6 +26,7 @@ private slots:
     void stall_timeout_scales_with_interval();
     void stalled_read_is_reported_and_recovery_too();
     void normal_read_is_not_reported_as_stalled();
+    void source_that_stops_working_is_reported_and_no_longer_polled();
     void shutdown_with_blocked_read_returns_within_limit();
 };
 
@@ -41,6 +42,7 @@ namespace {
         QWaitCondition opened;
         bool closed = false; // reads block while closed
         int blockedReads = 0;
+        int failAfterReads = -1; // the source turns uninitialized after this many reads (-1: never)
 
         int reads() {
             QMutexLocker lock(&mutex);
@@ -88,7 +90,11 @@ namespace {
         }
 
         [[nodiscard]] bool isInitialized() const override { return m_initialized; }
-        [[nodiscard]] QString lastError() const override { return m_initialized ? QString() : QStringLiteral("no chips"); }
+        [[nodiscard]] QString lastError() const override {
+            if (m_failed)
+                return QStringLiteral("re-init failed");
+            return m_initialized ? QString() : QStringLiteral("no chips");
+        }
 
         [[nodiscard]] QVector<SensorReading> readAll() override {
             QMutexLocker lock(&m_log->mutex);
@@ -97,6 +103,12 @@ namespace {
             while (m_log->closed)
                 m_log->opened.wait(&m_log->mutex);
             --m_log->blockedReads;
+            // Like LibsensorsSource after a failed re-init: no readings, uninitialized.
+            if (m_log->failAfterReads >= 0 && m_log->readIn.size() > m_log->failAfterReads) {
+                m_initialized = false;
+                m_failed = true;
+                return {};
+            }
             const double value = 40.0 + static_cast<double>(m_log->readIn.size());
             return {{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
                      .feature = QStringLiteral("temp1"), .featureNumber = 0, .subfeatureNumber = 1,
@@ -106,6 +118,7 @@ namespace {
     private:
         std::shared_ptr<SourceLog> m_log;
         bool m_initialized;
+        bool m_failed = false;
     };
 
     SensorMonitor::SourceFactory factory(const std::shared_ptr<SourceLog> &log, const bool initialized = true) {
@@ -248,6 +261,30 @@ void SensorMonitorTest::normal_read_is_not_reported_as_stalled() {
     QTest::qWait(500);
     QCOMPARE(stalled.count(), 0);
     QVERIFY(!monitor.isStalled());
+}
+
+void SensorMonitorTest::source_that_stops_working_is_reported_and_no_longer_polled() {
+    const auto log = std::make_shared<SourceLog>();
+    log->failAfterReads = 1;
+    SensorMonitor monitor(factory(log));
+    QSignalSpy readings(&monitor, &SensorMonitor::readingsChanged);
+    QSignalSpy failed(&monitor, &SensorMonitor::sourceFailed);
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(monitor.start(config));
+    QCOMPARE(readings.count(), 1);
+
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("stopped working: re-init failed")));
+    QVERIFY(failed.wait(10000));
+    QCOMPARE(failed.at(0).at(0).toString(), QStringLiteral("re-init failed"));
+    QCOMPARE(monitor.lastError(), QStringLiteral("re-init failed"));
+    // The cards of the lost source go away: an empty update follows the failure.
+    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, 10000);
+    QVERIFY(readingsAt(readings, 1).isEmpty());
+    // The source was dropped in its own thread, and nothing polls it any more.
+    QCOMPARE(log->destroyed(), log->createdIn);
+    QVERIFY(!readings.wait(2500));
+    QCOMPARE(log->reads(), 2);
 }
 
 void SensorMonitorTest::shutdown_with_blocked_read_returns_within_limit() {

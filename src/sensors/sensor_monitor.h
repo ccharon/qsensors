@@ -60,7 +60,7 @@ public:
      */
     bool start(const RuntimeConfig &config);
 
-    /** Initialization error of the source; empty after a successful start(). */
+    /** Error of the source: why it could not be initialized or why it stopped working; empty otherwise. */
     [[nodiscard]] QString lastError() const;
 
     /**
@@ -85,6 +85,12 @@ signals:
     /** A read stalled (true) or a stalled read returned (false). */
     void stalledChanged(bool stalled);
 
+    /**
+     * The source stopped working after start() (see lastError()); polling stops and
+     * readingsChanged() follows with no readings.
+     */
+    void sourceFailed(const QString &error);
+
 private:
     /** Requests a read in the worker unless the previous one is still running. */
     void requestPoll();
@@ -94,6 +100,9 @@ private:
 
     /** Reports the outstanding read as stalled. */
     void markStalled();
+
+    /** Stops polling a source that stopped working and reports @p error. */
+    void handleSourceFailure(const QString &error);
 
     QThread *m_thread;
     SensorPoller *m_poller;

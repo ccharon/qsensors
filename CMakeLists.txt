@@ -56,6 +56,7 @@ set(QSENSORS_MODEL_SOURCES
         src/config/app_config_store.cpp
         src/config/runtime_config.cpp
         src/config/settings_schema.cpp
+        src/sensors/hwmon_watch.cpp
         src/sensors/reading_pipeline.cpp
         src/sensors/sensor_format.cpp
         src/sensors/sensor_monitor.cpp
@@ -169,6 +170,7 @@ if (BUILD_TESTING)
     add_qsensors_test(test_settings_persistence tests/test_settings_persistence.cpp qsensors_ui)
     add_qsensors_test(test_sensor_contract tests/test_sensor_contract.cpp qsensors_ui)
     add_qsensors_test(test_sensor_identity tests/test_sensor_identity.cpp qsensors_model)
+    add_qsensors_test(test_hwmon_watch tests/test_hwmon_watch.cpp qsensors_model)
     add_qsensors_test(test_sensors_panel tests/test_sensors_panel.cpp qsensors_ui)
     add_qsensors_test(test_theme_refresh tests/test_theme_refresh.cpp qsensors_ui)
     add_qsensors_test(test_status_line tests/test_status_line.cpp qsensors_ui)

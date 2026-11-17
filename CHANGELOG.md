@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Sensor hardware that appears or disappears while qsensors runs (USB
+  devices, NVMe drives, GPUs after a driver reload) is now picked up: when the
+  hwmon devices change, libsensors is re-initialized, so new devices get cards
+  and removed ones lose theirs. Before, a removed device kept a card of dashes,
+  and a device that reused its hwmon index could show its values under the old
+  chip's name. A failed re-initialization is shown in the status line.
+
 ## [0.80.11] - 2026-11-15
 
 ### Added

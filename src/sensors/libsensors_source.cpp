@@ -237,6 +237,8 @@ LibsensorsSource::LibsensorsSource() : m_initialized(false) {
         m_lastError = QStringLiteral("another LibsensorsSource instance is already active");
         return;
     }
+    // Snapshot before the init, so a device that appears in between triggers a re-init.
+    m_hwmonWatch.reset();
     // nullptr reads the system configuration (/etc/sensors3.conf, /etc/sensors.d/); its
     // compute expressions affect values, so it must only be writable by root.
     const int rc = sensors_init(nullptr);
@@ -263,9 +265,32 @@ QString LibsensorsSource::lastError() const {
     return m_lastError;
 }
 
+bool LibsensorsSource::reinitialize() {
+    qInfo("qsensors: hwmon devices changed; re-initializing libsensors");
+    sensors_cleanup();
+    // Problems of the old chip list say nothing about the new one.
+    m_reportedProblems.clear();
+    const int rc = sensors_init(nullptr);
+    if (rc != 0) {
+        // A failed sensors_init cleans up after itself, so the pairing holds.
+        m_initialized = false;
+        g_backendActive = false;
+        m_lastError = QStringLiteral("sensors_init failed after a hardware change: %1 (%2)")
+                          .arg(QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
+        qWarning("qsensors: %s", qPrintable(m_lastError));
+        return false;
+    }
+    return true;
+}
+
 QVector<SensorReading> LibsensorsSource::readAll() {
     QVector<SensorReading> readings;
     if (!m_initialized) {
+        return readings;
+    }
+    // The chip list (and each chip's sysfs path) is fixed at init; a stale list would miss
+    // new devices, keep removed ones and read a reused hwmonN under the old chip's name.
+    if (m_hwmonWatch.changed() && !reinitialize()) {
         return readings;
     }
 

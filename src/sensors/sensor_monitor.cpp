@@ -37,13 +37,20 @@ public:
         return m_source ? m_source->readAll() : QVector<SensorReading>();
     }
 
-    /** Reads the source and emits the result. */
+    /** Reads the source and emits the result; a source that stopped working is reported first and dropped. */
     void poll() {
-        emit rawReadingsRead(read());
+        const QVector<SensorReading> raw = read();
+        if (m_source && !m_source->isInitialized()) {
+            QString error = m_source->lastError();
+            m_source.reset();
+            emit sourceFailed(error.isEmpty() ? QStringLiteral("sensor source stopped working") : error);
+        }
+        emit rawReadingsRead(raw);
     }
 
 signals:
     void rawReadingsRead(const QVector<SensorReading> &raw);
+    void sourceFailed(const QString &error);
 
 private:
     SensorMonitor::SourceFactory m_factory;
@@ -59,6 +66,7 @@ SensorMonitor::SensorMonitor(SourceFactory factory, QObject *parent)
     // Deferred deletes run in the worker before it exits, so the source dies in its own thread.
     connect(m_thread, &QThread::finished, m_poller, &QObject::deleteLater);
     connect(m_poller, &SensorPoller::rawReadingsRead, this, &SensorMonitor::acceptRawReadings);
+    connect(m_poller, &SensorPoller::sourceFailed, this, &SensorMonitor::handleSourceFailure);
     connect(m_timer, &QTimer::timeout, this, &SensorMonitor::requestPoll);
     connect(m_stallTimer, &QTimer::timeout, this, &SensorMonitor::markStalled);
 }
@@ -154,6 +162,14 @@ void SensorMonitor::markStalled() {
     qWarning("qsensors: sensor read has not returned for %lld ms",
              static_cast<long long>(m_stallTimer->intervalAsDuration().count()));
     emit stalledChanged(true);
+}
+
+void SensorMonitor::handleSourceFailure(const QString &error) {
+    m_lastError = error;
+    m_running = false;
+    m_timer->stop();
+    qWarning("qsensors: sensor source stopped working: %s", qPrintable(error));
+    emit sourceFailed(error);
 }
 
 void SensorMonitor::acceptRawReadings(const QVector<SensorReading> &raw) {

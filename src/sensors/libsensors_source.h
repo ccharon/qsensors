@@ -3,13 +3,19 @@
 
 #pragma once
 
+#include "sensors/hwmon_watch.h"
 #include "sensors/sensor_source.h"
 
 #include <QSet>
 #include <QString>
 #include <QVector>
 
-/** libsensors wrapper: initializes the library and reads all chips into raw SensorReadings. */
+/**
+ * libsensors wrapper: initializes the library and reads all chips into raw SensorReadings.
+ * libsensors enumerates chips once, in sensors_init(); when the hwmon devices change, the
+ * next readAll() re-initializes it. A failed re-init leaves the source uninitialized,
+ * with lastError() explaining why.
+ */
 class LibsensorsSource final : public SensorSource {
 public:
     /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
@@ -29,6 +35,10 @@ public:
     [[nodiscard]] QVector<SensorReading> readAll() override;
 
 private:
+    /** sensors_cleanup() + sensors_init(); false (and uninitialized) when the init fails. */
+    bool reinitialize();
+
+    HwmonWatch m_hwmonWatch;
     bool m_initialized;
     QString m_lastError;
     // Problems already logged, so a failing sensor does not flood the log every poll.
