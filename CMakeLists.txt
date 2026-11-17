@@ -196,9 +196,27 @@ qt_add_translations(qsensors
 if (BUILD_TESTING)
     # Tests creating widgets run on the offscreen platform, so CI needs no display.
     # Model tests link only the model, so they cannot pull in widgets by accident.
+    #
+    # The QTRY_* macros of some Qt versions (6.8 among them) narrow the timeout from
+    # long to int inside the macro, which -Wconversion reports at every call site.
+    # Probe the installed Qt Test and drop -Wconversion for the tests only when it does.
+    include(CheckCXXSourceCompiles)
+    set(CMAKE_REQUIRED_FLAGS "-Wconversion -Werror")
+    set(CMAKE_REQUIRED_LIBRARIES Qt::Test)
+    check_cxx_source_compiles([=[
+        #include <QTest>
+        static void probe() { bool done = true; QTRY_VERIFY_WITH_TIMEOUT(done, 1000); }
+        int main() { probe(); return 0; }
+    ]=] QSENSORS_QTRY_CONVERSION_CLEAN)
+    unset(CMAKE_REQUIRED_FLAGS)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+
     function(add_qsensors_test target source library)
         add_executable(${target} ${source})
         target_link_libraries(${target} ${library} Qt::Test qsensors_build_options)
+        if (NOT QSENSORS_QTRY_CONVERSION_CLEAN)
+            target_compile_options(${target} PRIVATE -Wno-conversion)
+        endif ()
         add_test(NAME ${target} COMMAND ${target})
         set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endfunction()
