@@ -11,10 +11,6 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <source>libsensors init failed: %1</source>
-        <translation>Falha ao inicializar libsensors: %1</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>Nenhum sensor encontrado. Execute sensors-detect e verifique a configuração do lm-sensors.</translation>
     </message>
@@ -25,6 +21,10 @@
     <message>
         <source>Sensors are available again</source>
         <translation>Os sensores estão disponíveis novamente</translation>
+    </message>
+    <message>
+        <source>Sensors unavailable, retrying: %1</source>
+        <translation>Sensores indisponíveis, a tentar novamente: %1</translation>
     </message>
     <message>
         <source>Readings: %1 | Refresh: %2s</source>

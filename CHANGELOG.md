@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   natural range and show no bar graph.
 
 ### Changed
+- The status line says "Sensors unavailable, retrying: …" while the sensors
+  cannot be read, instead of "libsensors init failed: …", which was also shown
+  when a running source stopped working.
 - The settings schema is now v3. The migration removes the unused
   `sensors/fingerprint` key (the saved chip set, which nothing reads any more)
   and is logged at startup. qsensors 0.80.11 and older read a v3 file without

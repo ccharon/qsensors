@@ -101,7 +101,7 @@ void MainWindow::showReadings(const QVector<SensorReading> &readings) {
 void MainWindow::updateReadingsStatus() {
     // Without a source there are no readings; the reason matters more than the count.
     if (!m_sourceError.isEmpty()) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_sourceError));
+        setStatusMessage(tr("Sensors unavailable, retrying: %1").arg(m_sourceError));
         return;
     }
     // The panel still shows the last readings; the count would suggest they are current.
