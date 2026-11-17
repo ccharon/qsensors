@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 4.2)
+cmake_minimum_required(VERSION 3.21...4.2)
 project(qsensors VERSION 0.80.11)
 
 set(CMAKE_CXX_STANDARD 20)
@@ -18,7 +18,8 @@ set(QSENSORS_QT_COMPONENTS Core Gui Widgets LinguistTools)
 if (BUILD_TESTING)
     list(APPEND QSENSORS_QT_COMPONENTS Test)
 endif ()
-find_package(Qt6 REQUIRED COMPONENTS ${QSENSORS_QT_COMPONENTS})
+# Qt 6.8 is the version the AppImages are built and tested with.
+find_package(Qt6 6.8 REQUIRED COMPONENTS ${QSENSORS_QT_COMPONENTS})
 
 # Warnings and sanitizers apply to qsensors' own targets only (PRIVATE use of this
 # interface library, so nothing leaks to consumers). Generated moc/rcc sources are
@@ -159,6 +160,7 @@ install(FILES resources/icons/qsensors.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 
 include(CheckCXXSourceCompiles)
+# The CMAKE_REQUIRED_* settings apply to this check only; they are reset after it.
 set(CMAKE_REQUIRED_QUIET TRUE)
 if (SENSORS_FOUND)
     set(CMAKE_REQUIRED_LIBRARIES PkgConfig::SENSORS)
@@ -176,6 +178,9 @@ check_cxx_source_compiles("
 if (NOT QSENSORS_LIBSENSORS_COMPILE_OK)
     message(FATAL_ERROR "libsensors development files are missing or unusable (headers/library mismatch)")
 endif ()
+unset(CMAKE_REQUIRED_QUIET)
+unset(CMAKE_REQUIRED_LIBRARIES)
+unset(CMAKE_REQUIRED_INCLUDES)
 
 set(TS_FILES
         i18n/qsensors_en.ts
@@ -200,7 +205,6 @@ if (BUILD_TESTING)
     # The QTRY_* macros of some Qt versions (6.8 among them) narrow the timeout from
     # long to int inside the macro, which -Wconversion reports at every call site.
     # Probe the installed Qt Test and drop -Wconversion for the tests only when it does.
-    include(CheckCXXSourceCompiles)
     set(CMAKE_REQUIRED_FLAGS "-Wconversion -Werror")
     set(CMAKE_REQUIRED_LIBRARIES Qt::Test)
     check_cxx_source_compiles([=[

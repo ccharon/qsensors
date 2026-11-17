@@ -8,7 +8,7 @@ Qt6/Wayland-oriented sensor monitor with an xsensors-inspired UI and direct
 ## Dependencies
 
 - C++20 compiler
-- CMake 4.2 or newer
+- CMake 3.21 or newer
 - Qt6 (`Core`, `Gui`, `Widgets`, and the Linguist tools for the translations;
   `Test` only when building the tests)
 - `libsensors` (lm-sensors)
