@@ -23,16 +23,16 @@ int main(int argc, char *argv[]) {
     // Always install English catalog first as baseline fallback.
     QTranslator translatorEn;
     if (translatorEn.load(QStringLiteral(":/i18n/qsensors_en.qm"))) {
-        app.installTranslator(&translatorEn);
+        QCoreApplication::installTranslator(&translatorEn);
     }
 
     // Overlay locale-specific catalog if available.
     QTranslator translatorLocale;
     if (translatorLocale.load(QLocale(), QStringLiteral("qsensors"), QStringLiteral("_"), QStringLiteral(":/i18n"))) {
-        app.installTranslator(&translatorLocale);
+        QCoreApplication::installTranslator(&translatorLocale);
     }
 
-    app.setWindowIcon(QIcon(QStringLiteral(":/icons/qsensors.png")));
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/icons/qsensors.png")));
     int exitCode = 0;
     {
         MainWindow window([] { return std::make_unique<LibsensorsSource>(); });

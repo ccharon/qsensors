@@ -10,7 +10,7 @@
 #include <algorithm>
 
 namespace {
-    void migrateV0ToV1(QSettings &) {
+    void migrateV0ToV1(QSettings &/*settings*/) {
         // v1 only introduces the version marker; no keys change.
     }
 
