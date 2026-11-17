@@ -126,7 +126,8 @@ install_linuxdeploy() {
 build_and_test() {
     cmake -S "$ROOT" -B "$WORK/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_PREFIX_PATH="$QT_DIR;$SENSORS_DIR" -DBUILD_TESTING=ON
+        -DCMAKE_PREFIX_PATH="$QT_DIR;$SENSORS_DIR" -DBUILD_TESTING=ON \
+        -DQSENSORS_WARNINGS_AS_ERRORS=ON
     cmake --build "$WORK/build" -j"$(nproc)"
     ctest --test-dir "$WORK/build" --output-on-failure
     rm -rf "$WORK/AppDir"
