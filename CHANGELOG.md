@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   If the first sensor read takes longer than 10 seconds, the window opens
   without readings and the status line says the sensors are not responding;
   the readings appear as soon as the read returns.
+- Closing qsensors while a sensor read hangs can no longer crash at exit: when
+  the read has not returned within the shutdown timeout, the process now ends
+  without tearing down Qt under the still running sensor thread.
 
 ## [0.80.11] - 2026-11-15
 

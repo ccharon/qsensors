@@ -45,6 +45,13 @@ public:
     /** Time after which a read requested at @p pollingIntervalSec counts as stalled. */
     [[nodiscard]] static std::chrono::milliseconds stallTimeoutFor(int pollingIntervalSec);
 
+    /**
+     * True once a destructor gave up on a worker (shutdown timeout). That worker may still
+     * return at any time and run Qt and libsensors code, so the process must not tear down
+     * Qt and its statics under it; main() ends with _Exit() then. Thread-safe.
+     */
+    [[nodiscard]] static bool workerAbandoned();
+
     /** Creates an idle monitor; nothing is read before start(). */
     explicit SensorMonitor(SourceFactory factory, QObject *parent = nullptr);
 

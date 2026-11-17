@@ -213,6 +213,8 @@ void SensorMonitorTest::source_is_destroyed_in_its_own_thread() {
     }
     QVERIFY(log->createdIn != nullptr);
     QCOMPARE(log->destroyedIn, log->createdIn);
+    // A worker that ended in time is not abandoned; main() tears down as usual.
+    QVERIFY(!SensorMonitor::workerAbandoned());
 }
 
 void SensorMonitorTest::stall_timeout_scales_with_interval() {
@@ -375,6 +377,8 @@ void SensorMonitorTest::shutdown_with_blocked_read_returns_within_limit() {
     monitor.reset();
     QVERIFY2(elapsed.elapsed() < 1500, qPrintable(QString::number(elapsed.elapsed())));
     QCOMPARE(log->destroyed(), nullptr);
+    // main() must not tear down Qt under the abandoned worker.
+    QVERIFY(SensorMonitor::workerAbandoned());
 
     // Once the read returns, the abandoned worker still destroys the source in its own thread.
     log->open();

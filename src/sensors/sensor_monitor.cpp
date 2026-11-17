@@ -12,11 +12,14 @@
 #include <QWaitCondition>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <utility>
 
 namespace {
+    std::atomic_bool g_workerAbandoned{false};
+
     /**
      * Hand-over of the first read between the worker and start(), which waits for it with
      * a deadline. Once start() has given up (abandoned), the worker emits the result instead.
@@ -126,7 +129,14 @@ SensorMonitor::~SensorMonitor() {
     // Destroying a running QThread aborts, and the poller and source may only die in the
     // worker. So the QThread object is leaked: if the read returns, the worker exits and
     // deletes the poller and source there as usual; if not, the process exit ends it.
+    // A worker returning during Qt teardown would run against a half-destroyed Qt, so
+    // main() skips the teardown once a worker was abandoned (see workerAbandoned()).
     m_thread->setParent(nullptr);
+    g_workerAbandoned = true;
+}
+
+bool SensorMonitor::workerAbandoned() {
+    return g_workerAbandoned;
 }
 
 std::chrono::milliseconds SensorMonitor::stallTimeoutFor(const int pollingIntervalSec) {
