@@ -38,11 +38,11 @@ public:
     void setChipExpandedState(const QHash<QString, bool> &state);
 
     /**
-     * Applies a persisted expand state that was saved for @p chipFingerprint. If the
-     * first readings show a different chip set, the state is dropped and
-     * layoutStateReset() is emitted.
+     * Applies a persisted expand state. The first readings with at least one chip drop
+     * the entries of chips that are no longer present; if any of them was collapsed,
+     * expandStateDropped() names those chips. Entries of present chips are kept.
      */
-    void restoreChipExpandedState(const QHash<QString, bool> &state, const QString &chipFingerprint);
+    void restoreChipExpandedState(const QHash<QString, bool> &state);
 
     /** Expand/collapse state per chip name, for persistence. */
     [[nodiscard]] QHash<QString, bool> chipExpandedState() const;
@@ -59,7 +59,10 @@ public:
     /** Moves @p chip to position @p targetIndex among the shown chips (insert position before the move). */
     void moveChip(const QString &chip, int targetIndex);
 
-    /** Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). */
+    /**
+     * Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). Only
+     * written to the settings; the restored expand state no longer depends on it.
+     */
     [[nodiscard]] QString chipFingerprint() const;
 
     /** Number of readings currently shown. */
@@ -101,8 +104,8 @@ signals:
     /** The user collapsed or expanded a chip; not emitted when a state is applied by code. */
     void chipExpandedChanged();
 
-    /** A restored expand state did not match the current chips and was dropped. */
-    void layoutStateReset();
+    /** The restored collapsed state of @p chips was dropped because they are no longer present. */
+    void expandStateDropped(const QStringList &chips);
 
 private:
     using CategoryGroups = QMap<SensorCategory, QVector<SensorReading>>;
@@ -124,7 +127,7 @@ private:
     /** True if render() would create, remove, rebuild or reorder a chip section. */
     [[nodiscard]] bool hasStructuralChange() const;
 
-    /** Drops the pending restored state when it belongs to another chip set. */
+    /** Drops restored expand entries of chips that the first non-empty readings lack. */
     void checkRestoredState();
 
     /** Deletes sections of chips that are no longer present; returns true if any was removed. */
@@ -169,7 +172,7 @@ private:
     QStringList m_preferredOrder;
     QWidget *m_dropIndicator;
     QHash<QString, bool> m_chipExpanded;
-    // Set by restoreChipExpandedState() until the first readings confirm or reject it.
-    QString m_restoredFingerprint;
+    // Set by restoreChipExpandedState() until the first readings with chips are checked.
+    bool m_restorePending = false;
     bool m_applyingExpandedState = false;
 };

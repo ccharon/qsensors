@@ -29,8 +29,9 @@ private slots:
     void resize_moves_cards_without_rebuild();
     void expand_state_roundtrip_and_apply();
     void structure_signal_on_new_category_not_on_values();
-    void restored_state_dropped_for_other_chip_set();
-    void restored_state_kept_for_same_chip_set();
+    void restored_state_dropped_only_for_missing_chips();
+    void restored_state_kept_when_all_chips_present();
+    void empty_first_read_keeps_restored_state();
     void fingerprint_and_count_follow_readings();
     void default_order_is_alphabetical();
     void move_chip_reorders_cards();
@@ -248,29 +249,56 @@ void SensorsPanelTest::structure_signal_on_new_category_not_on_values() {
     QVERIFY(panel.minimumSizeHint().width() > widthBefore);
 }
 
-void SensorsPanelTest::restored_state_dropped_for_other_chip_set() {
+void SensorsPanelTest::restored_state_dropped_only_for_missing_chips() {
     SensorsPanel panel;
-    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QStringLiteral("old-chip"));
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false},
+                                    {QStringLiteral("gone-collapsed"), false},
+                                    {QStringLiteral("gone-expanded"), true}});
     panel.setReadings(sampleReadings(40.0));
 
+    // Present chips keep their state; only the missing ones are dropped.
+    const QHash<QString, bool> state = panel.chipExpandedState();
+    QCOMPARE(state.value(QStringLiteral("chip-a"), true), false);
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-a"))->isChecked());
+    QVERIFY(!state.contains(QStringLiteral("gone-collapsed")));
+    QVERIFY(!state.contains(QStringLiteral("gone-expanded")));
+    // Only a dropped collapsed state is worth a notice; an expanded one is the default anyway.
     QCOMPARE(spy.count(), 1);
-    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), true);
+    QCOMPARE(spy.first().first().toStringList(), QStringList{QStringLiteral("gone-collapsed")});
 
-    // The check runs once; later polls do not reset again.
+    // The check runs once; later polls do not drop again.
+    panel.setChipExpandedState({{QStringLiteral("gone-collapsed"), false}});
     panel.setReadings(sampleReadings(41.0));
     QCOMPARE(spy.count(), 1);
+    QVERIFY(panel.chipExpandedState().contains(QStringLiteral("gone-collapsed")));
 }
 
-void SensorsPanelTest::restored_state_kept_for_same_chip_set() {
-    const QVector<SensorReading> readings = sampleReadings(40.0);
+void SensorsPanelTest::restored_state_kept_when_all_chips_present() {
     SensorsPanel panel;
-    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, SensorIdentity::chipFingerprint(readings));
-    panel.setReadings(readings);
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}});
+    // A new chip (chip-b) alone does not drop anything.
+    panel.setReadings(sampleReadings(40.0));
 
     QCOMPARE(spy.count(), 0);
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-b")), true);
+}
+
+void SensorsPanelTest::empty_first_read_keeps_restored_state() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}, {QStringLiteral("chip-b"), false}});
+    panel.setReadings({});
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.chipExpandedState().size(), 2);
+
+    // The first read with chips decides.
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-a"))->isChecked());
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-b"))->isChecked());
 }
 
 void SensorsPanelTest::fingerprint_and_count_follow_readings() {
@@ -345,7 +373,7 @@ void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_
     QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
 
     // Restoring before and after the cards exist, and reordering by code, are not user changes.
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QString());
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}});
     panel.setChipOrder({QStringLiteral("chip-b"), QStringLiteral("chip-a")});
     panel.setReadings(sampleReadings(40.0));
     panel.setChipExpandedState({{QStringLiteral("chip-a"), true}});

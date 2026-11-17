@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A poll whose readings only change values no longer repaints the whole
   sensors panel: only the LCDs whose display changed are redrawn. The panel
   still batches its repaint when chips or sensors appear, disappear or move.
+- A start with a different set of sensor chips no longer resets the expand
+  state of all chips: only the entries of chips that are gone are dropped,
+  and a read without any chip decides nothing. The status bar names the
+  missing chips whose collapsed state was dropped, instead of reporting a
+  reset of the UI configuration.
 
 ## [0.80.11] - 2026-11-15
 

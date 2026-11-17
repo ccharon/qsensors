@@ -15,10 +15,6 @@
         <translation>Falha ao inicializar libsensors: %1</translation>
     </message>
     <message>
-        <source>Sensor layout changed: UI config reset</source>
-        <translation>Layout dos sensores alterado: configuração de UI redefinida</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>Nenhum sensor encontrado. Execute sensors-detect e verifique a configuração do lm-sensors.</translation>
     </message>
@@ -33,6 +29,10 @@
     <message>
         <source>Settings could not be saved</source>
         <translation>Não foi possível salvar as configurações</translation>
+    </message>
+    <message>
+        <source>Collapsed state dropped for missing sensor chips: %1</source>
+        <translation>Estado recolhido descartado para os chips de sensores ausentes: %1</translation>
     </message>
     <message>
         <source>Settings were written by a newer qsensors version and are used as far as possible</source>

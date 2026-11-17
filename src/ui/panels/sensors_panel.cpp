@@ -115,9 +115,9 @@ void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_applyingExpandedState = false;
 }
 
-void SensorsPanel::restoreChipExpandedState(const QHash<QString, bool> &state, const QString &chipFingerprint) {
+void SensorsPanel::restoreChipExpandedState(const QHash<QString, bool> &state) {
     setChipExpandedState(state);
-    m_restoredFingerprint = chipFingerprint;
+    m_restorePending = true;
 }
 
 QHash<QString, bool> SensorsPanel::chipExpandedState() const {
@@ -153,14 +153,25 @@ int SensorsPanel::maximumUsefulWidth() const {
 }
 
 void SensorsPanel::checkRestoredState() {
-    if (m_restoredFingerprint.isEmpty()) {
+    // A read without any chip (e.g. libsensors failed once) says nothing about the chips.
+    if (!m_restorePending || m_groups.isEmpty())
         return;
+    m_restorePending = false;
+
+    QStringList collapsedGone;
+    for (auto it = m_chipExpanded.begin(); it != m_chipExpanded.end();) {
+        if (m_groups.contains(it.key())) {
+            ++it;
+            continue;
+        }
+        if (!it.value())
+            collapsedGone.append(it.key());
+        it = m_chipExpanded.erase(it);
     }
-    const bool matches = m_restoredFingerprint == chipFingerprint();
-    m_restoredFingerprint.clear();
-    if (!matches) {
-        setChipExpandedState({});
-        emit layoutStateReset();
+    // Dropping an expanded entry changes nothing a returning chip would show.
+    if (!collapsedGone.isEmpty()) {
+        collapsedGone.sort();
+        emit expandStateDropped(collapsedGone);
     }
 }
 
