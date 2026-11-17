@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Fan control outputs (`pwm*`) are shown in the Fans column as a duty cycle
+  in percent. libsensors 3.6.2 reports them divided by 2 instead of 2.55;
+  qsensors shows the duty cycle the kernel reports.
+- Power sensors that only report an average (`power*_average`, e.g. the PPT
+  of AMD GPUs) now get a card in the Power column.
+- Energy meters (`energy*_input`, in J, kJ, MJ or GJ) in the Power column,
+  humidity (`humidity*_input`, %RH) and frequency inputs (`freq*_input`, Hz,
+  kHz or MHz) in the Other column. Energy counters and frequencies have no
+  natural range and show no bar graph.
+
 ### Changed
 - Values are shown with four significant digits, and the unit prefix follows the
   sensor's range: `880 mV`, `1.052 V`, `12.10 V`, `230.1 V`, `396 mA`,

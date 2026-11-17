@@ -69,6 +69,11 @@ const SensorFormat::QuantityFormat &SensorFormat::quantityFormat(const SensorUni
     static const QuantityFormat kRpm{QStringLiteral("RPM"), SiPrefix::None, SiPrefix::None, 0};
     static const QuantityFormat kAmpere{QStringLiteral("A"), SiPrefix::Milli, SiPrefix::Kilo, 3};
     static const QuantityFormat kWatt{QStringLiteral("W"), SiPrefix::Milli, SiPrefix::Kilo, 3};
+    static const QuantityFormat kPercent{QStringLiteral("%"), SiPrefix::None, SiPrefix::None, 0};
+    static const QuantityFormat kRelativeHumidity{QStringLiteral("%RH"), SiPrefix::None, SiPrefix::None, 0};
+    // Energy meters are counters that grow for as long as the machine runs.
+    static const QuantityFormat kJoule{QStringLiteral("J"), SiPrefix::None, SiPrefix::Giga, 3};
+    static const QuantityFormat kHertz{QStringLiteral("Hz"), SiPrefix::None, SiPrefix::Mega, 3};
     static const QuantityFormat kUnknown{QString(), SiPrefix::None, SiPrefix::None, 3};
     switch (unit) {
         case SensorUnit::Celsius: return kCelsius;
@@ -77,6 +82,10 @@ const SensorFormat::QuantityFormat &SensorFormat::quantityFormat(const SensorUni
         case SensorUnit::Rpm: return kRpm;
         case SensorUnit::Ampere: return kAmpere;
         case SensorUnit::Watt: return kWatt;
+        case SensorUnit::Percent: return kPercent;
+        case SensorUnit::RelativeHumidity: return kRelativeHumidity;
+        case SensorUnit::Joule: return kJoule;
+        case SensorUnit::Hertz: return kHertz;
         case SensorUnit::Unknown: break;
     }
     return kUnknown;
@@ -94,6 +103,8 @@ QString SensorFormat::unitSymbol(const SensorUnit unit, const SiPrefix prefix) {
         case SiPrefix::Milli: return QLatin1Char('m') + symbol;
         case SiPrefix::None: break;
         case SiPrefix::Kilo: return QLatin1Char('k') + symbol;
+        case SiPrefix::Mega: return QLatin1Char('M') + symbol;
+        case SiPrefix::Giga: return QLatin1Char('G') + symbol;
     }
     return symbol;
 }
@@ -106,6 +117,10 @@ const QVector<SensorFormat::ScaleRange> &SensorFormat::scaleRanges(const SensorU
     static const QVector<ScaleRange> kRpm = build(SensorUnit::Rpm);
     static const QVector<ScaleRange> kAmpere = build(SensorUnit::Ampere);
     static const QVector<ScaleRange> kWatt = build(SensorUnit::Watt);
+    static const QVector<ScaleRange> kPercent = build(SensorUnit::Percent);
+    static const QVector<ScaleRange> kRelativeHumidity = build(SensorUnit::RelativeHumidity);
+    static const QVector<ScaleRange> kJoule = build(SensorUnit::Joule);
+    static const QVector<ScaleRange> kHertz = build(SensorUnit::Hertz);
     static const QVector<ScaleRange> kUnknown = build(SensorUnit::Unknown);
     switch (unit) {
         case SensorUnit::Celsius: return kCelsius;
@@ -114,6 +129,10 @@ const QVector<SensorFormat::ScaleRange> &SensorFormat::scaleRanges(const SensorU
         case SensorUnit::Rpm: return kRpm;
         case SensorUnit::Ampere: return kAmpere;
         case SensorUnit::Watt: return kWatt;
+        case SensorUnit::Percent: return kPercent;
+        case SensorUnit::RelativeHumidity: return kRelativeHumidity;
+        case SensorUnit::Joule: return kJoule;
+        case SensorUnit::Hertz: return kHertz;
         case SensorUnit::Unknown: break;
     }
     return kUnknown;

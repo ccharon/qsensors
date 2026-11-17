@@ -37,6 +37,7 @@ private slots:
     void scale_follows_the_range_table();
     void scale_from_a_limit_survives_a_missing_limit();
     void temperature_scale_in_both_units();
+    void new_quantities_get_their_ranges_and_scales();
 };
 
 namespace {
@@ -490,6 +491,29 @@ void ReadingPipelineTest::temperature_scale_in_both_units() {
     QCOMPARE(fahrenheit.scale, oneDecimal);
     config.temperatureUnit = TemperatureUnit::Celsius;
     QCOMPARE(pipeline.process({temperature(40.0)}, config)[0].scale, oneDecimal);
+}
+
+void ReadingPipelineTest::new_quantities_get_their_ranges_and_scales() {
+    RuntimeConfig config;
+    config.fanDefaultMaxRpm = 7200;
+    ReadingPipeline pipeline;
+    const QVector<SensorReading> shown = pipeline.process(
+            {raw(SensorCategory::Fans, QStringLiteral("pwm1"), 8, 27.06, SensorUnit::Percent, std::nullopt, std::nullopt),
+             raw(SensorCategory::Other, QStringLiteral("humidity1"), 9, 48.2, SensorUnit::RelativeHumidity,
+                 std::nullopt, std::nullopt),
+             raw(SensorCategory::Power, QStringLiteral("energy1"), 10, 3.6e6, SensorUnit::Joule, std::nullopt, std::nullopt),
+             raw(SensorCategory::Other, QStringLiteral("freq1"), 11, 1.85e9, SensorUnit::Hertz, std::nullopt, std::nullopt)},
+            config);
+    // A PWM output among the fans uses 0..100 %, not the fan fallback maximum.
+    QCOMPARE(shown[0].minValue, std::optional(0.0));
+    QCOMPARE(shown[0].maxValue, std::optional(100.0));
+    QCOMPARE(shown[0].scale, std::optional(SensorScale{SiPrefix::None, 0}));
+    QCOMPARE(shown[1].maxValue, std::optional(100.0));
+    // Counters and clocks have no range: no bar graph.
+    QVERIFY(!shown[2].hasRange());
+    QCOMPARE(shown[2].scale, std::optional(SensorScale{SiPrefix::Mega, 3}));
+    QVERIFY(!shown[3].hasRange());
+    QCOMPARE(shown[3].scale, std::optional(SensorScale{SiPrefix::Mega, 0}));
 }
 
 QTEST_APPLESS_MAIN(ReadingPipelineTest)

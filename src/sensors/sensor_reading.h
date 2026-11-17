@@ -30,6 +30,10 @@ enum class SensorUnit {
     Rpm,
     Ampere,
     Watt,
+    Percent, // PWM duty cycle
+    RelativeHumidity, // %RH
+    Joule,
+    Hertz,
     Unknown
 };
 
@@ -38,6 +42,8 @@ enum class SiPrefix {
     Milli = -1,
     None = 0,
     Kilo = 1,
+    Mega = 2,
+    Giga = 3,
 };
 
 /** How a value is displayed: SI prefix and number of decimals. */

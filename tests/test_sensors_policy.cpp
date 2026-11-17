@@ -40,13 +40,17 @@ private slots:
     void missingValue_keeps_latched_scale();
     void missingValue_yields_valid_range();
     void plausibleTemperatureLimit_rejects_placeholders();
+    void pwm_and_humidity_default_to_percent_range();
+    void energy_and_frequency_get_no_default_range();
+    void new_quantities_scale_and_alert();
+    void pwmDutyPercent_maps_full_scale();
 };
 
 void SensorsPolicyTest::temperatures_defaultRange_applied_when_missing() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Temperatures, 42.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Celsius, 42.0, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -58,7 +62,7 @@ void SensorsPolicyTest::fans_defaultMax_uses_runtime_config() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Fans, 1800.0, min, max, 7200);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Rpm, 1800.0, min, max, 7200);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -70,7 +74,7 @@ void SensorsPolicyTest::voltages_defaults_are_filled() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Voltages, 1.2, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Volt, 1.2, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -82,7 +86,7 @@ void SensorsPolicyTest::currents_defaults_are_filled() {
     std::optional<double> min;
     std::optional<double> max = 10.0;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Currents, 6.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Ampere, 6.0, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -94,7 +98,7 @@ void SensorsPolicyTest::power_defaults_are_filled() {
     std::optional<double> min = 20.0;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Power, 35.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Watt, 35.0, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -106,7 +110,7 @@ void SensorsPolicyTest::power_defaults_both_missing() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Power, 80.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Watt, 80.0, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -118,7 +122,7 @@ void SensorsPolicyTest::other_defaults_are_filled() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Other, 4.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Unknown, 4.0, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -130,7 +134,7 @@ void SensorsPolicyTest::existing_bounds_not_overwritten() {
     std::optional<double> min = 5.0;
     std::optional<double> max = 42.0;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Voltages, 12.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Volt, 12.0, min, max, 5000);
 
     QCOMPARE(*min, 5.0);
     QCOMPARE(*max, 42.0);
@@ -141,7 +145,7 @@ void SensorsPolicyTest::nan_input_yields_finite_range() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Other, nan, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Unknown, nan, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -154,7 +158,7 @@ void SensorsPolicyTest::inf_input_yields_finite_range() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Voltages, inf, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Volt, inf, min, max, 5000);
 
     QVERIFY(min.has_value());
     QVERIFY(max.has_value());
@@ -263,7 +267,7 @@ void SensorsPolicyTest::signed_current_without_limits_mirrors_range() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Currents, -396.0, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Ampere, -396.0, min, max, 5000);
 
     QCOMPARE(*min, -594.0);
     QCOMPARE(*max, 594.0);
@@ -273,7 +277,7 @@ void SensorsPolicyTest::signed_power_with_native_max_only_mirrors_range() {
     std::optional<double> min;
     std::optional<double> max = 60.0;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Power, -4.7, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Watt, -4.7, min, max, 5000);
 
     QCOMPARE(*min, -60.0);
     QCOMPARE(*max, 60.0);
@@ -283,7 +287,7 @@ void SensorsPolicyTest::negative_voltage_keeps_zero_minimum() {
     std::optional<double> min;
     std::optional<double> max;
 
-    SensorsPolicy::applyDefaultRangePolicy(SensorCategory::Voltages, -0.5, min, max, 5000);
+    SensorsPolicy::applyDefaultRangePolicy(SensorUnit::Volt, -0.5, min, max, 5000);
 
     QCOMPARE(*min, 0.0);
     QCOMPARE(*max, 1.0);
@@ -473,18 +477,19 @@ void SensorsPolicyTest::missingValue_keeps_latched_scale() {
 }
 
 void SensorsPolicyTest::missingValue_yields_valid_range() {
-    for (const SensorCategory category: {SensorCategory::Temperatures, SensorCategory::Fans, SensorCategory::Voltages,
-                                         SensorCategory::Currents, SensorCategory::Power, SensorCategory::Other}) {
+    for (const SensorUnit unit: {SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Rpm, SensorUnit::Volt,
+                                 SensorUnit::Ampere, SensorUnit::Watt, SensorUnit::Percent,
+                                 SensorUnit::RelativeHumidity, SensorUnit::Unknown}) {
         std::optional<double> min;
         std::optional<double> max;
-        SensorsPolicy::applyDefaultRangePolicy(category, std::nullopt, min, max, 5000);
+        SensorsPolicy::applyDefaultRangePolicy(unit, std::nullopt, min, max, 5000);
         QVERIFY(min.has_value() && max.has_value());
         QVERIFY(*max > *min);
 
         // L5: a lone firmware minimum above the default maximum must not invert the range.
         std::optional<double> onlyMin = 5.0;
         std::optional<double> noMax;
-        SensorsPolicy::applyDefaultRangePolicy(category, std::nullopt, onlyMin, noMax, 5000);
+        SensorsPolicy::applyDefaultRangePolicy(unit, std::nullopt, onlyMin, noMax, 5000);
         QCOMPARE(onlyMin, std::optional(5.0));
         QVERIFY(noMax.has_value() && *noMax > 5.0);
     }
@@ -497,6 +502,69 @@ void SensorsPolicyTest::plausibleTemperatureLimit_rejects_placeholders() {
     QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(65261.85));
     QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(-273.15));
     QVERIFY(!SensorsPolicy::isPlausibleTemperatureLimitC(std::numeric_limits<double>::quiet_NaN()));
+}
+
+void SensorsPolicyTest::pwm_and_humidity_default_to_percent_range() {
+    for (const SensorUnit unit: {SensorUnit::Percent, SensorUnit::RelativeHumidity}) {
+        std::optional<double> min;
+        std::optional<double> max;
+        SensorsPolicy::applyDefaultRangePolicy(unit, 42.0, min, max, 5000);
+        QCOMPARE(min, std::optional(0.0));
+        QCOMPARE(max, std::optional(100.0));
+        // Not the fan fallback, although PWM outputs are shown with the fans.
+        QVERIFY(*max != 5000.0);
+    }
+}
+
+void SensorsPolicyTest::energy_and_frequency_get_no_default_range() {
+    for (const SensorUnit unit: {SensorUnit::Joule, SensorUnit::Hertz}) {
+        for (const std::optional<double> value: {std::optional(123456.0), std::optional<double>()}) {
+            std::optional<double> min;
+            std::optional<double> max;
+            SensorsPolicy::applyDefaultRangePolicy(unit, value, min, max, 5000);
+            QCOMPARE(min, std::nullopt);
+            QCOMPARE(max, std::nullopt);
+            const SensorReading reading{.value = value, .unit = unit, .minValue = min, .maxValue = max};
+            QCOMPARE(SensorsPolicy::rangeFraction(reading), std::nullopt);
+        }
+    }
+}
+
+void SensorsPolicyTest::new_quantities_scale_and_alert() {
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Percent, 42.4, std::nullopt, std::nullopt), (SensorScale{SiPrefix::None, 0}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::RelativeHumidity, 55.6, std::nullopt, std::nullopt),
+             (SensorScale{SiPrefix::None, 0}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Joule, 12.5, std::nullopt, std::nullopt), (SensorScale{SiPrefix::None, 2}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Joule, 4321.0, std::nullopt, std::nullopt), (SensorScale{SiPrefix::Kilo, 3}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Joule, 2.5e9, std::nullopt, std::nullopt), (SensorScale{SiPrefix::Giga, 3}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Hertz, 50.0, std::nullopt, std::nullopt), (SensorScale{SiPrefix::None, 2}));
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Hertz, 25000.0, std::nullopt, std::nullopt), (SensorScale{SiPrefix::Kilo, 2}));
+    // A GPU clock: "1850 MHz", not GHz.
+    QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Hertz, 1.85e9, std::nullopt, std::nullopt), (SensorScale{SiPrefix::Mega, 0}));
+
+    // PWM and energy have no limits to violate; humidity and frequency follow firmware limits.
+    QVERIFY(!SensorsPolicy::isAlertState({.value = 100.0, .unit = SensorUnit::Percent, .firmwareMax = 50.0}));
+    QVERIFY(!SensorsPolicy::isAlertState({.value = 1e9, .unit = SensorUnit::Joule, .firmwareMax = 1.0}));
+    QVERIFY(SensorsPolicy::isAlertState({.value = 95.0, .unit = SensorUnit::RelativeHumidity, .firmwareMax = 90.0}));
+    QVERIFY(SensorsPolicy::isAlertState({.value = 10.0, .unit = SensorUnit::Hertz, .firmwareMin = 45.0}));
+
+    // A zero maximum is an unset limit for the new quantities too.
+    for (const SensorUnit unit: {SensorUnit::Percent, SensorUnit::RelativeHumidity, SensorUnit::Joule, SensorUnit::Hertz}) {
+        std::optional<double> min;
+        std::optional<double> max = 0.0;
+        SensorsPolicy::dropImplausibleFirmwareLimits(unit, min, max);
+        QCOMPARE(max, std::nullopt);
+    }
+}
+
+void SensorsPolicyTest::pwmDutyPercent_maps_full_scale() {
+    QCOMPARE(SensorsPolicy::pwmDutyPercent(0.0), 0.0);
+    QCOMPARE(SensorsPolicy::pwmDutyPercent(255.0), 100.0);
+    QCOMPARE(SensorsPolicy::pwmDutyPercent(127.5), 50.0);
+    QVERIFY(qFuzzyCompare(SensorsPolicy::pwmDutyPercent(69.0), 69.0 / 2.55));
+    // Out of range values (e.g. a sensors.conf compute statement) are clamped.
+    QCOMPARE(SensorsPolicy::pwmDutyPercent(300.0), 100.0);
+    QCOMPARE(SensorsPolicy::pwmDutyPercent(-1.0), 0.0);
 }
 
 QTEST_APPLESS_MAIN(SensorsPolicyTest)

@@ -55,7 +55,12 @@ namespace LcdSegmentFont {
                 {u'R', letter(A | B | E | F | G1 | G2 | M)},
                 {u'V', letter(F | B | N)},
                 {u'W', {F | B | O, 0, 0.86, 0.96}}, // wide: two Vs
+                {u'G', letter(A | C | D | E | F | G2)},
+                {u'H', letter(B | C | E | F | G1 | G2)},
+                {u'J', letter(B | C | D | E)},
                 {u'k', letter(E | F | G1 | J | M)},
+                {u'z', letter(D | G1 | K)},
+                {u'%', letter(F | C | J | K)},
                 {u'm', letter(C | E | G1 | G2 | L)},
                 {QChar(0x00B0), {A | B | F | G1 | G2, 0, 0.46, 0.52}}, // degree sign
             };

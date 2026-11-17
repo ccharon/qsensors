@@ -45,7 +45,7 @@ void GlyphModelTest::unknown_characters_are_rejected() {
     QVERIFY(!glyphFor(u'Z').has_value());
     QVERIFY(supports(u"12.34"));
     QVERIFY(supports(u"mW"));
-    QVERIFY(!supports(u"kHz"));
+    QVERIFY(!supports(u"Qx"));
 }
 
 void GlyphModelTest::every_segment_has_geometry_inside_cell() {

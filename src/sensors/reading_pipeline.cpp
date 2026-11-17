@@ -42,7 +42,7 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
         // The bar graph starts from the firmware limits; the policy fills in what is missing.
         reading.minValue = reading.firmwareMin;
         reading.maxValue = reading.firmwareMax;
-        SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, reading.minValue, reading.maxValue,
+        SensorsPolicy::applyDefaultRangePolicy(reading.unit, reading.value, reading.minValue, reading.maxValue,
                                                config.fanDefaultMaxRpm);
         applyTemperatureUnit(reading, config.temperatureUnit);
         // After the °F conversion: the scale is chosen for the values as displayed.

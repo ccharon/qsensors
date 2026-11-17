@@ -16,9 +16,25 @@
 #include <memory>
 #include <optional>
 
+// PWM outputs need libsensors API 0x501, frequency inputs API 0x510 (lm-sensors 3.6.2);
+// older libsensors (e.g. API 0x440, lm-sensors 3.4 on EL8) has neither.
+#define QSENSORS_HAVE_PWM (SENSORS_API_VERSION >= 0x501)
+#define QSENSORS_HAVE_FREQ (SENSORS_API_VERSION >= 0x510)
+
 namespace {
     // libsensors defines no hard name-length limit; 256 covers all real-world chip names.
     constexpr size_t kChipNameBufferSize = 256;
+
+#if QSENSORS_HAVE_PWM
+    // API 0x510 (lm-sensors 3.6.2) divides pwm* by a scaling factor of 2.55 that its
+    // integer return type truncates to 2; API 0x501 reports the raw duty. Multiplying back
+    // gives the kernel's 0..255 value.
+#if SENSORS_API_VERSION >= 0x510
+    constexpr double kLibsensorsPwmDivisor = 2.0;
+#else
+    constexpr double kLibsensorsPwmDivisor = 1.0;
+#endif
+#endif
 
     /** Maps libsensors input types to visible category columns. */
     [[nodiscard]] SensorCategory categoryForType(const sensors_subfeature_type type) {
@@ -32,7 +48,14 @@ namespace {
             case SENSORS_SUBFEATURE_CURR_INPUT:
                 return SensorCategory::Currents;
             case SENSORS_SUBFEATURE_POWER_INPUT:
+            case SENSORS_SUBFEATURE_POWER_AVERAGE:
+            case SENSORS_SUBFEATURE_ENERGY_INPUT:
                 return SensorCategory::Power;
+#if QSENSORS_HAVE_PWM
+            case SENSORS_SUBFEATURE_PWM_IO:
+                // Fan control outputs sit next to the fans they drive.
+                return SensorCategory::Fans;
+#endif
             default:
                 return SensorCategory::Other;
         }
@@ -50,10 +73,34 @@ namespace {
             case SENSORS_SUBFEATURE_CURR_INPUT:
                 return SensorUnit::Ampere;
             case SENSORS_SUBFEATURE_POWER_INPUT:
+            case SENSORS_SUBFEATURE_POWER_AVERAGE:
                 return SensorUnit::Watt;
+            case SENSORS_SUBFEATURE_ENERGY_INPUT:
+                return SensorUnit::Joule;
+            case SENSORS_SUBFEATURE_HUMIDITY_INPUT:
+                return SensorUnit::RelativeHumidity;
+#if QSENSORS_HAVE_PWM
+            case SENSORS_SUBFEATURE_PWM_IO:
+                return SensorUnit::Percent;
+#endif
+#if QSENSORS_HAVE_FREQ
+            case SENSORS_SUBFEATURE_FREQ_INPUT:
+                return SensorUnit::Hertz;
+#endif
             default:
                 return SensorUnit::Unknown;
         }
+    }
+
+    /** @p value as libsensors returns it for @p type, in the unit of unitForType(). */
+    [[nodiscard]] std::optional<double> toSourceUnit(const sensors_subfeature_type type, const std::optional<double> value) {
+#if QSENSORS_HAVE_PWM
+        if (value && type == SENSORS_SUBFEATURE_PWM_IO)
+            return SensorsPolicy::pwmDutyPercent(*value * kLibsensorsPwmDivisor);
+#else
+        Q_UNUSED(type);
+#endif
+        return value;
     }
 
     /** Value of @p sf; nullopt when unreadable or not finite. */
@@ -113,6 +160,7 @@ namespace {
                 range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
                 break;
             case SENSORS_SUBFEATURE_POWER_INPUT:
+            case SENSORS_SUBFEATURE_POWER_AVERAGE:
 #if SENSORS_API_VERSION >= 0x510
                 // power*_min is missing in older libsensors (API 0x440, lm-sensors 3.4 on EL8).
                 range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MIN);
@@ -139,7 +187,17 @@ namespace {
             SENSORS_SUBFEATURE_IN_INPUT,
             SENSORS_SUBFEATURE_FAN_INPUT,
             SENSORS_SUBFEATURE_CURR_INPUT,
-            SENSORS_SUBFEATURE_POWER_INPUT
+            SENSORS_SUBFEATURE_POWER_INPUT,
+            // amdgpu reports only power1_average (PPT).
+            SENSORS_SUBFEATURE_POWER_AVERAGE,
+            SENSORS_SUBFEATURE_ENERGY_INPUT,
+            SENSORS_SUBFEATURE_HUMIDITY_INPUT,
+#if QSENSORS_HAVE_PWM
+            SENSORS_SUBFEATURE_PWM_IO,
+#endif
+#if QSENSORS_HAVE_FREQ
+            SENSORS_SUBFEATURE_FREQ_INPUT,
+#endif
         };
 
         for (const sensors_subfeature_type type: candidates) {
@@ -179,7 +237,7 @@ namespace {
 
         // Intermittent failures (runtime suspend, stopped fan, drive standby) keep the card;
         // the reading carries no value until the input can be read again.
-        const std::optional<double> value = readSubfeatureValue(chip, selected.subfeature);
+        const std::optional<double> value = toSourceUnit(selected.type, readSubfeatureValue(chip, selected.subfeature));
         if (!value.has_value()) {
             reportOnce(reportedProblems, chipName + QLatin1Char('/') + QString::number(feature->number),
                        QStringLiteral("cannot read sensor %1 on %2")

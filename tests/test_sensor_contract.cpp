@@ -27,12 +27,13 @@ private slots:
 
 namespace {
     constexpr SensorUnit kKnownUnits[] = {
-        SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Volt,
-        SensorUnit::Rpm, SensorUnit::Ampere, SensorUnit::Watt,
+        SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Volt, SensorUnit::Rpm, SensorUnit::Ampere,
+        SensorUnit::Watt, SensorUnit::Percent, SensorUnit::RelativeHumidity, SensorUnit::Joule, SensorUnit::Hertz,
     };
     constexpr SensorUnit kAllUnits[] = {
-        SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Volt, SensorUnit::Rpm,
-        SensorUnit::Ampere, SensorUnit::Watt, SensorUnit::Unknown,
+        SensorUnit::Celsius, SensorUnit::Fahrenheit, SensorUnit::Volt, SensorUnit::Rpm, SensorUnit::Ampere,
+        SensorUnit::Watt, SensorUnit::Percent, SensorUnit::RelativeHumidity, SensorUnit::Joule, SensorUnit::Hertz,
+        SensorUnit::Unknown,
     };
 
     QStringList symbolsOf(const SensorUnit unit) {
@@ -74,6 +75,12 @@ void SensorContractTest::known_units_have_symbols_and_glyphs() {
     QCOMPARE(symbolsOf(SensorUnit::Celsius), QStringList{QStringLiteral("°C")});
     QCOMPARE(symbolsOf(SensorUnit::Fahrenheit), QStringList{QStringLiteral("°F")});
     QCOMPARE(symbolsOf(SensorUnit::Rpm), QStringList{QStringLiteral("RPM")});
+    QCOMPARE(symbolsOf(SensorUnit::Percent), QStringList{QStringLiteral("%")});
+    QCOMPARE(symbolsOf(SensorUnit::RelativeHumidity), QStringList{QStringLiteral("%RH")});
+    QCOMPARE(symbolsOf(SensorUnit::Joule), QStringList({QStringLiteral("J"), QStringLiteral("kJ"), QStringLiteral("MJ"),
+                                                        QStringLiteral("GJ")}));
+    QCOMPARE(symbolsOf(SensorUnit::Hertz),
+             QStringList({QStringLiteral("Hz"), QStringLiteral("kHz"), QStringLiteral("MHz")}));
 }
 
 void SensorContractTest::unknown_unit_has_no_symbol_and_no_glyph() {
@@ -142,6 +149,15 @@ void SensorContractTest::display_formats_each_range_of_the_table() {
     QCOMPARE(shown(SensorUnit::Rpm, 1534.0), QStringLiteral(" 1534|RPM"));
     QCOMPARE(shown(SensorUnit::Rpm, 12000.0), QStringLiteral("12000|RPM"));
     QCOMPARE(shown(SensorUnit::Unknown, 1.5), QStringLiteral(" 1.500|"));
+    QCOMPARE(shown(SensorUnit::Percent, 42.4), QStringLiteral("   42|%"));
+    QCOMPARE(shown(SensorUnit::Percent, 100.0), QStringLiteral("  100|%"));
+    QCOMPARE(shown(SensorUnit::RelativeHumidity, 55.6), QStringLiteral("   56|%RH"));
+    QCOMPARE(shown(SensorUnit::Joule, 12.5), QStringLiteral(" 12.50|J"));
+    QCOMPARE(shown(SensorUnit::Joule, 4321.0), QStringLiteral(" 4.321|kJ"));
+    QCOMPARE(shown(SensorUnit::Joule, 123456789.0), QStringLiteral(" 123.5|MJ"));
+    QCOMPARE(shown(SensorUnit::Hertz, 50.0), QStringLiteral(" 50.00|Hz"));
+    QCOMPARE(shown(SensorUnit::Hertz, 25000.0), QStringLiteral(" 25.00|kHz"));
+    QCOMPARE(shown(SensorUnit::Hertz, 1.85e9), QStringLiteral(" 1850|MHz"));
 
     // Every digit string has exactly kValueCells cells.
     for (const SensorUnit unit: kAllUnits) {
