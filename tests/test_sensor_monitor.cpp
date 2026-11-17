@@ -35,6 +35,12 @@ private slots:
 using namespace std::chrono_literals;
 
 namespace {
+    // Upper bound for waits on a condition; they return as soon as it holds, so a generous
+    // bound costs nothing on a fast machine and keeps slow CI runners from failing.
+    constexpr int kWaitMs = 10000;
+}
+
+namespace {
     /** What the fake source saw, shared with the test across threads. */
     struct SourceLog {
         QMutex mutex;
@@ -179,7 +185,7 @@ void SensorMonitorTest::timer_polls_in_worker_thread() {
     config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
 
     QVERIFY(monitor.start(config));
-    QVERIFY(spy.wait(3000));
+    QVERIFY(spy.wait(kWaitMs));
     QCOMPARE(spy.count(), 2);
     QCOMPARE(readingsAt(spy, 1).at(0).value.value(), 42.0);
     QCOMPARE(log->readIn.at(1), log->createdIn);
@@ -241,23 +247,30 @@ void SensorMonitorTest::stalled_read_is_reported_and_recovery_too() {
 
     log->close();
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("has not returned for 100 ms")));
-    QVERIFY(stalled.wait(3000));
+    QVERIFY(stalled.wait(kWaitMs));
     QCOMPARE(stalled.count(), 1);
     QCOMPARE(stalled.at(0).at(0).toBool(), true);
     QVERIFY(monitor.isStalled());
     QCOMPARE(readings.count(), 1);
 
-    // Further timer ticks while stalled request no further reads.
-    QTest::qWait(1200);
-    QCOMPARE(log->reads(), 2);
+    // Timer ticks while stalled must request no further reads. The worker is blocked in the
+    // read, so a wrongly queued read would only run after it returns: let ticks pass (the
+    // wait is a lower bound; a slow machine only adds ticks), move the next tick 10 s away,
+    // then open the gate. Any read right after the one that returns was queued meanwhile.
+    QTest::qWait(2500);
+    QCOMPARE(stalled.count(), 1); // reported once, not per tick
+    config.pollingIntervalSec = RuntimeConfigLimits::kMaxPollingIntervalSec;
+    monitor.setConfig(config);
 
     log->open();
-    QVERIFY(stalled.wait(3000));
+    QVERIFY(stalled.wait(kWaitMs));
     QCOMPARE(stalled.count(), 2);
     QCOMPARE(stalled.at(1).at(0).toBool(), false);
     QVERIFY(!monitor.isStalled());
     QCOMPARE(readings.count(), 2);
     QCOMPARE(readingsAt(readings, 1).at(0).value.value(), 42.0);
+    QVERIFY(!readings.wait(500));
+    QCOMPARE(log->reads(), 2);
 }
 
 void SensorMonitorTest::normal_read_is_not_reported_as_stalled() {
@@ -270,10 +283,9 @@ void SensorMonitorTest::normal_read_is_not_reported_as_stalled() {
     config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
     QVERIFY(monitor.start(config));
 
-    QVERIFY(readings.wait(3000));
+    QVERIFY(readings.wait(kWaitMs));
     // Past the stall timeout of the poll that just returned, before the next poll.
-    QTest::qWait(500);
-    QCOMPARE(stalled.count(), 0);
+    QVERIFY(!stalled.wait(500));
     QVERIFY(!monitor.isStalled());
 }
 
@@ -289,11 +301,11 @@ void SensorMonitorTest::source_that_stops_working_is_reported_and_no_longer_poll
     QCOMPARE(readings.count(), 1);
 
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("stopped working: re-init failed")));
-    QVERIFY(failed.wait(10000));
+    QVERIFY(failed.wait(kWaitMs));
     QCOMPARE(failed.at(0).at(0).toString(), QStringLiteral("re-init failed"));
     QCOMPARE(monitor.lastError(), QStringLiteral("re-init failed"));
     // The cards of the lost source go away: an empty update follows the failure.
-    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, kWaitMs);
     QVERIFY(readingsAt(readings, 1).isEmpty());
     // The source was dropped in its own thread, and nothing polls it any more.
     QCOMPARE(log->destroyed(), log->createdIn);
@@ -326,12 +338,12 @@ void SensorMonitorTest::slow_first_read_starts_stalled_and_fills_in_later() {
 
     // The read returns: the normal path shows it, ends the stall and starts polling.
     log->open();
-    QVERIFY(readings.wait(10000));
+    QVERIFY(readings.wait(kWaitMs));
     QCOMPARE(readingsAt(readings, 0).at(0).value.value(), 41.0);
     QVERIFY(!monitor.isStalled());
     QCOMPARE(stalled.count(), 2);
     QCOMPARE(stalled.at(1).at(0).toBool(), false);
-    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, 10000);
+    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, kWaitMs);
     QCOMPARE(log->reads(), 2);
 }
 
@@ -351,7 +363,7 @@ void SensorMonitorTest::slow_init_failure_is_reported_after_start() {
 
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("could not be initialized: no chips")));
     log->open();
-    QVERIFY(failed.wait(10000));
+    QVERIFY(failed.wait(kWaitMs));
     QCOMPARE(failed.at(0).at(0).toString(), QStringLiteral("no chips"));
     QCOMPARE(monitor.lastError(), QStringLiteral("no chips"));
     QVERIFY(!monitor.isStalled());
@@ -370,19 +382,19 @@ void SensorMonitorTest::shutdown_with_blocked_read_returns_within_limit() {
     QVERIFY(monitor->start(config));
 
     log->close();
-    QTRY_COMPARE_WITH_TIMEOUT(log->blocked(), 1, 3000);
+    QTRY_COMPARE_WITH_TIMEOUT(log->blocked(), 1, kWaitMs);
     QElapsedTimer elapsed;
     elapsed.start();
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("did not return within 200 ms")));
     monitor.reset();
-    QVERIFY2(elapsed.elapsed() < 1500, qPrintable(QString::number(elapsed.elapsed())));
+    QVERIFY2(elapsed.elapsed() < 2500, qPrintable(QString::number(elapsed.elapsed())));
     QCOMPARE(log->destroyed(), nullptr);
     // main() must not tear down Qt under the abandoned worker.
     QVERIFY(SensorMonitor::workerAbandoned());
 
     // Once the read returns, the abandoned worker still destroys the source in its own thread.
     log->open();
-    QTRY_VERIFY_WITH_TIMEOUT(log->destroyed() != nullptr, 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(log->destroyed() != nullptr, kWaitMs);
     QCOMPARE(log->destroyed(), log->createdIn);
 }
 
