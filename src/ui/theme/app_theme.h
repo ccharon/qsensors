@@ -26,7 +26,9 @@ namespace AppTheme {
     inline constexpr int kGridSpacing = 4;
     inline constexpr int kCategoryVsGridSpacingDelta = 2;
     inline constexpr int kUnifiedHorizontalSpacing = kGridSpacing + kCategoryVsGridSpacingDelta;
-    inline constexpr int kChipCardFrameWidthTotal = 2; // 1px left + 1px right
+    // Border of a CollapsibleSection card (sectionCardStyle()); the layouts count it on both sides.
+    inline constexpr int kChipCardBorderWidth = 1;
+    inline constexpr int kChipCardFrameWidthTotal = 2 * kChipCardBorderWidth;
     inline constexpr int kSensorsPanelVerticalSpacing = 10;
     inline constexpr int kCategoryBlockSpacing = 3;
     inline constexpr int kMaxColumnsPerCategory = 6;

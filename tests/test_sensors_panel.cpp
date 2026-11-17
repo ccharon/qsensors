@@ -42,6 +42,7 @@ private slots:
     void header_click_still_toggles_when_draggable();
     void user_toggle_and_drop_are_announced_but_applying_state_is_not();
     void drop_from_another_drag_is_rejected();
+    void section_frame_matches_the_theme_frame_width();
     void drag_request_carries_the_pointer_position_in_the_section();
     void structural_update_waits_for_the_end_of_a_drag();
     void columns_go_to_category_with_most_rows();
@@ -498,6 +499,14 @@ void SensorsPanelTest::drop_from_another_drag_is_rejected() {
     QCOMPARE(dropOnWindow(panel, mime, panel.height()), false);
     QCOMPARE(orderSpy.count(), 0);
     QCOMPARE(cardOrder(panel), before);
+}
+
+void SensorsPanelTest::section_frame_matches_the_theme_frame_width() {
+    // The width calculations count AppTheme::kChipCardFrameWidthTotal for the styled border.
+    CollapsibleSection section(QStringLiteral("chip"), true);
+    section.resize(300, 100);
+    section.ensurePolished();
+    QCOMPARE(section.width() - section.contentsRect().width(), AppTheme::kChipCardFrameWidthTotal);
 }
 
 void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section() {
