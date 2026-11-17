@@ -2,18 +2,20 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "ui/widgets/lcd_segment_font.h"
+#include "ui/widgets/lcd_symbol_font.h"
+#include "sensors/sensor_format.h"
 
 #include <QtTest/QtTest>
 
 using namespace LcdSegmentFont;
 
-// Verifies segment glyph masks, segment geometry and value/unit layout of the vector LCD.
+// Verifies segment glyph masks, segment geometry, digit cell layout and the annunciator symbol font of the LCD.
 class GlyphModelTest final : public QObject {
     Q_OBJECT
 
 private slots:
     void digits_use_seven_segment_masks();
-    void digits_show_ghost_segments_units_do_not();
+    void digits_show_ghost_segments();
     void unknown_characters_are_rejected();
     void every_segment_has_geometry_inside_cell();
     void layout_cells_right_aligns_the_value();
@@ -21,6 +23,9 @@ private slots:
     void layout_cells_grow_for_long_values();
     void cells_width_and_fit_agree();
     void layout_skips_unsupported_characters();
+    void symbol_font_draws_every_unit_and_state();
+    void symbol_font_is_deterministic_and_inside_its_box();
+    void symbol_font_tells_R_from_A();
 };
 
 void GlyphModelTest::digits_use_seven_segment_masks() {
@@ -37,17 +42,20 @@ void GlyphModelTest::digits_use_seven_segment_masks() {
     }
 }
 
-void GlyphModelTest::digits_show_ghost_segments_units_do_not() {
+void GlyphModelTest::digits_show_ghost_segments() {
     QCOMPARE(glyphFor(u'4')->ghost, kSevenSegments);
     QCOMPARE(glyphFor(u' ')->ghost, kSevenSegments);
-    QCOMPARE(glyphFor(u'W')->ghost, SegmentMask(0));
-    QCOMPARE(glyphFor(QChar(0x00B0))->ghost, SegmentMask(0));
+    QCOMPARE(glyphFor(u'O')->ghost, kSevenSegments);
 }
 
 void GlyphModelTest::unknown_characters_are_rejected() {
     QVERIFY(!glyphFor(u'Z').has_value());
+    // Unit letters are no segment characters any more.
+    QVERIFY(!glyphFor(u'V').has_value());
+    QVERIFY(!glyphFor(u'm').has_value());
     QVERIFY(supports(u"12.34"));
-    QVERIFY(supports(u"mW"));
+    QVERIFY(supports(u"   OL"));
+    QVERIFY(!supports(u"mW"));
     QVERIFY(!supports(u"Qx"));
 }
 
@@ -125,11 +133,56 @@ void GlyphModelTest::cells_width_and_fit_agree() {
 }
 
 void GlyphModelTest::layout_skips_unsupported_characters() {
-    const auto layout = layoutText(u"1?2", u"", 30.0);
-    QCOMPARE(layout.size(), 2);
-    QCOMPARE(layout.at(0).symbol, QChar(u'1'));
-    QCOMPARE(layout.at(1).symbol, QChar(u'2'));
-    QCOMPARE(layout.at(1).cell.left(), layout.at(0).glyph.advance * 30.0);
+    const auto layout = layoutCells(u"1?2", 3, 3, 30.0);
+    QCOMPARE(layout.size(), 3);
+    QCOMPARE(layout.at(1).symbol, QChar(u'1'));
+    QCOMPARE(layout.at(2).symbol, QChar(u'2'));
+    QCOMPARE(layout.at(2).cell.left() - layout.at(1).cell.left(), kDigitAdvance * 30.0);
+}
+
+void GlyphModelTest::symbol_font_draws_every_unit_and_state() {
+    QStringList symbols = SensorFormat::allUnitSymbols();
+    symbols << QStringLiteral("HI") << QStringLiteral("LO");
+    for (const QString &symbol: symbols) {
+        QVERIFY2(LcdSymbolFont::supports(symbol), qPrintable(symbol));
+        const QPainterPath path = LcdSymbolFont::path(symbol, 14.0);
+        QVERIFY2(!path.isEmpty(), qPrintable(symbol));
+        // Every letter contributes ink: wider symbols cover more.
+        QVERIFY2(LcdSymbolFont::width(symbol, 14.0) > 0.0, qPrintable(symbol));
+    }
+    QVERIFY(!LcdSymbolFont::supports(u"x"));
+    QVERIFY(LcdSymbolFont::path(u"", 14.0).isEmpty());
+    // Width is linear in the height and grows with each letter.
+    QCOMPARE(LcdSymbolFont::width(u"mV", 28.0), 2.0 * LcdSymbolFont::width(u"mV", 14.0));
+    QVERIFY(LcdSymbolFont::width(u"mV", 14.0) > LcdSymbolFont::width(u"V", 14.0));
+}
+
+void GlyphModelTest::symbol_font_is_deterministic_and_inside_its_box() {
+    for (const QString &symbol: SensorFormat::allUnitSymbols()) {
+        constexpr qreal height = 20.0;
+        const QPainterPath path = LcdSymbolFont::path(symbol, height);
+        QCOMPARE(path, LcdSymbolFont::path(symbol, height));
+        const QRectF box = path.boundingRect();
+        const qreal tolerance = 1e-6;
+        QVERIFY2(box.top() >= -tolerance && box.bottom() <= height + tolerance, qPrintable(symbol));
+        QVERIFY2(box.left() >= -tolerance, qPrintable(symbol));
+        QVERIFY2(box.right() <= LcdSymbolFont::width(symbol, height) + tolerance, qPrintable(symbol));
+        // Bold letters reach the baseline (the degree sign alone does not).
+        QVERIFY2(box.bottom() > height * 0.95, qPrintable(symbol));
+    }
+}
+
+void GlyphModelTest::symbol_font_tells_R_from_A() {
+    // The 14-segment R and A differed by one diagonal; the symbol shapes differ widely.
+    constexpr qreal height = 20.0;
+    const QPainterPath r = LcdSymbolFont::path(u"R", height);
+    const QPainterPath a = LcdSymbolFont::path(u"A", height);
+    // R has a full-height stem on the left, A slants away from the left edge.
+    QVERIFY(r.contains(QPointF(0.05 * height, 0.30 * height)));
+    QVERIFY(!a.contains(QPointF(0.05 * height, 0.30 * height)));
+    // R closes its bowl with a bar at mid height where A is open between its legs.
+    QVERIFY(r.contains(QPointF(0.30 * height, 0.52 * height)));
+    QVERIFY(!a.contains(QPointF(0.30 * height, 0.52 * height)));
 }
 
 QTEST_APPLESS_MAIN(GlyphModelTest)

@@ -5,6 +5,7 @@
 #include "sensors/sensor_format.h"
 #include "sensors/sensors_policy.h"
 #include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_symbol_font.h"
 
 #include <QLinearGradient>
 #include <QPainter>
@@ -29,38 +30,16 @@ namespace {
         return QTransform(1, 0, -LcdSegmentFont::kSlant, 1, origin.x() + LcdSegmentFont::kSlant * height, origin.y());
     }
 
-    /** Width of @p symbol drawn with segment letters of @p height. */
+    /** Width of @p symbol at cap height @p height, slant overhang included. */
     qreal symbolWidth(const QString &symbol, const qreal height) {
-        qreal x = 0.0;
-        qreal right = 0.0;
-        for (const QChar c: symbol) {
-            if (const auto glyph = LcdSegmentFont::glyphFor(c)) {
-                right = x + (glyph->width + LcdSegmentFont::kSlant) * height;
-                x += glyph->advance * height;
-            }
-        }
-        return right;
+        return LcdSymbolFont::width(symbol, height) + LcdSegmentFont::kSlant * height;
     }
 
+    /** Annunciator @p symbol left-aligned in @p box, slanted like the digits. */
     void appendSymbol(QVector<Shape> &shapes, const QString &symbol, const QRectF &box) {
-        const qreal height = box.height();
-        qreal x = box.left();
-        for (const QChar c: symbol) {
-            const auto glyph = LcdSegmentFont::glyphFor(c);
-            if (!glyph)
-                continue;
-            const QTransform transform = slanted({x, box.top()}, height);
-            for (LcdSegmentFont::SegmentMask bit = 1; bit <= LcdSegmentFont::kLastSegment; bit <<= 1) {
-                if (!(glyph->lit & bit))
-                    continue;
-                QPainterPath path;
-                path.addPolygon(LcdSegmentFont::segmentPolygon(static_cast<LcdSegmentFont::Segment>(bit),
-                                                               {glyph->width * height, height}));
-                path.closeSubpath();
-                shapes.append({transform.map(path), true});
-            }
-            x += glyph->advance * height;
-        }
+        if (symbol.isEmpty())
+            return;
+        shapes.append({slanted(box.topLeft(), box.height()).map(LcdSymbolFont::path(symbol, box.height())), true});
     }
 }
 

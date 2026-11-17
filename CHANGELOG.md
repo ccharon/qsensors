@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   digits, decimal points and units line up across all cards. A wider card
   shows more unlit digits on the left instead of moving the value. Decimal
   points sit between the digit cells.
+- Units are drawn as LCD symbols in a bold, narrow face instead of segment
+  letters, with the same slant, colour and shadow or glow as the digits.
+  "RPM" no longer reads like "APM", and `%`, `%RH`, `kHz` and `MHz` can be
+  shown. The symbols are built into qsensors and need no installed font.
 
 ### Fixed
 - A value no longer takes more digit cells than the others: `-2000 mA` and

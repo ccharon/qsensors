@@ -11,26 +11,27 @@
 #include <optional>
 
 /**
- * Vector segment font for the LCD display.
+ * Vector 7-segment font for the digits of the LCD display.
  *
- * Characters are described as masks over a 14-segment cell plus a decimal
- * point. Geometry is computed in cell-local coordinates, so the display scales
- * freely with widget size and device pixel ratio.
+ * Characters are masks over a 7-segment cell plus a decimal point. Geometry is
+ * computed in cell-local coordinates, so the display scales freely with widget size
+ * and device pixel ratio. Unit symbols are not segment characters; they are drawn by
+ * LcdSymbolFont.
  *
  * Segment names:
  *
  *      ---A---
- *     |\  |  /|
- *     F H I J B
- *     |  \|/  |
+ *     |       |
+ *     F       B
+ *     |       |
  *      -G1-G2-
- *     |  /|\  |
- *     E K L M C
- *     |/  |  \|
- *      ---D---   DP
+ *     |       |
+ *     E       C
+ *     |       |
+ *      ---D---  DP
  *
- * N and O are continuous strokes for the lower half of "V" and "W"; together
- * with F and B they form proper letter shapes with clean mitered tips.
+ * The middle bar is split into G1 and G2 with flat inner ends, so it reads as one bar
+ * with a hairline seam. The decimal point lies in the gap after the cell.
  */
 namespace LcdSegmentFont {
     /** One bit per segment, as drawn in the diagram above. */
@@ -43,34 +44,24 @@ namespace LcdSegmentFont {
         F = 1u << 5,
         G1 = 1u << 6,
         G2 = 1u << 7,
-        H = 1u << 8, // diagonal: center -> top-left
-        I = 1u << 9, // vertical: center -> top
-        J = 1u << 10, // diagonal: center -> top-right
-        K = 1u << 11, // diagonal: center -> bottom-left
-        L = 1u << 12, // vertical: center -> bottom
-        M = 1u << 13, // diagonal: center -> bottom-right
-        DP = 1u << 14,
-        N = 1u << 15, // lower half of "V": one mitered stroke through the bottom center
-        O = 1u << 16, // lower half of "W": one mitered stroke with a center peak
+        DP = 1u << 8,
     };
 
     using SegmentMask = quint32;
 
     /** Highest segment bit; iterate `for (bit = 1; bit <= kLastSegment; bit <<= 1)`. */
-    inline constexpr SegmentMask kLastSegment = O;
+    inline constexpr SegmentMask kLastSegment = DP;
 
     /** Segments of a classic 7-segment digit; used for digit ghosting. */
     inline constexpr SegmentMask kSevenSegments = A | B | C | D | E | F | G1 | G2;
 
-    /** Glyph description; widths are relative to the cell height. */
+    /** Lit and faintly drawn (ghost) segments of a digit cell. */
     struct Glyph final {
         SegmentMask lit = 0;
         SegmentMask ghost = 0; // unlit segments drawn faintly, like a real LCD
-        qreal width = 0.0; // drawable cell width / height
-        qreal advance = 0.0; // horizontal pen advance / height
     };
 
-    /** Returns glyph for a supported character, std::nullopt otherwise. */
+    /** Glyph for a digit, '-', ' ' or the letters of "OL"; std::nullopt otherwise. */
     [[nodiscard]] std::optional<Glyph> glyphFor(QChar c);
 
     /** True when every character of @p text has a glyph or is a decimal point. */
@@ -83,31 +74,15 @@ namespace LcdSegmentFont {
     inline constexpr qreal kDigitWidth = 0.50;
     inline constexpr qreal kDigitAdvance = 0.66;
 
-    /** Unit symbols are rendered at this fraction of the digit height, baseline aligned. */
-    inline constexpr qreal kUnitScale = 0.70;
-
-    /** Gap between value and unit, relative to the digit height. */
-    inline constexpr qreal kUnitGap = 0.18;
-
-    /** Polygon of @p segment inside an unslanted cell of @p cellSize at origin. */
+    /** Polygon of @p segment for an unslanted cell of @p cellSize at origin. */
     [[nodiscard]] QPolygonF segmentPolygon(Segment segment, const QSizeF &cellSize);
 
-    /** Positioned glyph produced by layoutText(). */
+    /** Positioned glyph produced by layoutCells(). */
     struct PlacedGlyph final {
         QChar symbol;
         Glyph glyph;
-        QRectF cell; // unslanted cell rectangle in widget coordinates
+        QRectF cell; // unslanted cell rectangle, relative to the first cell
     };
-
-    /**
-     * Lays out @p value at full @p height followed by @p unit at kUnitScale,
-     * sharing one baseline at @p height. Unsupported characters are skipped.
-     * Used for the unit symbols; values use layoutCells().
-     */
-    [[nodiscard]] QVector<PlacedGlyph> layoutText(QStringView value, QStringView unit, qreal height);
-
-    /** Total horizontal extent of a layout, including slant overhang. */
-    [[nodiscard]] qreal layoutWidth(const QVector<PlacedGlyph> &layout);
 
     /** Width of @p cellCount digit cells at @p height, slant overhang included. */
     [[nodiscard]] qreal cellsWidth(int cellCount, qreal height);

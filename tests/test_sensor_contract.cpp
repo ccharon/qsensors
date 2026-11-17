@@ -3,6 +3,7 @@
 
 #include "sensors/sensor_reading.h"
 #include "ui/widgets/lcd_segment_font.h"
+#include "ui/widgets/lcd_symbol_font.h"
 #include "sensors/sensor_format.h"
 
 #include <QtTest/QtTest>
@@ -64,7 +65,7 @@ void SensorContractTest::known_units_have_symbols_and_glyphs() {
     for (const SensorUnit unit: kKnownUnits) {
         for (const QString &symbol: symbolsOf(unit)) {
             QVERIFY2(!symbol.isEmpty(), "Known unit must have symbol");
-            QVERIFY2(LcdSegmentFont::supports(symbol), qPrintable(symbol + QStringLiteral(" must have segment glyphs")));
+            QVERIFY2(LcdSymbolFont::supports(symbol), qPrintable(symbol + QStringLiteral(" must have symbol glyphs")));
         }
     }
     QCOMPARE(symbolsOf(SensorUnit::Volt), QStringList({QStringLiteral("mV"), QStringLiteral("V")}));
@@ -86,7 +87,7 @@ void SensorContractTest::known_units_have_symbols_and_glyphs() {
 void SensorContractTest::unknown_unit_has_no_symbol_and_no_glyph() {
     const QString symbol = SensorFormat::unitSymbol(SensorUnit::Unknown);
     QVERIFY(symbol.isEmpty());
-    QVERIFY(LcdSegmentFont::layoutText(QString(), symbol, 30.0).isEmpty());
+    QVERIFY(LcdSymbolFont::path(symbol, 30.0).isEmpty());
 }
 
 void SensorContractTest::scale_ranges_give_four_significant_digits() {
