@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Changing the polling interval or fan fallback with the spin box arrows no
+  longer rewrites the settings file on every step: the display follows each
+  step, the file is written once the changes stop (and on close).
+
 ### Fixed
 - Status notices no longer replace each other: when several appear at once
   (for example at startup) they are shown one after another.

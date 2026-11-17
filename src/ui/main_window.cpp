@@ -18,11 +18,15 @@
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <utility>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
+    // Holding a spin box arrow changes the value many times per second; the display follows
+    // each step, the settings file is written once the changes stop.
+    constexpr int kSaveDebounceMs = 500;
 }
 
 MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
@@ -31,7 +35,11 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
       m_scrollArea(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLine(nullptr) {
+      m_statusLine(nullptr),
+      m_saveTimer(new QTimer(this)) {
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(kSaveDebounceMs);
+    connect(m_saveTimer, &QTimer::timeout, this, &MainWindow::persistRuntimeConfig);
     setupUi();
     m_styledPalette = QApplication::palette();
     loadSettings();
@@ -64,6 +72,14 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
     }
 }
 
+MainWindow::~MainWindow() {
+    // A change still waiting for its debounce interval must not be lost.
+    if (m_saveTimer->isActive()) {
+        m_saveTimer->stop();
+        persistRuntimeConfig();
+    }
+}
+
 void MainWindow::showReadings(const QVector<SensorReading> &readings) {
     m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
@@ -93,6 +109,7 @@ void MainWindow::showNotice(const QString &text) {
 }
 
 void MainWindow::persistRuntimeConfig() {
+    m_saveTimer->stop();
     if (m_settingsReadOnly)
         return;
     if (!AppConfigStore::saveRuntimeConfig(m_runtimeConfig)) {
@@ -167,6 +184,7 @@ void MainWindow::setStatusMessage(const QString &text) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+    m_saveTimer->stop(); // saveSettings() writes the current config
     saveSettings();
     QMainWindow::closeEvent(event);
 }
@@ -293,7 +311,7 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
-    persistRuntimeConfig();
+    m_saveTimer->start();
     m_monitor->setConfig(m_runtimeConfig);
     updateReadingsStatus();
 }

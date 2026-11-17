@@ -16,6 +16,7 @@ class QResizeEvent;
 class QShowEvent;
 class SensorsPanel;
 class SettingsPanel;
+class QTimer;
 class StatusLine;
 class VerticalScrollArea;
 
@@ -26,6 +27,9 @@ class MainWindow final : public QMainWindow {
 public:
     /** Builds the UI, restores settings and starts polling the source made by @p sourceFactory. */
     explicit MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent = nullptr);
+
+    /** Writes a runtime config change still waiting for its debounce interval. */
+    ~MainWindow() override;
 
 protected:
     /** Persists settings and window state before closing. */
@@ -64,7 +68,7 @@ private:
     /** Shows @p text for a while instead of the permanent status. */
     void showNotice(const QString &text);
 
-    /** Saves the runtime config right away and reports a failed write. */
+    /** Saves the runtime config and reports a failed write; also what the debounce timer runs. */
     void persistRuntimeConfig();
 
     /** Saves chip order, expand state and chip fingerprint right away and reports a failed write. */
@@ -94,6 +98,7 @@ private:
     SensorsPanel *m_sensorsPanel;
     SettingsPanel *m_settingsPanel;
     StatusLine *m_statusLine;
+    QTimer *m_saveTimer; // debounces writing the runtime config after spin box steps
     bool m_initialLayoutApplied = false;
     bool m_hasSavedGeometry = false;
     bool m_fitToContent = false; // pending first size fit without saved geometry

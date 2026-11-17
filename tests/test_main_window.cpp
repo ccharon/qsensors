@@ -47,6 +47,8 @@ private slots:
     void long_status_text_does_not_change_window_width_limits();
     void expand_state_is_saved_when_the_user_changes_it_not_on_startup();
     void failed_layout_write_is_reported();
+    void spin_box_steps_are_saved_once_after_the_last_step();
+    void pending_setting_change_is_saved_when_the_window_closes();
     void newer_schema_settings_survive_a_session_and_are_reported();
 
 private:
@@ -399,6 +401,45 @@ void MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported() 
     QCOMPARE(s.value(SettingsKeys::kChipOrder).toStringList(), QStringList{QStringLiteral("zzz-future-chip")});
     QVERIFY(!s.contains(SettingsKeys::kWindowGeometry));
     QVERIFY(!s.contains(SettingsKeys::kSensorFingerprint));
+}
+
+void MainWindowTest::spin_box_steps_are_saved_once_after_the_last_step() {
+    const auto window = showWindow();
+    QSpinBox *polling = nullptr;
+    for (QSpinBox *spin: window->findChildren<QSpinBox *>()) {
+        if (spin->maximum() == RuntimeConfigLimits::kMaxPollingIntervalSec)
+            polling = spin;
+    }
+    QVERIFY(polling != nullptr);
+    for (const int value: {4, 5, 6})
+        polling->setValue(value);
+    // The display follows each step, the settings file only the last one, after the debounce.
+    QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    QTRY_VERIFY_WITH_TIMEOUT(QSettings().contains(SettingsKeys::kPollingIntervalSec), 3000);
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, 6);
+}
+
+void MainWindowTest::pending_setting_change_is_saved_when_the_window_closes() {
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->maximum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+        window->close();
+    }
+    const RuntimeConfig saved = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(saved.pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
+    QCOMPARE(saved.fanDefaultMaxRpm, RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
+
+    // Without a close event (window destroyed directly) the pending change is flushed as well.
+    QSettings().clear();
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->minimum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    }
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMinPollingIntervalSec);
 }
 
 QTEST_MAIN(MainWindowTest)
