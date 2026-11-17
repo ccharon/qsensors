@@ -69,6 +69,11 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
         m_sourceError = error;
         updateReadingsStatus();
     });
+    // The readings follow right away and set the permanent status.
+    connect(m_monitor, &SensorMonitor::sourceRecovered, this, [this] {
+        m_sourceError.clear();
+        showNotice(tr("Sensors are available again"));
+    });
     // Reads once before returning, so the first readings are shown before the window.
     if (!m_monitor->start(m_runtimeConfig)) {
         m_sourceError = m_monitor->lastError();
