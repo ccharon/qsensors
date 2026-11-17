@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 
 option(QSENSORS_WARNINGS_AS_ERRORS "Treat compiler warnings in qsensors code as errors" OFF)
 option(QSENSORS_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(QSENSORS_HARDENING "Build with security hardening flags (PIE, stack protector, FORTIFY_SOURCE, RELRO)" ON)
 
 # Defines BUILD_TESTING, which decides whether Qt Test is required.
 include(CTest)
@@ -37,6 +38,45 @@ if (QSENSORS_SANITIZE)
             -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
     target_link_options(qsensors_build_options INTERFACE -fsanitize=address,undefined)
 endif ()
+
+# Hardening, for qsensors' own targets only. Every flag is probed, so a compiler or
+# architecture without it (-fcf-protection is x86 only) simply goes without; flags a
+# distribution toolchain already passes are harmless duplicates.
+if (QSENSORS_HARDENING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    include(CheckCXXCompilerFlag)
+    include(CheckLinkerFlag)
+    include(CheckPIESupported)
+
+    # Position independent code and -pie for executables (global default, set before
+    # any own target exists; imported Qt targets are not affected).
+    check_pie_supported(LANGUAGES CXX)
+    if (CMAKE_CXX_LINK_PIE_SUPPORTED)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    endif ()
+
+    foreach (flag IN ITEMS -fstack-protector-strong -fstack-clash-protection -fcf-protection)
+        string(MAKE_C_IDENTIFIER "QSENSORS_HAS${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if (${flag_var})
+            target_compile_options(qsensors_build_options INTERFACE "${flag}")
+        endif ()
+    endforeach ()
+
+    # Fortify needs optimization and conflicts with the sanitizers' interceptors.
+    # -U first: toolchains that define it themselves (Ubuntu, Gentoo) must not warn
+    # about a redefinition. Level 3 is treated as 2 by older glibc or compilers.
+    if (NOT QSENSORS_SANITIZE)
+        target_compile_options(qsensors_build_options INTERFACE
+                "$<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=3>")
+    endif ()
+
+    # Full RELRO and immediate binding.
+    check_linker_flag(CXX "LINKER:-z,relro,-z,now" QSENSORS_HAS_RELRO_NOW)
+    if (QSENSORS_HAS_RELRO_NOW)
+        target_link_options(qsensors_build_options INTERFACE "LINKER:-z,relro,-z,now")
+    endif ()
+endif ()
+
 find_package(PkgConfig QUIET)
 if (PkgConfig_FOUND)
     pkg_check_modules(SENSORS QUIET IMPORTED_TARGET libsensors)
