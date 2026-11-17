@@ -5,6 +5,7 @@
 #include "ui/panels/sensors_panel.h"
 #include "ui/widgets/collapsible_section.h"
 #include "sensors/sensor_identity.h"
+#include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 #include "ui/theme/app_theme.h"
 
@@ -24,6 +25,7 @@ class SensorsPanelTest final : public QObject {
 
 private slots:
     void value_and_unit_updates_keep_widgets();
+    void value_update_repaints_only_changed_lcds();
     void resize_moves_cards_without_rebuild();
     void expand_state_roundtrip_and_apply();
     void structure_signal_on_new_category_not_on_values();
@@ -84,6 +86,44 @@ namespace {
         QCoreApplication::sendPostedEvents();
     }
 
+    // Counts paint events per watched widget.
+    class PaintCounter final : public QObject {
+    public:
+        void watch(QWidget *widget) {
+            widget->installEventFilter(this);
+            m_counts.insert(widget, 0);
+        }
+        [[nodiscard]] int count(QWidget *widget) const { return m_counts.value(widget); }
+        [[nodiscard]] int total() const {
+            int sum = 0;
+            for (const int c: m_counts)
+                sum += c;
+            return sum;
+        }
+        void reset() {
+            for (int &c: m_counts)
+                c = 0;
+        }
+
+    protected:
+        bool eventFilter(QObject *watched, QEvent *event) override {
+            if (event->type() == QEvent::Paint)
+                ++m_counts[static_cast<QWidget *>(watched)];
+            return QObject::eventFilter(watched, event);
+        }
+
+    private:
+        QHash<QWidget *, int> m_counts;
+    };
+
+    // Delivers pending update requests, so scheduled paints happen now.
+    void flushPaints() {
+        for (int i = 0; i < 3; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    }
+
     QToolButton *headerFor(const SensorsPanel &panel, const QString &chip) {
         for (QToolButton *button: panel.findChildren<QToolButton *>())
             if (button->text() == chip)
@@ -100,6 +140,36 @@ void SensorsPanelTest::value_and_unit_updates_keep_widgets() {
 
     panel.setReadings(sampleReadings(55.0, SensorUnit::Milliampere));
     QCOMPARE(cards(panel), before);
+}
+
+void SensorsPanelTest::value_update_repaints_only_changed_lcds() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0));
+    layOut(panel, 900);
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    flushPaints();
+
+    PaintCounter counter;
+    LcdDisplayWidget *tempLcd = nullptr;
+    for (SensorValueWidget *card: cards(panel)) {
+        auto *lcd = card->findChild<LcdDisplayWidget *>();
+        QVERIFY(lcd);
+        counter.watch(lcd);
+        if (card->toolTip().contains(QStringLiteral("temp1")))
+            tempLcd = lcd;
+    }
+    QVERIFY(tempLcd);
+
+    // The same readings again paint nothing.
+    panel.setReadings(sampleReadings(40.0));
+    flushPaints();
+    QCOMPARE(counter.total(), 0);
+
+    // One changed value repaints only its own LCD.
+    panel.setReadings(sampleReadings(55.0));
+    flushPaints();
+    QCOMPARE(counter.count(tempLcd), 1);
+    QCOMPARE(counter.total(), 1);
 }
 
 void SensorsPanelTest::resize_moves_cards_without_rebuild() {

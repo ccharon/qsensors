@@ -164,9 +164,26 @@ void SensorsPanel::checkRestoredState() {
     }
 }
 
+bool SensorsPanel::hasStructuralChange() const {
+    for (auto it = m_chipSections.cbegin(); it != m_chipSections.cend(); ++it) {
+        if (!m_groups.contains(it.key()))
+            return true;
+    }
+    for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
+        const auto section = m_chipSections.constFind(it.key());
+        if (section == m_chipSections.cend() || section->structureFingerprint != chipStructureFingerprint(it.value()))
+            return true;
+    }
+    return displayOrder() != m_chipOrder;
+}
+
 bool SensorsPanel::render() {
-    // Batch updates avoid flicker while chip sections are reconciled/reordered.
-    setUpdatesEnabled(false);
+    // Batch updates avoid flicker while chip sections are created, rebuilt or reordered.
+    // Only then: re-enabling updates repaints every child, which would defeat the LCD's
+    // repaint caching on the plain value path.
+    const bool batchUpdates = hasStructuralChange();
+    if (batchUpdates)
+        setUpdatesEnabled(false);
     bool structureChanged = removeStaleChipSections();
 
     // The plan is shared by all chips (one card width), so every chip follows a change.
@@ -183,7 +200,8 @@ bool SensorsPanel::render() {
         structureChanged |= reconcileChipSection(it.key(), it.value());
     }
     applyChipOrder();
-    setUpdatesEnabled(true);
+    if (batchUpdates)
+        setUpdatesEnabled(true);
     return structureChanged;
 }
 

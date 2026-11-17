@@ -121,6 +121,9 @@ private:
     /** Reconciles all sections with m_groups; returns true if the structure changed. */
     bool render();
 
+    /** True if render() would create, remove, rebuild or reorder a chip section. */
+    [[nodiscard]] bool hasStructuralChange() const;
+
     /** Drops the pending restored state when it belongs to another chip set. */
     void checkRestoredState();
 

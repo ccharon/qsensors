@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A poll whose readings only change values no longer repaints the whole
+  sensors panel: only the LCDs whose display changed are redrawn. The panel
+  still batches its repaint when chips or sensors appear, disappear or move.
+
 ## [0.80.11] - 2026-11-15
 
 ### Added
