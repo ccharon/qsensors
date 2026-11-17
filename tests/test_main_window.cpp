@@ -47,6 +47,7 @@ private slots:
     void long_status_text_does_not_change_window_width_limits();
     void expand_state_is_saved_when_the_user_changes_it_not_on_startup();
     void failed_layout_write_is_reported();
+    void newer_schema_settings_survive_a_session_and_are_reported();
 
 private:
     QTemporaryDir m_dir;
@@ -365,6 +366,39 @@ void MainWindowTest::failed_layout_write_is_reported() {
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
     QVERIFY(status->isShowingNotice());
     QVERIFY(QDir().rmdir(file.fileName()));
+}
+
+void MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported() {
+    {
+        // Written by a newer version: values this build would clamp, under a newer marker.
+        QSettings s;
+        s.setValue(SettingsKeys::kSchemaVersion, 99);
+        s.setValue(SettingsKeys::kPollingIntervalSec, 30);
+        s.setValue(SettingsKeys::kFanDefaultMaxRpm, 20000);
+        s.setValue(SettingsKeys::kTemperatureUnit, QStringLiteral("K"));
+        s.setValue(SettingsKeys::kChipOrder, QStringList{QStringLiteral("zzz-future-chip")});
+        s.sync();
+    }
+    {
+        const auto window = showWindow();
+        const StatusLine *status = window->findChild<StatusLine *>();
+        QVERIFY(status->isShowingNotice());
+        QVERIFY2(status->text().contains(QStringLiteral("newer")), qPrintable(status->text()));
+
+        // Changes in this session stay in memory only.
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->value() == spin->maximum() ? spin->minimum() : spin->maximum());
+        section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+        window->close();
+    }
+    const QSettings s;
+    QCOMPARE(s.value(SettingsKeys::kSchemaVersion).toInt(), 99);
+    QCOMPARE(s.value(SettingsKeys::kPollingIntervalSec).toInt(), 30);
+    QCOMPARE(s.value(SettingsKeys::kFanDefaultMaxRpm).toInt(), 20000);
+    QCOMPARE(s.value(SettingsKeys::kTemperatureUnit).toString(), QStringLiteral("K"));
+    QCOMPARE(s.value(SettingsKeys::kChipOrder).toStringList(), QStringList{QStringLiteral("zzz-future-chip")});
+    QVERIFY(!s.contains(SettingsKeys::kWindowGeometry));
+    QVERIFY(!s.contains(SettingsKeys::kSensorFingerprint));
 }
 
 QTEST_MAIN(MainWindowTest)

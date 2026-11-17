@@ -183,14 +183,19 @@ void SettingsPersistenceTest::runtime_config_out_of_range_values_are_clamped() {
 void SettingsPersistenceTest::newer_schema_version_is_not_downgraded() {
     QSettings s;
     s.setValue(QStringLiteral("meta/schema_version"), SettingsSchema::kCurrentVersion + 1);
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), 30);
     s.sync();
 
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("newer than supported")));
     SettingsSchema::ensureUpToDate(s);
-    (void) AppConfigStore::loadRuntimeConfig();
-    QVERIFY(AppConfigStore::saveRuntimeConfig(RuntimeConfig{}));
+    // Loading clamps in memory only and writes nothing; the main window then never saves
+    // (see MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported).
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("out of range")));
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
 
-    QSettings reread;
+    const QSettings reread;
     QCOMPARE(SettingsSchema::storedVersion(reread), SettingsSchema::kCurrentVersion + 1);
+    QCOMPARE(reread.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 30);
 }
 
 void SettingsPersistenceTest::temperatureUnit_token_parsing_rejects_unknown() {

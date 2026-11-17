@@ -93,12 +93,16 @@ void MainWindow::showNotice(const QString &text) {
 }
 
 void MainWindow::persistRuntimeConfig() {
+    if (m_settingsReadOnly)
+        return;
     if (!AppConfigStore::saveRuntimeConfig(m_runtimeConfig)) {
         showNotice(tr("Settings could not be saved"));
     }
 }
 
 void MainWindow::persistChipLayout() {
+    if (m_settingsReadOnly)
+        return;
     const bool saved = MainWindowStateStore::saveLayout({
         .geometry = {},
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
@@ -256,8 +260,11 @@ void MainWindow::loadSettings() {
     // The only migration point: the stores below read the current schema.
     QSettings settings;
     SettingsSchema::ensureUpToDate(settings);
-    if (SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
-        showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
+    // Values of a newer schema are only read (clamped, in memory); writing them back would
+    // replace the newer version's values under its own version marker.
+    m_settingsReadOnly = SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion;
+    if (m_settingsReadOnly) {
+        showNotice(tr("Settings were written by a newer qsensors version; changes are not saved in this session"));
     }
 
     // Runtime config and UI layout state are intentionally persisted independently.
@@ -272,6 +279,8 @@ void MainWindow::loadSettings() {
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
+    if (m_settingsReadOnly)
+        return;
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
     (void) MainWindowStateStore::save({
         .geometry = saveGeometry(),

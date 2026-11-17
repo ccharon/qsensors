@@ -98,6 +98,7 @@ private:
     bool m_hasSavedGeometry = false;
     bool m_fitToContent = false; // pending first size fit without saved geometry
     RuntimeConfig m_runtimeConfig;
+    bool m_settingsReadOnly = false; // stored schema is newer than this build understands: never write
     // Palette the style sheets were last resolved against; avoids redundant refreshes.
     QPalette m_styledPalette;
 };

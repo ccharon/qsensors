@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Settings written by a newer qsensors version are no longer overwritten: this
+  version reads them (clamping out-of-range values in memory only), does not
+  write any setting, layout or window state back during the session, and says
+  so in a status notice.
+
 ## [0.80.11] - 2026-11-15
 
 ### Added

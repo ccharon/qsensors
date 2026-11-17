@@ -35,8 +35,8 @@
         <translation>Settings could not be saved</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>Settings were written by a newer qsensors version and are used as far as possible</translation>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Settings were written by a newer qsensors version; changes are not saved in this session</translation>
     </message>
 </context>
 <context>
