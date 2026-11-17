@@ -3,7 +3,10 @@
 
 // Generates resources/icons/qsensors.svg from the app's own LCD segment font,
 // so the icon always matches the in-app display. See tools/icon/README.md.
-#include "lcd_segment_font.h"
+#include "ui/widgets/lcd_segment_font.h"
+#include "ui/widgets/lcd_symbol_font.h"
+
+#include <QPainterPath>
 #include <QFile>
 #include <QTextStream>
 #include <QTransform>
@@ -40,14 +43,22 @@ int main(int argc, char **argv) {
     const QString lit = "#2c5a2a";
     const qreal digitH = 86;
     const qreal top = win.y() + 14;
-    auto layout = layoutText(u"42", u"°C", digitH);
-    const qreal w = layoutWidth(layout);
+    // Same proportions as the LCD (AppTheme::kLcdUnitScale, kLcdUnitGap): "42" in two
+    // digit cells, the unit symbol after it at half the digit height, bottom-aligned.
+    const qreal unitH = digitH * 0.5;
+    const qreal unitGap = digitH * 0.2;
+    const QVector<PlacedGlyph> layout = layoutCells(u"42", 2, 0, digitH);
+    const qreal digitsW = cellsWidth(2, digitH);
+    const qreal unitW = LcdSymbolFont::width(u"°C", unitH) + kSlant * unitH;
+    const qreal w = digitsW + unitGap + unitW;
     const qreal x0 = win.x() + (win.width() - w) / 2.0;
+    const QTransform unitT(1, 0, -kSlant, 1, x0 + digitsW + unitGap + kSlant * unitH, top + digitH - unitH);
+    const QList<QPolygonF> unitPolys = unitT.map(LcdSymbolFont::path(u"°C", unitH)).toFillPolygons();
 
     auto drawGlyphs = [&](bool shadow) {
+        const qreal off = shadow ? 2.2 : 0.0;
         for (const PlacedGlyph &g: layout) {
             const QRectF &c = g.cell;
-            const qreal off = shadow ? 2.2 : 0.0;
             QTransform t(1, 0, -kSlant, 1, x0 + c.left() + kSlant * c.height() + off, top + c.top() + off);
             const SegmentMask drawn = shadow ? g.glyph.lit : (g.glyph.lit | g.glyph.ghost);
             for (SegmentMask bit = 1; bit <= kLastSegment; bit <<= 1) {
@@ -57,6 +68,11 @@ int main(int argc, char **argv) {
                 else if (g.glyph.lit & bit) s << "<polygon fill=\"" << lit << "\" points=\"" << pts(poly) << "\"/>\n";
                 else s << "<polygon fill=\"" << lit << "\" fill-opacity=\"0.10\" points=\"" << pts(poly) << "\"/>\n";
             }
+        }
+        for (const QPolygonF &poly: unitPolys) {
+            const QPolygonF placed = poly.translated(off, off);
+            if (shadow) s << "<polygon fill=\"#000000\" fill-opacity=\"0.16\" points=\"" << pts(placed) << "\"/>\n";
+            else s << "<polygon fill=\"" << lit << "\" points=\"" << pts(placed) << "\"/>\n";
         }
     };
     drawGlyphs(true);
