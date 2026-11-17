@@ -159,16 +159,17 @@ namespace {
 
     // Lets pending paints run, then forgets them.
     void settle(PaintCounter &counter) {
-        QTest::qWait(30);
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
         counter.count = 0;
     }
 
-    // True when a paint follows setReading() within a generous wait.
+    // True when a paint follows setReading(). Returns as soon as one happens; "no paint" needs the
+    // full window, which is a fixed wait by nature.
     bool repaintsAfter(LcdDisplayWidget &lcd, PaintCounter &counter, const SensorReading &reading) {
         counter.count = 0;
         lcd.setReading(reading);
-        QTest::qWait(30);
-        return counter.count > 0;
+        return QTest::qWaitFor([&counter] { return counter.count > 0; }, 100);
     }
 }
 
@@ -233,8 +234,7 @@ void LcdLogicTest::lcd_repaints_on_resize_and_palette_change() {
     settle(counter);
 
     lcd.resize(260, 40);
-    QTest::qWait(30);
-    QVERIFY(counter.count > 0);
+    QTRY_VERIFY(counter.count > 0);
     // After the resize the unchanged reading is still not repainted.
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
 
@@ -242,8 +242,7 @@ void LcdLogicTest::lcd_repaints_on_resize_and_palette_change() {
     dark.setColor(QPalette::Base, Qt::black);
     counter.count = 0;
     lcd.setPalette(dark);
-    QTest::qWait(30);
-    QVERIFY(counter.count > 0);
+    QTRY_VERIFY(counter.count > 0);
 }
 
 void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
