@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version reads them (clamping out-of-range values in memory only), does not
   write any setting, layout or window state back during the session, and says
   so in a status notice.
+- A setting too large for a 32-bit integer is clamped to its range like any
+  other out-of-range value instead of being replaced by the default.
+- A garbled settings schema version is logged and treated as unversioned, and
+  a failed write of the migrated schema version is logged and shown as a
+  notice instead of passing silently.
 
 ## [0.80.11] - 2026-11-15
 

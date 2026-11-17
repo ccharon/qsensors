@@ -259,7 +259,9 @@ void MainWindow::applyThemeRefresh() {
 void MainWindow::loadSettings() {
     // The only migration point: the stores below read the current schema.
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
+    if (!SettingsSchema::ensureUpToDate(settings)) {
+        showNotice(tr("Settings could not be saved"));
+    }
     // Values of a newer schema are only read (clamped, in memory); writing them back would
     // replace the newer version's values under its own version marker.
     m_settingsReadOnly = SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion;

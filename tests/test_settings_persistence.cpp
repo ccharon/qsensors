@@ -32,6 +32,12 @@ private slots:
     void runtime_config_out_of_range_values_are_clamped();
     void newer_schema_version_is_not_downgraded();
     void temperatureUnit_token_parsing_rejects_unknown();
+    void runtime_config_value_too_large_for_int_is_clamped();
+    void runtime_config_temperatureUnit_non_string_falls_back_to_celsius();
+    void garbled_schema_version_is_reported_and_migrated();
+    void unversioned_settings_with_keys_are_migrated_and_logged();
+    void main_window_state_special_chip_names_roundtrip();
+    void main_window_state_corrupt_geometry_loads_as_bytes();
 };
 
 void SettingsPersistenceTest::init() {
@@ -141,7 +147,7 @@ void SettingsPersistenceTest::stores_do_not_write_schema_version() {
 
 void SettingsPersistenceTest::new_settings_get_current_schema_version() {
     QSettings s;
-    SettingsSchema::ensureUpToDate(s);
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
     QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
 }
 
@@ -151,7 +157,7 @@ void SettingsPersistenceTest::v1_settings_are_migrated_and_logged() {
     s.setValue(QStringLiteral("runtime/polling_interval_sec"), 3);
 
     QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v1 to v2")));
-    SettingsSchema::ensureUpToDate(s);
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
 
     QCOMPARE(SettingsSchema::storedVersion(s), 2);
     QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
@@ -187,7 +193,7 @@ void SettingsPersistenceTest::newer_schema_version_is_not_downgraded() {
     s.sync();
 
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("newer than supported")));
-    SettingsSchema::ensureUpToDate(s);
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
     // Loading clamps in memory only and writes nothing; the main window then never saves
     // (see MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported).
     QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("out of range")));
@@ -203,6 +209,75 @@ void SettingsPersistenceTest::temperatureUnit_token_parsing_rejects_unknown() {
     QCOMPARE(temperatureUnitFromToken(u"c"), std::optional(TemperatureUnit::Celsius));
     QVERIFY(!temperatureUnitFromToken(u"X").has_value());
     QVERIFY(!temperatureUnitFromToken(u"").has_value());
+}
+
+void SettingsPersistenceTest::runtime_config_value_too_large_for_int_is_clamped() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), QStringLiteral("99999999999"));
+    s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), QStringLiteral("-99999999999"));
+    s.sync();
+
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("out of range")));
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("out of range")));
+    const RuntimeConfig loaded = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(loaded.pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
+    QCOMPARE(loaded.fanDefaultMaxRpm, RuntimeConfigLimits::kMinFanDefaultMaxRpm);
+}
+
+void SettingsPersistenceTest::runtime_config_temperatureUnit_non_string_falls_back_to_celsius() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/temperature_unit"), 42);
+    s.sync();
+
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("invalid setting")));
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().temperatureUnit, TemperatureUnit::Celsius);
+}
+
+void SettingsPersistenceTest::garbled_schema_version_is_reported_and_migrated() {
+    for (const QString &garbled: {QStringLiteral("abc"), QStringLiteral("-3")}) {
+        QSettings s;
+        s.clear();
+        s.setValue(QStringLiteral("meta/schema_version"), garbled);
+        s.setValue(QStringLiteral("runtime/polling_interval_sec"), 3);
+        QCOMPARE(SettingsSchema::storedVersion(s), 0);
+
+        QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("unreadable settings schema version")));
+        QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v2")));
+        QVERIFY(SettingsSchema::ensureUpToDate(s));
+        QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
+        QCOMPARE(s.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 3);
+    }
+}
+
+void SettingsPersistenceTest::unversioned_settings_with_keys_are_migrated_and_logged() {
+    QSettings s;
+    s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), 4000);
+
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v2")));
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
+    QCOMPARE(SettingsSchema::storedVersion(s), 2);
+    QCOMPARE(s.value(QStringLiteral("runtime/fan_default_max_rpm")).toInt(), 4000);
+    QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
+}
+
+void SettingsPersistenceTest::main_window_state_special_chip_names_roundtrip() {
+    QHash<QString, bool> expanded;
+    expanded.insert(QStringLiteral("100%"), false);
+    expanded.insert(QStringLiteral("a%2Fb"), false); // looks percent-encoded already
+    expanded.insert(QStringLiteral("a/b"), true);
+    expanded.insert(QStringLiteral("sp ace\u00e4"), false);
+
+    QVERIFY(MainWindowStateStore::save({.chipExpanded = expanded}));
+    const MainWindowState loaded = MainWindowStateStore::load();
+    QCOMPARE(loaded.chipExpanded, expanded);
+}
+
+void SettingsPersistenceTest::main_window_state_corrupt_geometry_loads_as_bytes() {
+    // The store does not interpret the geometry; restoreGeometry() rejects garbage.
+    QSettings s;
+    s.setValue(QStringLiteral("ui/geometry"), QStringLiteral("not a geometry blob"));
+    s.sync();
+    QCOMPARE(MainWindowStateStore::load().geometry, QByteArray("not a geometry blob"));
 }
 
 QTEST_APPLESS_MAIN(SettingsPersistenceTest)
