@@ -17,9 +17,7 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     setMaximumWidth(AppTheme::kCardMaxWidth);
 
     // The LCD panel is the card; the title is plain theme text above it.
-    QFont titleFont = m_title->font();
-    titleFont.setPointSizeF(titleFont.pointSizeF() * AppTheme::kCardTitleFontScale);
-    m_title->setFont(titleFont);
+    updateTitleFont();
     m_title->setSizePolicy(QSizePolicy::Ignored, QSizePolicy::Fixed);
     m_title->setContentsMargins(AppTheme::kCardTitleInset, 0, 0, 0);
 
@@ -30,7 +28,37 @@ SensorValueWidget::SensorValueWidget(const SensorReading &reading, QWidget *pare
     layout->addWidget(m_lcdValue);
 
     setReading(reading);
-    setFixedHeight(layout->sizeHint().height());
+    updateFixedHeight();
+}
+
+void SensorValueWidget::updateTitleFont() {
+    // Derived from the card's own font, so a font change on the card carries over to the title.
+    QFont titleFont = font();
+    titleFont.setPointSizeF(titleFont.pointSizeF() * AppTheme::kCardTitleFontScale);
+    m_title->setFont(titleFont);
+}
+
+void SensorValueWidget::updateFixedHeight() {
+    const int height = layout()->sizeHint().height();
+    if (height != minimumHeight() || height != maximumHeight()) {
+        setFixedHeight(height);
+    }
+}
+
+void SensorValueWidget::changeEvent(QEvent *event) {
+    QWidget::changeEvent(event);
+    if (event->type() == QEvent::FontChange) {
+        updateTitleFont();
+    }
+}
+
+bool SensorValueWidget::event(QEvent *event) {
+    const bool handled = QWidget::event(event);
+    // The layout reports a changed size hint (e.g. after a font change) this way.
+    if (event->type() == QEvent::LayoutRequest) {
+        updateFixedHeight();
+    }
+    return handled;
 }
 
 void SensorValueWidget::setReading(const SensorReading &reading) {
@@ -40,17 +68,13 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
         updateElidedTitle();
     }
     // Set on the card itself so hovering title or LCD shows the same details.
-    const ToolTipInputs inputs = ToolTipInputs::of(reading);
-    if (!m_hasToolTip || inputs != m_toolTipInputs) {
-        setToolTip(detailsToolTip(reading));
-        m_toolTipInputs = inputs;
-        m_hasToolTip = true;
+    // Compared as text, so a field added to the tooltip cannot go stale; an unchanged tooltip
+    // is left alone so one that is currently shown does not flicker.
+    const QString toolTipText = detailsToolTip(reading);
+    if (toolTipText != toolTip()) {
+        setToolTip(toolTipText);
     }
     m_lcdValue->setReading(reading);
-}
-
-SensorValueWidget::ToolTipInputs SensorValueWidget::ToolTipInputs::of(const SensorReading &reading) {
-    return {reading.chip, reading.feature, reading.unit, reading.hasValue(), reading.firmwareMin, reading.firmwareMax};
 }
 
 QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {

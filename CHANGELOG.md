@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   step, the file is written once the changes stop (and on close).
 
 ### Fixed
+- The height of a sensor card follows a font change instead of staying at the
+  value computed at creation.
 - Status notices no longer replace each other: when several appear at once
   (for example at startup) they are shown one after another.
 - Settings written by a newer qsensors version are no longer overwritten: this

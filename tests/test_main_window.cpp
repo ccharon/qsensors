@@ -15,6 +15,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLayout>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
@@ -49,6 +50,8 @@ private slots:
     void failed_layout_write_is_reported();
     void spin_box_steps_are_saved_once_after_the_last_step();
     void pending_setting_change_is_saved_when_the_window_closes();
+    void sensor_card_height_follows_font_changes();
+    void sensor_card_tooltip_follows_every_displayed_field();
     void newer_schema_settings_survive_a_session_and_are_reported();
 
 private:
@@ -440,6 +443,39 @@ void MainWindowTest::pending_setting_change_is_saved_when_the_window_closes() {
         QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
     }
     QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMinPollingIntervalSec);
+}
+
+void MainWindowTest::sensor_card_height_follows_font_changes() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const int before = card.height();
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+
+    QFont bigger = card.font();
+    bigger.setPointSizeF(bigger.pointSizeF() * 2.0);
+    card.setFont(bigger);
+    QTRY_VERIFY(card.height() > before);
+    QCOMPARE(card.height(), card.layout()->sizeHint().height());
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+}
+
+void MainWindowTest::sensor_card_tooltip_follows_every_displayed_field() {
+    SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                          .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius,
+                          .firmwareMax = 80.0};
+    SensorValueWidget card(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.firmwareMax = 90.0;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    reading.value = std::nullopt;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
 }
 
 QTEST_MAIN(MainWindowTest)
