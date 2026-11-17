@@ -22,7 +22,7 @@
 
 namespace {
     constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
-    const QString kChipMimeType = QStringLiteral("application/x-qsensors-chip");
+    constexpr QLatin1String kChipMimeType("application/x-qsensors-chip");
     constexpr int kDropIndicatorHeight = 3;
     constexpr qreal kDragPixmapOpacity = 0.7;
 

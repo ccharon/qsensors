@@ -57,7 +57,7 @@ namespace SensorIdentity {
 
     /**
      * Widget lookup key built from libsensors numbering only. Unit and label are
-     * left out, so a unit switch (A/mA, °C/°F) is a value update, not a rebuild.
+     * left out, so a scale or unit switch (mA/A, °C/°F) is a value update, not a rebuild.
      */
     [[nodiscard]] inline QString sensorKey(const SensorReading &reading) {
         return reading.chip + QLatin1Char('|')

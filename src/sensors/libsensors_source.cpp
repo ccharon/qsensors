@@ -317,7 +317,7 @@ namespace {
     [[nodiscard]] QString stableChipKey(const sensors_chip_name *chip) {
         if (chip->path == nullptr)
             return {};
-        const QString path = QString::fromUtf8(chip->path);
+        QString path = QString::fromUtf8(chip->path);
         for (const QString &candidate: {path + QStringLiteral("/device"), path}) {
             if (QString canonical = QFileInfo(candidate).canonicalFilePath(); !canonical.isEmpty())
                 return canonical;

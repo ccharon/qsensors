@@ -8,7 +8,7 @@
 
 // Normalized sensor data shared by backend, rules and UI.
 
-/** Column a reading is grouped into; values are persisted in sensor keys. */
+/** Column a reading is grouped into. */
 enum class SensorCategory {
     Voltages = 0,
     Temperatures = 1,
