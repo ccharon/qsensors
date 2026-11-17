@@ -29,7 +29,8 @@ namespace {
     constexpr int kSaveDebounceMs = 500;
 }
 
-MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
+MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent,
+                       const std::chrono::milliseconds startupTimeout)
     : QMainWindow(parent),
       m_monitor(new SensorMonitor(std::move(sourceFactory), this)),
       m_scrollArea(nullptr),
@@ -75,6 +76,7 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
         showNotice(tr("Sensors are available again"));
     });
     // Reads once before returning, so the first readings are shown before the window.
+    m_monitor->setStartupTimeout(startupTimeout);
     if (!m_monitor->start(m_runtimeConfig)) {
         m_sourceError = m_monitor->lastError();
         updateReadingsStatus();
@@ -92,6 +94,8 @@ MainWindow::~MainWindow() {
 void MainWindow::showReadings(const QVector<SensorReading> &readings) {
     m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
+    // First readings after a startup timeout arrive while the window is already shown.
+    applyInitialLayout();
 }
 
 void MainWindow::updateReadingsStatus() {
@@ -229,6 +233,10 @@ QSize MainWindow::availableScreenSize() const {
 }
 
 void MainWindow::updateSizeLimits() {
+    // On Wayland the maximum size goes to the compositor (xdg_toplevel.set_max_size), which
+    // may use it to allow or refuse maximizing. KWin 6.7 maximizes and quick-tiles to the
+    // full area anyway, both on showMaximized() and on its own maximize action, and the
+    // limit is lifted here once the maximized state arrives (tested in kwin_wayland --virtual).
     if (isMaximized() || isFullScreen()) {
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         return;
@@ -252,13 +260,25 @@ void MainWindow::updateSizeLimits() {
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
-    if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
-        // Without saved geometry the first size fits the content; applied once the
-        // layout has computed its size (see updateSizeLimits()).
-        m_fitToContent = !m_hasSavedGeometry;
-        m_initialLayoutApplied = true;
-        QMetaObject::invokeMethod(this, &MainWindow::updateSizeLimits, Qt::QueuedConnection);
-    }
+    if (!m_shownSize.isValid())
+        m_shownSize = size();
+    applyInitialLayout();
+}
+
+void MainWindow::applyInitialLayout() {
+    if (m_initialLayoutApplied || !isVisible() || m_sensorsPanel->readingCount() == 0)
+        return;
+    m_initialLayoutApplied = true;
+    // Without saved geometry the first size fits the content. Late first readings
+    // (startup timeout) leave a window alone that the user resized or maximized meanwhile.
+    const bool fit = !m_hasSavedGeometry && size() == m_shownSize && !isMaximized() && !isFullScreen();
+    // A zero timer runs once the posted events are processed: the deferred showing of new
+    // chip sections and the layout requests it causes. Only then is the content height
+    // final; a fit taken from an earlier updateSizeLimits() call could use an empty panel.
+    QTimer::singleShot(0, this, [this, fit] {
+        m_fitToContent = fit;
+        updateSizeLimits();
+    });
 }
 
 void MainWindow::changeEvent(QEvent *event) {

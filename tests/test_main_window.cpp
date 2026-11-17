@@ -42,6 +42,8 @@ class MainWindowTest final : public QObject {
 private slots:
     void init();
     void first_start_fits_height_to_content();
+    void late_first_readings_fit_window_to_content();
+    void late_first_readings_keep_a_size_the_user_chose();
     void minimum_width_shows_every_card_completely();
     void cards_share_one_size_and_survive_resizing();
     void height_limited_to_content_but_never_forced_smaller();
@@ -231,6 +233,43 @@ void MainWindowTest::first_start_fits_height_to_content() {
     // The full layout is narrower than the default width, so the width is fitted too.
     QVERIFY(window->width() < AppTheme::kInitialWindowWidth);
     QCOMPARE(window->width(), window->maximumWidth());
+}
+
+void MainWindowTest::late_first_readings_fit_window_to_content() {
+    const auto gate = std::make_shared<ReadGate>();
+    gate->close();
+    // The first read outlasts the startup timeout: the window opens without readings.
+    MainWindow window([gate] { return std::make_unique<FakeSource>(gate); }, nullptr, std::chrono::milliseconds(50));
+    const GateGuard guard{gate};
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(visibleCards(window).isEmpty());
+    QCOMPARE(window.size(), QSize(AppTheme::kInitialWindowWidth, AppTheme::kInitialWindowHeight));
+
+    // Once the readings arrive, the window is fitted as on a start with readings.
+    gate->open();
+    QTRY_COMPARE_WITH_TIMEOUT(visibleCards(window).size(), 8, 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(contentFits(window) && window.height() == window.maximumHeight(), 3000);
+    QVERIFY(window.width() < AppTheme::kInitialWindowWidth);
+    QCOMPARE(window.width(), window.maximumWidth());
+}
+
+void MainWindowTest::late_first_readings_keep_a_size_the_user_chose() {
+    const auto gate = std::make_shared<ReadGate>();
+    gate->close();
+    MainWindow window([gate] { return std::make_unique<FakeSource>(gate); }, nullptr, std::chrono::milliseconds(50));
+    const GateGuard guard{gate};
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    // Resized while waiting; still wider and lower than a fit to the content would make it.
+    const QSize chosen(AppTheme::kInitialWindowWidth - 10, 150);
+    resizeWindow(window, chosen.width(), chosen.height());
+    QCOMPARE(window.size(), chosen);
+
+    gate->open();
+    QTRY_COMPARE_WITH_TIMEOUT(visibleCards(window).size(), 8, 3000);
+    QTest::qWait(50);
+    QCOMPARE(window.size(), chosen);
 }
 
 void MainWindowTest::minimum_width_shows_every_card_completely() {
