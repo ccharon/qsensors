@@ -11,6 +11,7 @@
 #include "config/settings_keys.h"
 #include "ui/main_window_state_store.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -150,17 +151,25 @@ namespace {
         int m_reads = 0;
     };
 
+    // Runs what the last change posted (layout requests, resizes) without a timed wait.
+    void settleEvents() {
+        for (int i = 0; i < 3; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    }
+
     std::unique_ptr<MainWindow> showWindow() {
         auto window = std::make_unique<MainWindow>([] { return std::make_unique<FakeSource>(); });
         window->show();
         [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(window.get());
-        QTest::qWait(50);
+        settleEvents();
         return window;
     }
 
     void resizeWindow(MainWindow &window, const int width, const int height) {
         window.resize(width, height);
-        QTest::qWait(50);
+        settleEvents();
     }
 
     QScrollArea *scrollArea(const MainWindow &window) {
@@ -257,7 +266,7 @@ void MainWindowTest::height_limited_to_content_but_never_forced_smaller() {
 
     // Collapsing shortens the content; the window keeps its height but cannot grow.
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
-    QTest::qWait(50);
+    settleEvents();
     QCOMPARE(window->height(), fitted);
     resizeWindow(*window, 600, 5000);
     QCOMPARE(window->height(), fitted);
@@ -285,16 +294,14 @@ void MainWindowTest::width_limited_to_full_layout() {
 
     // Collapsed chips still count, so collapsing does not change the limit.
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
-    QTest::qWait(50);
+    settleEvents();
     QCOMPARE(window->maximumWidth(), limit);
 
     // Maximized windows fill the screen; the limit returns afterwards.
     window->showMaximized();
-    QTest::qWait(50);
-    QCOMPARE(window->maximumWidth(), QWIDGETSIZE_MAX);
+    QTRY_COMPARE(window->maximumWidth(), QWIDGETSIZE_MAX);
     window->showNormal();
-    QTest::qWait(50);
-    QCOMPARE(window->maximumWidth(), limit);
+    QTRY_COMPARE(window->maximumWidth(), limit);
 }
 
 void MainWindowTest::source_error_stays_in_status_after_setting_change() {
@@ -340,7 +347,7 @@ void MainWindowTest::long_status_text_does_not_change_window_width_limits() {
     longWindow.show();
     QVERIFY(QTest::qWaitForWindowExposed(&shortWindow));
     QVERIFY(QTest::qWaitForWindowExposed(&longWindow));
-    QTest::qWait(50);
+    settleEvents();
 
     QCOMPARE(longWindow.minimumSizeHint().width(), shortWindow.minimumSizeHint().width());
     QCOMPARE(longWindow.minimumWidth(), shortWindow.minimumWidth());
@@ -371,8 +378,13 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
     // The saved state is restored without being written again.
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_dir.path());
     const QString file = QSettings().fileName();
+    // Age the file instead of sleeping past the file system's timestamp resolution.
+    {
+        QFile settingsFile(file);
+        QVERIFY(settingsFile.open(QIODevice::ReadWrite));
+        QVERIFY(settingsFile.setFileTime(QDateTime::currentDateTime().addSecs(-60), QFileDevice::FileModificationTime));
+    }
     const QDateTime before = QFileInfo(file).lastModified();
-    QTest::qWait(1100);
     const auto window = showWindow();
     QVERIFY(!section(*window, QStringLiteral("chip-a"))->isExpanded());
     QCOMPARE(QFileInfo(file).lastModified(), before);
