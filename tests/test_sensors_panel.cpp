@@ -14,6 +14,7 @@
 #include <QDrag>
 #include <QDropEvent>
 #include <QLayout>
+#include <QKeySequence>
 #include <QMimeData>
 #include <QPointer>
 #include <QSignalSpy>
@@ -53,6 +54,7 @@ private slots:
     void maximum_width_is_where_all_cards_reach_maximum();
     void unreadable_sensor_is_a_value_update();
     void chip_with_only_unreadable_sensors_keeps_its_cards();
+    void ampersand_in_chip_name_is_shown_literally();
 };
 
 namespace {
@@ -711,6 +713,31 @@ void SensorsPanelTest::chip_with_only_unreadable_sensors_keeps_its_cards() {
     for (const QPointer<SensorValueWidget> &card: before)
         QVERIFY(!card.isNull());
     QCOMPARE(cards(panel).size(), 3);
+}
+
+
+void SensorsPanelTest::ampersand_in_chip_name_is_shown_literally() {
+    const QString chip = QStringLiteral("a&b");
+    SensorsPanel panel;
+    panel.setReadings({{.chip = chip, .category = SensorCategory::Fans, .feature = QStringLiteral("fan1"),
+                        .featureNumber = 0, .subfeatureNumber = 1, .value = 1200.0, .unit = SensorUnit::Rpm},
+                       {.chip = QStringLiteral("chip-b"), .category = SensorCategory::Fans,
+                        .feature = QStringLiteral("fan1"), .featureNumber = 0, .subfeatureNumber = 1,
+                        .value = 900.0, .unit = SensorUnit::Rpm}});
+    // The button text is escaped, so it renders as "a&b" and defines no mnemonic.
+    QToolButton *header = headerFor(panel, QStringLiteral("a&&b"));
+    QVERIFY(header);
+    QVERIFY(QKeySequence::mnemonic(header->text()).isEmpty());
+
+    // State, order and drag data stay under the original name.
+    QSignalSpy expandedSpy(&panel, &SensorsPanel::chipExpandedChanged);
+    QTest::mouseClick(header, Qt::LeftButton);
+    QCOMPARE(expandedSpy.count(), 1);
+    QCOMPARE(panel.chipExpandedState().value(chip), false);
+    QVERIFY(!panel.chipExpandedState().contains(QStringLiteral("a&&b")));
+
+    panel.moveChip(chip, 2);
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), chip}));
 }
 
 QTEST_MAIN(SensorsPanelTest)

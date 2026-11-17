@@ -48,6 +48,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   within a minute; a limit that could not be read is retried on the next poll.
 
 ### Fixed
+- A chip name containing `&` is shown as is in the chip card header; the
+  character was dropped and the next letter underlined as a shortcut.
 - A poll whose readings only change values no longer repaints the whole
   sensors panel: only the LCDs whose display changed are redrawn. The panel
   still batches its repaint when chips or sensors appear, disappear or move.
