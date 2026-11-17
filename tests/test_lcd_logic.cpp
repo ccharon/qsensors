@@ -55,6 +55,12 @@ void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
     QVERIFY(tip.contains(QStringLiteral("13.32 V")) || tip.contains(QStringLiteral("13.33 V")));
     QVERIFY(!tip.contains(QStringLiteral("No limits")));
 
+    // Limits use the card's scale, so they read like the card: "500 mA", not "0.500 A".
+    SensorReading milliamps{.chip = QStringLiteral("c"), .feature = QStringLiteral("curr1"), .value = 0.25,
+                            .unit = SensorUnit::Ampere, .firmwareMax = 0.5,
+                            .scale = SensorScale{SiPrefix::Milli, 0}};
+    QVERIFY(SensorValueWidget::detailsToolTip(milliamps).contains(QStringLiteral("Max: 500 mA")));
+
     // Names are escaped: sensors.conf labels are free text.
     SensorReading odd{.chip = QStringLiteral("c"), .feature = QStringLiteral("<CPU & SoC>"),
                       .value = 1.0, .unit = SensorUnit::Watt};
