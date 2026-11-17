@@ -23,6 +23,10 @@
         <translation>Sensoren antworten nicht; die angezeigten Werte sind veraltet</translation>
     </message>
     <message>
+        <source>Sensors are available again</source>
+        <translation>Sensoren sind wieder verfügbar</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Messwerte: %1 | Aktualisierung: %2s</translation>
     </message>

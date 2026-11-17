@@ -368,22 +368,41 @@ namespace {
     std::atomic_bool g_backendActive{false};
 }
 
-LibsensorsSource::LibsensorsSource() : m_initialized(false) {
+LibsensorsSource::LibsensorsSource() {
+    acquireAndInitialize(false);
+}
+
+bool LibsensorsSource::acquireAndInitialize(const bool afterStart) {
     if (g_backendActive.exchange(true)) {
+        m_hwmonWatch.reset();
         m_lastError = QStringLiteral("another LibsensorsSource instance is already active");
-        return;
+        return false;
     }
-    // Snapshot before the init, so a device that appears in between triggers a re-init.
+    return initialize(afterStart);
+}
+
+bool LibsensorsSource::initialize(const bool afterStart) {
+    // Snapshot before the init, so a device that appears in between triggers a re-init
+    // (or, after a failed init, the next retry).
     m_hwmonWatch.reset();
+    // Problems and cached features of an old chip list say nothing about the new one.
+    m_reportedProblems.clear();
+    m_featureCache.clear();
     // nullptr reads the system configuration (/etc/sensors3.conf, /etc/sensors.d/); its
     // compute expressions affect values, so it must only be writable by root.
     const int rc = sensors_init(nullptr);
     if (rc != 0) {
-        m_lastError = QStringLiteral("sensors_init failed: %1 (%2)").arg(QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
+        // A failed sensors_init cleans up after itself, so the pairing holds.
         g_backendActive = false;
-        return;
+        m_lastError = QStringLiteral("sensors_init failed%1: %2 (%3)")
+                          .arg(afterStart ? QStringLiteral(" after a hardware change") : QString(),
+                               QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
+        return false;
     }
     m_initialized = true;
+    m_wasInitialized = true;
+    m_lastError.clear();
+    return true;
 }
 
 LibsensorsSource::~LibsensorsSource() {
@@ -404,20 +423,18 @@ QString LibsensorsSource::lastError() const {
 bool LibsensorsSource::reinitialize() {
     qInfo("qsensors: hwmon devices changed; re-initializing libsensors");
     sensors_cleanup();
-    // Problems and cached features of the old chip list say nothing about the new one.
-    m_reportedProblems.clear();
-    m_featureCache.clear();
-    const int rc = sensors_init(nullptr);
-    if (rc != 0) {
-        // A failed sensors_init cleans up after itself, so the pairing holds.
-        m_initialized = false;
-        g_backendActive = false;
-        m_lastError = QStringLiteral("sensors_init failed after a hardware change: %1 (%2)")
-                          .arg(QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
-        qWarning("qsensors: %s", qPrintable(m_lastError));
+    m_initialized = false;
+    // The backend stays claimed by this instance; initialize() releases it on failure.
+    return initialize(true);
+}
+
+bool LibsensorsSource::recover(const bool retryDue) {
+    if (m_initialized)
+        return true;
+    // Between due retries only a hardware change is worth a sensors_init; the listing is cheap.
+    if (!retryDue && !m_hwmonWatch.changed())
         return false;
-    }
-    return true;
+    return acquireAndInitialize(m_wasInitialized);
 }
 
 QVector<SensorReading> LibsensorsSource::readAll() {

@@ -96,6 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and removed ones lose theirs. Before, a removed device kept a card of dashes,
   and a device that reused its hwmon index could show its values under the old
   chip's name. A failed re-initialization is shown in the status line.
+- A failed libsensors initialization, at startup or after a hardware change,
+  no longer needs a restart of qsensors. It is retried on the next change of
+  the hwmon devices and on a timer, first after one polling interval, then
+  with doubling delays up to once a minute. The status line shows the error
+  until a retry succeeds, then the readings return with the notice "Sensors
+  are available again". The log names the failure once, a different error
+  again, and the recovery.
 - Two chips with the same name (for example two ACPI fans, both
   `acpi_fan-acpi-0`) no longer share one set of cards, where one card froze
   and the other jumped between both sensors. The second and further chips of

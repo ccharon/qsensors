@@ -25,4 +25,13 @@ public:
 
     /** All readable sensors with raw values and native limits. */
     [[nodiscard]] virtual QVector<SensorReading> readAll() = 0;
+
+    /**
+     * Tries to make a source that is not initialized usable again; returns isInitialized().
+     * @p retryDue is true when the time-based retry is due; otherwise a source retries only
+     * when it sees a reason of its own (LibsensorsSource: the hwmon devices changed), so the
+     * call is cheap. Called in the worker thread every polling interval while the source has failed.
+     * The default never recovers.
+     */
+    [[nodiscard]] virtual bool recover(bool /*retryDue*/) { return isInitialized(); }
 };

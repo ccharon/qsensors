@@ -23,6 +23,10 @@
         <translation>Les capteurs ne répondent pas ; les valeurs affichées sont obsolètes</translation>
     </message>
     <message>
+        <source>Sensors are available again</source>
+        <translation>Les capteurs sont de nouveau disponibles</translation>
+    </message>
+    <message>
         <source>Readings: %1 | Refresh: %2s</source>
         <translation>Mesures : %1 | Actualisation : %2s</translation>
     </message>

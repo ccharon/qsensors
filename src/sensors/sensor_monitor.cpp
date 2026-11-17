@@ -34,7 +34,10 @@ namespace {
     };
 }
 
-/** Worker-thread side of SensorMonitor: owns the source and reads it on request. */
+/**
+ * Worker-thread side of SensorMonitor: owns the source and reads it on request. A source
+ * that failed is kept, so it can be retried; it dies with the poller, in the worker.
+ */
 class SensorPoller final : public QObject {
     Q_OBJECT
 
@@ -44,15 +47,15 @@ public:
     /** Creates the source; returns its initialization error, empty on success. */
     QString initialize() {
         m_source = m_factory();
-        if (!m_source) {
+        return m_source && m_source->isInitialized() ? QString() : error();
+    }
+
+    /** Why the source is not usable; never empty. */
+    [[nodiscard]] QString error() const {
+        if (!m_source)
             return QStringLiteral("no sensor source available");
-        }
-        if (!m_source->isInitialized()) {
-            const QString error = m_source->lastError();
-            m_source.reset();
-            return error;
-        }
-        return {};
+        const QString error = m_source->lastError();
+        return error.isEmpty() ? QStringLiteral("sensor source stopped working") : error;
     }
 
     [[nodiscard]] QVector<SensorReading> read() const {
@@ -63,8 +66,14 @@ public:
     void startup(const std::shared_ptr<StartupHandover> &handover) {
         QString error = initialize();
         QVector<SensorReading> first;
-        if (error.isEmpty())
+        if (error.isEmpty()) {
             first = read();
+            // A source that fails in its first read is a failed start, retried the same way.
+            if (!m_source->isInitialized()) {
+                error = this->error();
+                first.clear();
+            }
+        }
         QMutexLocker lock(&handover->mutex);
         if (handover->abandoned) {
             lock.unlock();
@@ -77,20 +86,33 @@ public:
         handover->done.wakeAll();
     }
 
-    /** Reads the source and emits the result; a source that stopped working is reported first and dropped. */
+    /** Reads the source and emits the result; a source that stopped working is reported first. */
     void poll() {
         const QVector<SensorReading> raw = read();
-        if (m_source && !m_source->isInitialized()) {
-            QString error = m_source->lastError();
-            m_source.reset();
-            emit sourceFailed(error.isEmpty() ? QStringLiteral("sensor source stopped working") : error);
-        }
+        if (m_source && !m_source->isInitialized())
+            emit sourceFailed(error());
         emit rawReadingsRead(raw);
+    }
+
+    /** Retries a failed source (see SensorSource::recover()); on success reads it and emits the result. */
+    void retry(const bool retryDue) {
+        if (!m_source || !m_source->recover(retryDue)) {
+            emit retryFailed(error());
+            return;
+        }
+        const QVector<SensorReading> raw = m_source->readAll();
+        if (!m_source->isInitialized()) {
+            emit retryFailed(error());
+            return;
+        }
+        emit recovered(raw);
     }
 
 signals:
     void rawReadingsRead(const QVector<SensorReading> &raw);
     void sourceFailed(const QString &error);
+    void retryFailed(const QString &error);
+    void recovered(const QVector<SensorReading> &raw);
     void lateStartFinished(const QString &error, const QVector<SensorReading> &first);
 
 private:
@@ -100,22 +122,29 @@ private:
 
 SensorMonitor::SensorMonitor(SourceFactory factory, QObject *parent)
     : QObject(parent), m_thread(new QThread(this)), m_poller(new SensorPoller(std::move(factory))),
-      m_timer(new QTimer(this)), m_stallTimer(new QTimer(this)) {
+      m_timer(new QTimer(this)), m_stallTimer(new QTimer(this)), m_retryTimer(new QTimer(this)) {
     m_thread->setObjectName(QStringLiteral("qsensors-poll"));
     m_stallTimer->setSingleShot(true);
+    m_retryTimer->setSingleShot(true);
+    // Never early, so the backoff is a lower bound (a coarse timer may fire 5 % early).
+    m_retryTimer->setTimerType(Qt::PreciseTimer);
     m_poller->moveToThread(m_thread);
     // Deferred deletes run in the worker before it exits, so the source dies in its own thread.
     connect(m_thread, &QThread::finished, m_poller, &QObject::deleteLater);
     connect(m_poller, &SensorPoller::rawReadingsRead, this, &SensorMonitor::acceptRawReadings);
     connect(m_poller, &SensorPoller::sourceFailed, this, &SensorMonitor::handleSourceFailure);
+    connect(m_poller, &SensorPoller::retryFailed, this, &SensorMonitor::handleRetryFailure);
+    connect(m_poller, &SensorPoller::recovered, this, &SensorMonitor::handleRecovery);
     connect(m_poller, &SensorPoller::lateStartFinished, this, &SensorMonitor::finishLateStart);
     connect(m_timer, &QTimer::timeout, this, &SensorMonitor::requestPoll);
     connect(m_stallTimer, &QTimer::timeout, this, &SensorMonitor::markStalled);
+    connect(m_retryTimer, &QTimer::timeout, this, &SensorMonitor::retryDue);
 }
 
 SensorMonitor::~SensorMonitor() {
     m_timer->stop();
     m_stallTimer->stop();
+    m_retryTimer->stop();
     if (!m_thread->isRunning()) {
         delete m_poller; // worker never started; the poller still has no source
         return;
@@ -176,7 +205,8 @@ bool SensorMonitor::start(const RuntimeConfig &config) {
 
 bool SensorMonitor::finishStart(const QString &error, const QVector<SensorReading> &first) {
     if (!error.isEmpty()) {
-        m_lastError = error;
+        qWarning("qsensors: sensor source could not be initialized: %s; retrying", qPrintable(error));
+        enterFailedState(error);
         return false;
     }
     m_running = true;
@@ -189,7 +219,6 @@ bool SensorMonitor::finishStart(const QString &error, const QVector<SensorReadin
 void SensorMonitor::finishLateStart(const QString &error, const QVector<SensorReading> &first) {
     if (finishStart(error, first))
         return;
-    qWarning("qsensors: sensor source could not be initialized: %s", qPrintable(error));
     emit sourceFailed(error);
     m_stalled = false;
     emit stalledChanged(false);
@@ -208,7 +237,8 @@ void SensorMonitor::setConfig(const RuntimeConfig &config) {
         return;
     if (intervalChanged)
         m_timer->setInterval(std::chrono::seconds(m_config.pollingIntervalSec));
-    if (displayChanged)
+    // A failed source has no readings to show in another unit.
+    if (displayChanged && !m_failed)
         emit readingsChanged(m_pipeline.process(m_rawReadings, m_config));
 }
 
@@ -228,13 +258,36 @@ void SensorMonitor::setShutdownTimeout(const std::chrono::milliseconds timeout) 
     m_shutdownTimeout = timeout;
 }
 
+void SensorMonitor::setRetryDelays(const std::chrono::milliseconds first, const std::chrono::milliseconds max) {
+    m_firstRetryDelayOverride = first;
+    m_maxRetryDelay = max;
+}
+
+std::chrono::milliseconds SensorMonitor::nextRetryDelay(const std::chrono::milliseconds current,
+                                                        const std::chrono::milliseconds max) {
+    return std::min(current * 2, max);
+}
+
 void SensorMonitor::requestPoll() {
     // A read slower than the interval must not queue up further reads.
     if (m_pollPending)
         return;
     m_pollPending = true;
     m_stallTimer->start(m_stallTimeoutOverride.value_or(stallTimeoutFor(m_config.pollingIntervalSec)));
-    QMetaObject::invokeMethod(m_poller, &SensorPoller::poll, Qt::QueuedConnection);
+    if (!m_failed) {
+        QMetaObject::invokeMethod(m_poller, &SensorPoller::poll, Qt::QueuedConnection);
+        return;
+    }
+    // While failed, every tick asks the source for a cheap retry; a due one forces the init.
+    m_pendingRetryDue = std::exchange(m_retryDue, false);
+    SensorPoller *poller = m_poller;
+    const bool due = m_pendingRetryDue;
+    QMetaObject::invokeMethod(m_poller, [poller, due] { poller->retry(due); }, Qt::QueuedConnection);
+}
+
+void SensorMonitor::retryDue() {
+    m_retryDue = true;
+    requestPoll(); // a request in progress picks it up when it returns
 }
 
 void SensorMonitor::markStalled() {
@@ -245,22 +298,65 @@ void SensorMonitor::markStalled() {
 }
 
 void SensorMonitor::handleSourceFailure(const QString &error) {
-    m_lastError = error;
-    m_running = false;
-    m_timer->stop();
-    qWarning("qsensors: sensor source stopped working: %s", qPrintable(error));
+    qWarning("qsensors: sensor source stopped working: %s; retrying", qPrintable(error));
+    enterFailedState(error);
     emit sourceFailed(error);
 }
 
-void SensorMonitor::acceptRawReadings(const QVector<SensorReading> &raw) {
+void SensorMonitor::enterFailedState(const QString &error) {
+    m_failed = true;
+    m_lastError = error;
+    m_retryDue = false;
+    m_retryDelay = m_firstRetryDelayOverride.value_or(std::chrono::seconds(m_config.pollingIntervalSec));
+    m_retryTimer->start(m_retryDelay);
+    // The polling timer goes on (or starts, after a failed start) and drives the cheap retries.
+    m_running = true;
+    m_timer->setInterval(std::chrono::seconds(m_config.pollingIntervalSec));
+    if (!m_timer->isActive())
+        m_timer->start();
+}
+
+void SensorMonitor::handleRetryFailure(const QString &error) {
+    const bool wasDue = m_pendingRetryDue;
+    finishRequest();
+    // The same failure is logged once; only a different one is worth a line and the status.
+    if (error != m_lastError) {
+        m_lastError = error;
+        qWarning("qsensors: sensor source still not working, now: %s; retrying", qPrintable(error));
+        emit sourceFailed(error);
+    }
+    if (wasDue) {
+        m_retryDelay = nextRetryDelay(m_retryDelay, m_maxRetryDelay);
+        m_retryTimer->start(m_retryDelay);
+    }
+    if (m_retryDue)
+        requestPoll();
+}
+
+void SensorMonitor::handleRecovery(const QVector<SensorReading> &raw) {
+    m_failed = false;
+    m_retryDue = false;
+    m_retryTimer->stop();
+    m_lastError.clear();
+    qInfo("qsensors: sensor source works again");
+    emit sourceRecovered();
+    acceptRawReadings(raw);
+}
+
+void SensorMonitor::finishRequest() {
     m_pollPending = false;
+    m_pendingRetryDue = false;
     m_stallTimer->stop();
-    m_rawReadings = raw;
     if (m_stalled) {
         m_stalled = false;
         qInfo("qsensors: sensor reads resumed");
         emit stalledChanged(false);
     }
+}
+
+void SensorMonitor::acceptRawReadings(const QVector<SensorReading> &raw) {
+    finishRequest();
+    m_rawReadings = raw;
     emit readingsChanged(m_pipeline.process(m_rawReadings, m_config));
 }
 
