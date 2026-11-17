@@ -18,7 +18,25 @@ private slots:
     void sensorKey_different_category_different_key();
     void sensorKey_different_chip_different_key();
     void sensorKey_ignores_unit_and_label();
+    void uniqueChipNames_keeps_unique_names();
+    void uniqueChipNames_numbers_repeated_names_by_stable_key();
+    void uniqueChipNames_is_stable_across_listing_order();
+    void uniqueChipNames_avoids_existing_names();
+    void uniqueChipNames_separates_sensor_keys();
 };
+
+namespace {
+    /** Stable keys by index, recording which indexes were asked for. */
+    struct KeyLookup {
+        QStringList keys;
+        QList<qsizetype> *asked;
+
+        QString operator()(const qsizetype i) const {
+            asked->append(i);
+            return keys.at(i);
+        }
+    };
+}
 
 void SensorIdentityTest::chipFingerprint_deduplicates_chips() {
     QVector<SensorReading> readings;
@@ -119,6 +137,54 @@ void SensorIdentityTest::sensorKey_ignores_unit_and_label() {
     r.unit = SensorUnit::Milliampere;
     r.feature = QStringLiteral("Battery Current");
     QCOMPARE(SensorIdentity::sensorKey(r), key);
+}
+
+void SensorIdentityTest::uniqueChipNames_keeps_unique_names() {
+    const QStringList names{QStringLiteral("coretemp-isa-0000"), QStringLiteral("nvme-pci-0100")};
+    QList<qsizetype> asked;
+    QCOMPARE(SensorIdentity::uniqueChipNames(names, KeyLookup{{}, &asked}), names);
+    QVERIFY(asked.isEmpty()); // no filesystem lookups for unique names
+}
+
+void SensorIdentityTest::uniqueChipNames_numbers_repeated_names_by_stable_key() {
+    const QStringList names{QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("coretemp-isa-0000"),
+                            QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("acpi_fan-acpi-0")};
+    const QStringList keys{QStringLiteral("/sys/devices/PNP0C0B:02"), QString(),
+                           QStringLiteral("/sys/devices/PNP0C0B:00"), QStringLiteral("/sys/devices/PNP0C0B:01")};
+    QList<qsizetype> asked;
+    const QStringList unique = SensorIdentity::uniqueChipNames(names, KeyLookup{keys, &asked});
+    QCOMPARE(unique, (QStringList{QStringLiteral("acpi_fan-acpi-0 #3"), QStringLiteral("coretemp-isa-0000"),
+                                  QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("acpi_fan-acpi-0 #2")}));
+    QVERIFY(!asked.contains(1));
+}
+
+void SensorIdentityTest::uniqueChipNames_is_stable_across_listing_order() {
+    // libsensors may list the same chips in another order after a re-init or a restart.
+    const QStringList names{QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("acpi_fan-acpi-0")};
+    QList<qsizetype> asked;
+    const QStringList first = SensorIdentity::uniqueChipNames(names, KeyLookup{{QStringLiteral("a"), QStringLiteral("b")}, &asked});
+    const QStringList swapped = SensorIdentity::uniqueChipNames(names, KeyLookup{{QStringLiteral("b"), QStringLiteral("a")}, &asked});
+    QCOMPARE(first, (QStringList{QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("acpi_fan-acpi-0 #2")}));
+    QCOMPARE(swapped, (QStringList{QStringLiteral("acpi_fan-acpi-0 #2"), QStringLiteral("acpi_fan-acpi-0")}));
+}
+
+void SensorIdentityTest::uniqueChipNames_avoids_existing_names() {
+    const QStringList names{QStringLiteral("x"), QStringLiteral("x #2"), QStringLiteral("x")};
+    QList<qsizetype> asked;
+    const QStringList unique = SensorIdentity::uniqueChipNames(names, KeyLookup{{QStringLiteral("a"), {}, QStringLiteral("b")}, &asked});
+    QCOMPARE(unique, (QStringList{QStringLiteral("x"), QStringLiteral("x #2"), QStringLiteral("x #3")}));
+}
+
+void SensorIdentityTest::uniqueChipNames_separates_sensor_keys() {
+    // Two ACPI fans with the same printed name and numbering get separate cards.
+    const QStringList unique = SensorIdentity::uniqueChipNames(
+        {QStringLiteral("acpi_fan-acpi-0"), QStringLiteral("acpi_fan-acpi-0")},
+        [](const qsizetype i) { return QString::number(i); });
+    SensorReading a{.chip = unique.at(0), .category = SensorCategory::Fans, .featureNumber = 0, .subfeatureNumber = 0};
+    SensorReading b = a;
+    b.chip = unique.at(1);
+    QVERIFY(SensorIdentity::sensorKey(a) != SensorIdentity::sensorKey(b));
+    QCOMPARE(SensorIdentity::chipFingerprint({a, b}).split(QLatin1Char('\n')).size(), 2);
 }
 
 QTEST_APPLESS_MAIN(SensorIdentityTest)

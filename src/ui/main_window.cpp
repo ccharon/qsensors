@@ -65,6 +65,10 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
 
     connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
     connect(m_monitor, &SensorMonitor::stalledChanged, this, &MainWindow::updateReadingsStatus);
+    connect(m_monitor, &SensorMonitor::sourceFailed, this, [this](const QString &error) {
+        m_sourceError = error;
+        updateReadingsStatus();
+    });
     // Reads once before returning, so the first readings are shown before the window.
     if (!m_monitor->start(m_runtimeConfig)) {
         m_sourceError = m_monitor->lastError();

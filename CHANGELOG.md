@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changing the polling interval or fan fallback with the spin box arrows no
   longer rewrites the settings file on every step: the display follows each
   step, the file is written once the changes stop (and on close).
+- Sensor labels and firmware limits are read once and then cached instead of
+  on every poll, which cuts device I/O per poll (limits of NVMe drives and
+  `drivetemp` disks are device commands). They are read again after a
+  hardware change and once a minute, so a limit changed at runtime shows up
+  within a minute; a limit that could not be read is retried on the next poll.
 
 ### Fixed
 - A poll whose readings only change values no longer repaints the whole
@@ -47,6 +52,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A garbled settings schema version is logged and treated as unversioned, and
   a failed write of the migrated schema version is logged and shown as a
   notice instead of passing silently.
+- Sensor hardware that appears or disappears while qsensors runs (USB
+  devices, NVMe drives, GPUs after a driver reload) is now picked up: when the
+  hwmon devices change, libsensors is re-initialized, so new devices get cards
+  and removed ones lose theirs. Before, a removed device kept a card of dashes,
+  and a device that reused its hwmon index could show its values under the old
+  chip's name. A failed re-initialization is shown in the status line.
+- Two chips with the same name (for example two ACPI fans, both
+  `acpi_fan-acpi-0`) no longer share one set of cards, where one card froze
+  and the other jumped between both sensors. The second and further chips of
+  that name are shown as `acpi_fan-acpi-0 #2` and so on, numbered by their
+  device path so the numbering stays the same across restarts. Chips with a
+  unique name keep their name and their saved order and expand state.
+- A driver that hangs at startup no longer keeps the window from appearing.
+  If the first sensor read takes longer than 10 seconds, the window opens
+  without readings and the status line says the sensors are not responding;
+  the readings appear as soon as the read returns.
+- Closing qsensors while a sensor read hangs can no longer crash at exit: when
+  the read has not returned within the shutdown timeout, the process now ends
+  without tearing down Qt under the still running sensor thread.
 
 ### Security
 - The build enables hardening flags for the project's own targets

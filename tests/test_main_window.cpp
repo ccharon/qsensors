@@ -55,6 +55,7 @@ private slots:
     void sensor_card_height_follows_font_changes();
     void sensor_card_tooltip_follows_every_displayed_field();
     void newer_schema_settings_survive_a_session_and_are_reported();
+    void source_that_stops_working_is_shown_in_status();
 
 private:
     QTemporaryDir m_dir;
@@ -129,6 +130,24 @@ namespace {
 
     private:
         QString m_error;
+    };
+
+    /** Reads once, then stops working like LibsensorsSource after a failed re-init. */
+    class FailingSource final : public SensorSource {
+    public:
+        [[nodiscard]] bool isInitialized() const override { return m_reads == 0; }
+        [[nodiscard]] QString lastError() const override { return QStringLiteral("re-init failed (4)"); }
+
+        [[nodiscard]] QVector<SensorReading> readAll() override {
+            if (m_reads++ > 0)
+                return {};
+            return {{.chip = QStringLiteral("chip-a"), .category = SensorCategory::Temperatures,
+                     .feature = QStringLiteral("s0"), .featureNumber = 0, .subfeatureNumber = 0, .value = 40.0,
+                     .unit = SensorUnit::Celsius}};
+        }
+
+    private:
+        int m_reads = 0;
     };
 
     std::unique_ptr<MainWindow> showWindow() {
@@ -491,6 +510,19 @@ void MainWindowTest::sensor_card_tooltip_follows_every_displayed_field() {
     card.setReading(reading);
     QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
     QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
+}
+
+void MainWindowTest::source_that_stops_working_is_shown_in_status() {
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(AppConfigStore::saveRuntimeConfig(config));
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("stopped working")));
+    MainWindow window([] { return std::make_unique<FailingSource>(); });
+    const StatusLine *status = window.findChild<StatusLine *>();
+    QVERIFY2(status->text().startsWith(QStringLiteral("Readings: 1")), qPrintable(status->text()));
+
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("re-init failed (4)")), 10000);
+    QCOMPARE(window.findChildren<SensorValueWidget *>().size(), 0);
 }
 
 QTEST_MAIN(MainWindowTest)

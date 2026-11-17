@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/libsensors_source.h"
+#include "sensors/sensor_identity.h"
 #include "sensors/sensors_policy.h"
 
 #include <sensors/error.h>
 #include <sensors/sensors.h>
 
 #include <QDebug>
+#include <QFileInfo>
 #include <QSet>
 
 #include <atomic>
@@ -68,12 +70,20 @@ namespace {
         return value;
     }
 
+    // Limit reads that failed although the limit exists; such a limit is not cached, so it
+    // is retried next poll. A missing subfeature is no failure. Worker thread only.
+    thread_local int t_failedLimitReads = 0;
+
     [[nodiscard]] std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
         const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
         if (sf == nullptr) {
             return std::nullopt;
         }
-        return readSubfeatureValue(chip, sf);
+        const std::optional<double> value = readSubfeatureValue(chip, sf);
+        if (!value.has_value()) {
+            ++t_failedLimitReads;
+        }
+        return value;
     }
 
     struct RangeInfo {
@@ -169,8 +179,32 @@ namespace {
         }
     }
 
+    using FeatureCache = RefreshingCache<LibsensorsSource::FeatureKey, LibsensorsSource::FeatureInfo>;
+
+    /**
+     * Label and limits of @p feature from @p cache, read from the hardware on a miss. Limits
+     * are device I/O (NVMe, drivetemp), so they are not read every poll; a set with a failed
+     * limit read is used once and not cached, so the limit is retried.
+     */
+    [[nodiscard]] LibsensorsSource::FeatureInfo featureInfo(const sensors_chip_name *chip, const sensors_feature *feature,
+                                                           const sensors_subfeature_type type, FeatureCache &cache) {
+        const LibsensorsSource::FeatureKey key{reinterpret_cast<quintptr>(chip), feature->number};
+        return cache.get(key, [chip, feature, type] {
+            t_failedLimitReads = 0;
+            const RangeInfo nativeRange = readRange(chip, feature, type);
+            return FeatureCache::Load{
+                .value = {
+                    .label = resolveFeatureLabel(chip, feature),
+                    .firmwareMin = nativeRange.min,
+                    .firmwareMax = nativeRange.max,
+                },
+                .complete = t_failedLimitReads == 0,
+            };
+        });
+    }
+
     void appendFeatureReading(const sensors_chip_name *chip, const QString &chipName, const sensors_feature *feature,
-                              QVector<SensorReading> &readings, QSet<QString> &reportedProblems) {
+                              QVector<SensorReading> &readings, QSet<QString> &reportedProblems, FeatureCache &cache) {
         const InputSelection selected = selectInputSubfeature(chip, feature);
         // An input without read permission never delivers a value; it gets no card.
         if (selected.subfeature == nullptr || (selected.subfeature->flags & SENSORS_MODE_R) == 0) {
@@ -186,19 +220,19 @@ namespace {
                            .arg(QString::fromUtf8(feature->name != nullptr ? feature->name : "?"), chipName));
         }
 
+        const LibsensorsSource::FeatureInfo info = featureInfo(chip, feature, selected.type, cache);
         SensorReading reading{
             .chip = chipName,
             .category = categoryForType(selected.type),
-            .feature = resolveFeatureLabel(chip, feature),
+            .feature = info.label,
             .featureNumber = feature->number,
             .subfeatureNumber = selected.subfeature->number,
             .value = value,
             .unit = unitForType(selected.type),
         };
 
-        const RangeInfo nativeRange = readRange(chip, feature, selected.type);
-        reading.firmwareMin = nativeRange.min;
-        reading.firmwareMax = nativeRange.max;
+        reading.firmwareMin = info.firmwareMin;
+        reading.firmwareMax = info.firmwareMax;
         readings.push_back(reading);
     }
 
@@ -212,20 +246,64 @@ namespace {
         return QString::fromUtf8(chipNameBuffer, length);
     }
 
-    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, QSet<QString> &reportedProblems) {
-        const std::optional<QString> chipName = chipNameFrom(chip);
-        if (!chipName.has_value() || chipName->isEmpty()) {
-            reportOnce(reportedProblems, QStringLiteral("chip:%1").arg(chip->addr),
-                       QStringLiteral("skipping chip with unusable name (prefix %1)")
-                           .arg(QString::fromUtf8(chip->prefix != nullptr ? chip->prefix : "?")));
-            return;
-        }
-
+    void appendChipReadings(const sensors_chip_name *chip, const QString &chipName, QVector<SensorReading> &readings,
+                            QSet<QString> &reportedProblems, FeatureCache &cache) {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, *chipName, feature, readings, reportedProblems);
+            appendFeatureReading(chip, chipName, feature, readings, reportedProblems, cache);
         }
+    }
+
+    /** Device path behind @p chip, which survives a reboot better than its hwmonN path. */
+    [[nodiscard]] QString stableChipKey(const sensors_chip_name *chip) {
+        if (chip->path == nullptr)
+            return {};
+        const QString path = QString::fromUtf8(chip->path);
+        for (const QString &candidate: {path + QStringLiteral("/device"), path}) {
+            if (QString canonical = QFileInfo(candidate).canonicalFilePath(); !canonical.isEmpty())
+                return canonical;
+        }
+        return path;
+    }
+
+    struct DetectedChip {
+        const sensors_chip_name *chip = nullptr;
+        QString name;
+    };
+
+    /** All chips with a usable name; repeated names are made unique (see SensorIdentity::uniqueChipNames). */
+    [[nodiscard]] QVector<DetectedChip> detectedChips(QSet<QString> &reportedProblems) {
+        QVector<DetectedChip> chips;
+        const sensors_chip_name *chip = nullptr;
+        int chipNr = 0;
+        while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
+            const std::optional<QString> chipName = chipNameFrom(chip);
+            if (!chipName.has_value() || chipName->isEmpty()) {
+                reportOnce(reportedProblems, QStringLiteral("chip:%1").arg(chip->addr),
+                           QStringLiteral("skipping chip with unusable name (prefix %1)")
+                               .arg(QString::fromUtf8(chip->prefix != nullptr ? chip->prefix : "?")));
+                continue;
+            }
+            chips.push_back({.chip = chip, .name = *chipName});
+        }
+
+        QStringList names;
+        names.reserve(chips.size());
+        for (const DetectedChip &detected: chips)
+            names.push_back(detected.name);
+        const QStringList unique = SensorIdentity::uniqueChipNames(names, [&chips](const qsizetype i) {
+            return stableChipKey(chips.at(i).chip);
+        });
+        for (qsizetype i = 0; i < chips.size(); ++i) {
+            if (chips.at(i).name != unique.at(i)) {
+                reportOnce(reportedProblems, QStringLiteral("dup:%1").arg(unique.at(i)),
+                           QStringLiteral("chip name %1 is not unique; showing %2 as %3")
+                               .arg(chips.at(i).name, stableChipKey(chips.at(i).chip), unique.at(i)));
+                chips[i].name = unique.at(i);
+            }
+        }
+        return chips;
     }
 
     // sensors_init()/sensors_cleanup() manage process-wide state; one source at a time.
@@ -237,6 +315,8 @@ LibsensorsSource::LibsensorsSource() : m_initialized(false) {
         m_lastError = QStringLiteral("another LibsensorsSource instance is already active");
         return;
     }
+    // Snapshot before the init, so a device that appears in between triggers a re-init.
+    m_hwmonWatch.reset();
     // nullptr reads the system configuration (/etc/sensors3.conf, /etc/sensors.d/); its
     // compute expressions affect values, so it must only be writable by root.
     const int rc = sensors_init(nullptr);
@@ -263,16 +343,40 @@ QString LibsensorsSource::lastError() const {
     return m_lastError;
 }
 
+bool LibsensorsSource::reinitialize() {
+    qInfo("qsensors: hwmon devices changed; re-initializing libsensors");
+    sensors_cleanup();
+    // Problems and cached features of the old chip list say nothing about the new one.
+    m_reportedProblems.clear();
+    m_featureCache.clear();
+    const int rc = sensors_init(nullptr);
+    if (rc != 0) {
+        // A failed sensors_init cleans up after itself, so the pairing holds.
+        m_initialized = false;
+        g_backendActive = false;
+        m_lastError = QStringLiteral("sensors_init failed after a hardware change: %1 (%2)")
+                          .arg(QString::fromUtf8(sensors_strerror(rc)), QString::number(rc));
+        qWarning("qsensors: %s", qPrintable(m_lastError));
+        return false;
+    }
+    return true;
+}
+
 QVector<SensorReading> LibsensorsSource::readAll() {
     QVector<SensorReading> readings;
     if (!m_initialized) {
         return readings;
     }
+    // The chip list (and each chip's sysfs path) is fixed at init; a stale list would miss
+    // new devices, keep removed ones and read a reused hwmonN under the old chip's name.
+    if (m_hwmonWatch.changed() && !reinitialize()) {
+        return readings;
+    }
 
-    const sensors_chip_name *chip = nullptr;
-    int chipNr = 0;
-    while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings, m_reportedProblems);
+    m_featureCache.expire(FeatureCache::Clock::now());
+
+    for (const DetectedChip &detected: detectedChips(m_reportedProblems)) {
+        appendChipReadings(detected.chip, detected.name, readings, m_reportedProblems, m_featureCache);
     }
 
     return readings;

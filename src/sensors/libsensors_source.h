@@ -3,15 +3,38 @@
 
 #pragma once
 
+#include "sensors/hwmon_watch.h"
+#include "sensors/refreshing_cache.h"
 #include "sensors/sensor_source.h"
 
+#include <QPair>
 #include <QSet>
 #include <QString>
 #include <QVector>
 
-/** libsensors wrapper: initializes the library and reads all chips into raw SensorReadings. */
+#include <chrono>
+#include <optional>
+
+/**
+ * libsensors wrapper: initializes the library and reads all chips into raw SensorReadings.
+ * libsensors enumerates chips once, in sensors_init(); when the hwmon devices change, the
+ * next readAll() re-initializes it. A failed re-init leaves the source uninitialized,
+ * with lastError() explaining why.
+ */
 class LibsensorsSource final : public SensorSource {
 public:
+    /** Labels and limits are re-read after this time even without a hardware change (limits can be set at runtime). */
+    static constexpr std::chrono::milliseconds kFeatureCacheLifetime{std::chrono::minutes(1)};
+
+    /** Label and firmware limits of one feature; read once, values are read every poll. */
+    struct FeatureInfo {
+        QString label;
+        std::optional<double> firmwareMin;
+        std::optional<double> firmwareMax;
+    };
+    /** Chip (valid until the next sensors_cleanup) and feature number. */
+    using FeatureKey = QPair<quintptr, int>;
+
     /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
     LibsensorsSource();
 
@@ -29,8 +52,14 @@ public:
     [[nodiscard]] QVector<SensorReading> readAll() override;
 
 private:
+    /** sensors_cleanup() + sensors_init(); false (and uninitialized) when the init fails. */
+    bool reinitialize();
+
+    HwmonWatch m_hwmonWatch;
     bool m_initialized;
     QString m_lastError;
     // Problems already logged, so a failing sensor does not flood the log every poll.
     QSet<QString> m_reportedProblems;
+    // Cleared on re-init (the chip pointers die with sensors_cleanup) and after kFeatureCacheLifetime.
+    RefreshingCache<FeatureKey, FeatureInfo> m_featureCache{kFeatureCacheLifetime};
 };
