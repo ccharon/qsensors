@@ -143,10 +143,6 @@ QHash<QString, bool> SensorsPanel::chipExpandedState() const {
     return m_chipExpanded;
 }
 
-QString SensorsPanel::chipFingerprint() const {
-    return SensorIdentity::chipSetFingerprint(m_groups.keys());
-}
-
 int SensorsPanel::readingCount() const {
     int count = 0;
     for (const CategoryGroups &categories: m_groups)

@@ -71,13 +71,13 @@ private:
     /** Saves the runtime config and reports a failed write; also what the debounce timer runs. */
     void persistRuntimeConfig();
 
-    /** Saves chip order, expand state and chip fingerprint right away and reports a failed write. */
+    /** Saves chip order, expand state right away and reports a failed write. */
     void persistChipLayout();
 
-    /** Loads runtime config, geometry, chip order, expand state and chip fingerprint. */
+    /** Loads runtime config, geometry, chip order and expand state. */
     void loadSettings();
 
-    /** Persists runtime config, geometry, chip order, expand state and chip fingerprint. */
+    /** Persists runtime config, geometry, chip order and expand state. */
     void saveSettings() const;
 
     /** Window height at which the whole content fits without scrolling. */

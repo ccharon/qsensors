@@ -354,7 +354,7 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
     {
         const auto window = showWindow();
         // Starting, restoring and polling write no layout state.
-        QVERIFY(!QSettings().contains(SettingsKeys::kSensorFingerprint));
+        QVERIFY(!QSettings().contains(SettingsKeys::kChipExpandedGroup));
         QVERIFY(!QSettings().contains(SettingsKeys::kChipOrder));
 
         section(*window, QStringLiteral("chip-a"))->setExpanded(false);
@@ -362,7 +362,7 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
         const MainWindowState state = MainWindowStateStore::load();
         QCOMPARE(state.chipExpanded.value(QStringLiteral("chip-a"), true), false);
         QCOMPARE(state.chipOrder, (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
-        QVERIFY(!state.sensorFingerprint.isEmpty());
+        QVERIFY(!QSettings().contains(QStringLiteral("sensors/fingerprint")));
         QVERIFY(state.geometry.isEmpty());
         window->close();
     }
@@ -424,7 +424,7 @@ void MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported() 
     QCOMPARE(s.value(SettingsKeys::kTemperatureUnit).toString(), QStringLiteral("K"));
     QCOMPARE(s.value(SettingsKeys::kChipOrder).toStringList(), QStringList{QStringLiteral("zzz-future-chip")});
     QVERIFY(!s.contains(SettingsKeys::kWindowGeometry));
-    QVERIFY(!s.contains(SettingsKeys::kSensorFingerprint));
+    QVERIFY(!s.contains(QStringLiteral("sensors/fingerprint")));
 }
 
 void MainWindowTest::spin_box_steps_are_saved_once_after_the_last_step() {

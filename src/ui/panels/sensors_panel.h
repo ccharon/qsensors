@@ -71,12 +71,6 @@ public:
     /** Moves @p chip to position @p targetIndex among the shown chips (insert position before the move). */
     void moveChip(const QString &chip, int targetIndex);
 
-    /**
-     * Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). Only
-     * written to the settings; the restored expand state no longer depends on it.
-     */
-    [[nodiscard]] QString chipFingerprint() const;
-
     /** Number of readings currently shown. */
     [[nodiscard]] int readingCount() const;
 

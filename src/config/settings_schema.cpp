@@ -20,6 +20,16 @@ namespace {
             settings.setValue(SettingsKeys::kTemperatureUnit, temperatureUnitToToken(TemperatureUnit::Celsius));
         }
     }
+
+    void migrateV2ToV3(QSettings &settings) {
+        // v3 drops the chip fingerprint: the expand state keys name their chips, so nothing
+        // reads it any more. The key is named here only, it is no live key.
+        constexpr QLatin1String kLegacySensorFingerprint("sensors/fingerprint");
+        if (settings.contains(kLegacySensorFingerprint)) {
+            settings.remove(kLegacySensorFingerprint);
+            qInfo("qsensors: removed the unused settings key %s (schema v3)", kLegacySensorFingerprint.data());
+        }
+    }
 }
 
 int SettingsSchema::storedVersion(const QSettings &settings) {
@@ -52,6 +62,9 @@ bool SettingsSchema::ensureUpToDate(QSettings &settings) {
     }
     if (version < 2) {
         migrateV1ToV2(settings);
+    }
+    if (version < 3) {
+        migrateV2ToV3(settings);
     }
 
     settings.setValue(SettingsKeys::kSchemaVersion, kCurrentVersion);

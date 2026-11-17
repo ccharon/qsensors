@@ -31,6 +31,9 @@ private slots:
     void runtime_config_non_numeric_values_use_defaults();
     void runtime_config_out_of_range_values_are_clamped();
     void newer_schema_version_is_not_downgraded();
+    void v2_settings_are_migrated_to_v3_and_the_fingerprint_removed();
+    void saving_the_layout_does_not_write_the_fingerprint();
+    void schema_version_above_current_is_newer();
     void temperatureUnit_token_parsing_rejects_unknown();
     void runtime_config_value_too_large_for_int_is_clamped();
     void runtime_config_temperatureUnit_non_string_falls_back_to_celsius();
@@ -87,18 +90,15 @@ void SettingsPersistenceTest::runtime_config_temperatureUnit_invalid_fallbacks_t
 
 void SettingsPersistenceTest::main_window_state_roundtrip() {
     const QByteArray geometry("fake-geometry");
-    const QString fingerprint = QStringLiteral("chip-a\\nchip-b");
     QHash<QString, bool> expanded;
     expanded.insert(QStringLiteral("chip-a"), true);
     expanded.insert(QStringLiteral("chip-b"), false);
 
     const QStringList order{QStringLiteral("chip-b"), QStringLiteral("chip-a")};
-    QVERIFY(MainWindowStateStore::save({.geometry = geometry, .chipExpanded = expanded, .chipOrder = order,
-                                        .sensorFingerprint = fingerprint}));
+    QVERIFY(MainWindowStateStore::save({.geometry = geometry, .chipExpanded = expanded, .chipOrder = order}));
     const MainWindowState loaded = MainWindowStateStore::load();
 
     QCOMPARE(loaded.geometry, geometry);
-    QCOMPARE(loaded.sensorFingerprint, fingerprint);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a")), true);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-b")), false);
     QCOMPARE(loaded.chipOrder, order);
@@ -122,18 +122,16 @@ void SettingsPersistenceTest::main_window_state_chip_name_with_slash_roundtrip()
 }
 
 void SettingsPersistenceTest::save_layout_keeps_stored_geometry() {
-    QVERIFY(MainWindowStateStore::save({.geometry = QByteArray("fake-geometry"), .chipExpanded = {}, .chipOrder = {}, .sensorFingerprint = {}}));
+    QVERIFY(MainWindowStateStore::save({.geometry = QByteArray("fake-geometry"), .chipExpanded = {}, .chipOrder = {}}));
 
     const QStringList order{QStringLiteral("chip-b"), QStringLiteral("chip-a")};
     QVERIFY(MainWindowStateStore::saveLayout({.geometry = QByteArray("ignored"),
                                               .chipExpanded = {{QStringLiteral("chip-a"), false}},
-                                              .chipOrder = order,
-                                              .sensorFingerprint = QStringLiteral("fp")}));
+                                              .chipOrder = order}));
     const MainWindowState loaded = MainWindowStateStore::load();
     QCOMPARE(loaded.geometry, QByteArray("fake-geometry"));
     QCOMPARE(loaded.chipOrder, order);
     QCOMPARE(loaded.chipExpanded.value(QStringLiteral("chip-a"), true), false);
-    QCOMPARE(loaded.sensorFingerprint, QStringLiteral("fp"));
 }
 
 void SettingsPersistenceTest::stores_do_not_write_schema_version() {
@@ -156,10 +154,10 @@ void SettingsPersistenceTest::v1_settings_are_migrated_and_logged() {
     s.setValue(QStringLiteral("meta/schema_version"), 1);
     s.setValue(QStringLiteral("runtime/polling_interval_sec"), 3);
 
-    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v1 to v2")));
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v1 to v3")));
     QVERIFY(SettingsSchema::ensureUpToDate(s));
 
-    QCOMPARE(SettingsSchema::storedVersion(s), 2);
+    QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
     QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
     QCOMPARE(s.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 3);
 }
@@ -204,6 +202,57 @@ void SettingsPersistenceTest::newer_schema_version_is_not_downgraded() {
     QCOMPARE(reread.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 30);
 }
 
+void SettingsPersistenceTest::v2_settings_are_migrated_to_v3_and_the_fingerprint_removed() {
+    const QByteArray geometry("fake-geometry");
+    QSettings s;
+    s.setValue(QStringLiteral("meta/schema_version"), 2);
+    s.setValue(QStringLiteral("sensors/fingerprint"), QStringLiteral("chip-a\nchip-b"));
+    s.setValue(QStringLiteral("runtime/polling_interval_sec"), 3);
+    s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), 4000);
+    s.setValue(QStringLiteral("runtime/temperature_unit"), QStringLiteral("F"));
+    s.setValue(QStringLiteral("ui/geometry"), geometry);
+    s.setValue(QStringLiteral("ui/chip_order"), QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")});
+    s.setValue(QStringLiteral("ui/chips/chip-a"), false);
+    s.sync();
+
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("removed the unused settings key sensors/fingerprint")));
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v2 to v3")));
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
+
+    const QSettings reread;
+    QCOMPARE(SettingsSchema::storedVersion(reread), 3);
+    QVERIFY(!reread.contains(QStringLiteral("sensors/fingerprint")));
+    QCOMPARE(reread.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 3);
+    QCOMPARE(reread.value(QStringLiteral("runtime/fan_default_max_rpm")).toInt(), 4000);
+    QCOMPARE(reread.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("F"));
+    const MainWindowState state = MainWindowStateStore::load();
+    QCOMPARE(state.geometry, geometry);
+    QCOMPARE(state.chipOrder, (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+    QCOMPARE(state.chipExpanded.value(QStringLiteral("chip-a"), true), false);
+    QCOMPARE(state.chipExpanded.size(), 1);
+}
+
+void SettingsPersistenceTest::saving_the_layout_does_not_write_the_fingerprint() {
+    QVERIFY(MainWindowStateStore::save({.geometry = QByteArray("g"), .chipExpanded = {{QStringLiteral("chip-a"), false}},
+                                        .chipOrder = {QStringLiteral("chip-a")}}));
+    QVERIFY(MainWindowStateStore::saveLayout({.chipExpanded = {{QStringLiteral("chip-a"), true}}}));
+    const QSettings s;
+    QVERIFY(!s.contains(QStringLiteral("sensors/fingerprint")));
+    for (const QString &key: s.allKeys())
+        QVERIFY2(!key.contains(QStringLiteral("fingerprint")), qPrintable(key));
+}
+
+void SettingsPersistenceTest::schema_version_above_current_is_newer() {
+    QCOMPARE(SettingsSchema::kCurrentVersion, 3);
+    QSettings s;
+    s.setValue(QStringLiteral("meta/schema_version"), 4);
+    s.setValue(QStringLiteral("sensors/fingerprint"), QStringLiteral("kept"));
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("newer than supported")));
+    QVERIFY(SettingsSchema::ensureUpToDate(s));
+    QCOMPARE(SettingsSchema::storedVersion(s), 4);
+    QVERIFY(s.contains(QStringLiteral("sensors/fingerprint")));
+}
+
 void SettingsPersistenceTest::temperatureUnit_token_parsing_rejects_unknown() {
     QCOMPARE(temperatureUnitFromToken(u" f "), std::optional(TemperatureUnit::Fahrenheit));
     QCOMPARE(temperatureUnitFromToken(u"c"), std::optional(TemperatureUnit::Celsius));
@@ -242,7 +291,7 @@ void SettingsPersistenceTest::garbled_schema_version_is_reported_and_migrated() 
         QCOMPARE(SettingsSchema::storedVersion(s), 0);
 
         QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("unreadable settings schema version")));
-        QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v2")));
+        QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v3")));
         QVERIFY(SettingsSchema::ensureUpToDate(s));
         QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
         QCOMPARE(s.value(QStringLiteral("runtime/polling_interval_sec")).toInt(), 3);
@@ -253,9 +302,9 @@ void SettingsPersistenceTest::unversioned_settings_with_keys_are_migrated_and_lo
     QSettings s;
     s.setValue(QStringLiteral("runtime/fan_default_max_rpm"), 4000);
 
-    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v2")));
+    QTest::ignoreMessage(QtInfoMsg, QRegularExpression(QStringLiteral("migrated settings .* from schema v0 to v3")));
     QVERIFY(SettingsSchema::ensureUpToDate(s));
-    QCOMPARE(SettingsSchema::storedVersion(s), 2);
+    QCOMPARE(SettingsSchema::storedVersion(s), SettingsSchema::kCurrentVersion);
     QCOMPARE(s.value(QStringLiteral("runtime/fan_default_max_rpm")).toInt(), 4000);
     QCOMPARE(s.value(QStringLiteral("runtime/temperature_unit")).toString(), QStringLiteral("C"));
 }
