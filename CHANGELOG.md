@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Status notices no longer replace each other: when several appear at once
+  (for example at startup) they are shown one after another.
 - Settings written by a newer qsensors version are no longer overwritten: this
   version reads them (clamping out-of-range values in memory only), does not
   write any setting, layout or window state back during the session, and says
