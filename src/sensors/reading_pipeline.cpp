@@ -2,6 +2,7 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/reading_pipeline.h"
+#include "sensors/sensor_format.h"
 #include "sensors/sensors_policy.h"
 
 #include <cmath>
@@ -29,18 +30,18 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
     QVector<SensorReading> readings = raw;
     for (SensorReading &reading: readings) {
         const QString latchKey = reading.chip + QLatin1Char(':') + QString::number(reading.featureNumber);
-        const auto latchIt = m_milliScaleLatch.constFind(latchKey);
-        std::optional<bool> latchedMilli = latchIt != m_milliScaleLatch.cend() ? std::optional(*latchIt) : std::nullopt;
+        const auto latchIt = m_prefixLatch.constFind(latchKey);
+        std::optional<SiPrefix> latchedPrefix = latchIt != m_prefixLatch.cend() ? std::optional(*latchIt) : std::nullopt;
         // A non-finite value is no value: no alert, no bar graph, placeholder on the LCD.
         if (reading.value && !std::isfinite(*reading.value)) {
             reading.value.reset();
         }
         // Before scaling and the °F conversion: the rule works on raw source units.
         SensorsPolicy::dropImplausibleFirmwareLimits(reading.unit, reading.firmwareMin, reading.firmwareMax);
-        SensorsPolicy::applyCurrentPowerUnitScaling(reading.unit, reading.value, reading.firmwareMin,
-                                                    reading.firmwareMax, &latchedMilli);
-        if (latchedMilli.has_value()) {
-            m_milliScaleLatch.insert(latchKey, *latchedMilli);
+        const SiPrefix prefix = SensorsPolicy::chooseMilliPrefix(reading.unit, reading.value, reading.firmwareMin,
+                                                                 reading.firmwareMax, &latchedPrefix);
+        if (latchedPrefix.has_value()) {
+            m_prefixLatch.insert(latchKey, *latchedPrefix);
         }
         // The bar graph starts from the firmware limits; the policy fills in what is missing.
         reading.minValue = reading.firmwareMin;
@@ -48,6 +49,7 @@ QVector<SensorReading> ReadingPipeline::process(const QVector<SensorReading> &ra
         SensorsPolicy::applyDefaultRangePolicy(reading.category, reading.value, reading.minValue, reading.maxValue,
                                                config.fanDefaultMaxRpm);
         applyTemperatureUnit(reading, config.temperatureUnit);
+        reading.scale = SensorFormat::scaleFor(reading.unit, prefix);
     }
     return readings;
 }

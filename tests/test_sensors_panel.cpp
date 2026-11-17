@@ -98,7 +98,9 @@ void SensorsPanelTest::value_and_unit_updates_keep_widgets() {
     const QList<SensorValueWidget *> before = cards(panel);
     QCOMPARE(before.size(), 3);
 
-    panel.setReadings(sampleReadings(55.0, SensorUnit::Milliampere));
+    QVector<SensorReading> milli = sampleReadings(55.0);
+    milli[1].scale = SensorScale{.prefix = SiPrefix::Milli, .decimals = 0};
+    panel.setReadings(milli);
     QCOMPARE(cards(panel), before);
 }
 

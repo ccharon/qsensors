@@ -175,9 +175,9 @@ void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.5)));
 
     // Changed unit with the same digits.
-    SensorReading milli = volts(5.5);
-    milli.unit = SensorUnit::Ampere;
-    QVERIFY(repaintsAfter(lcd, counter, milli));
+    SensorReading amps = volts(5.5);
+    amps.unit = SensorUnit::Ampere;
+    QVERIFY(repaintsAfter(lcd, counter, amps));
 
     // Same digits, but the value crosses the firmware maximum: only the alert state differs.
     QVERIFY(repaintsAfter(lcd, counter, volts(12.0)));
@@ -236,7 +236,11 @@ void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
     card.setReading(reading);
     QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
 
-    reading.unit = SensorUnit::Milliampere;
+    reading.scale = SensorScale{.prefix = SiPrefix::Milli, .decimals = 1};
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.unit = SensorUnit::Ampere;
     card.setReading(reading);
     QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
 

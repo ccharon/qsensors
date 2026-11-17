@@ -40,6 +40,7 @@ private:
         QString chip;
         QString feature;
         SensorUnit unit = SensorUnit::Unknown;
+        SensorScale scale;
         bool hasValue = false;
         std::optional<double> firmwareMin;
         std::optional<double> firmwareMax;

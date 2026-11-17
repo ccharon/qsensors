@@ -50,11 +50,11 @@ void SensorValueWidget::setReading(const SensorReading &reading) {
 }
 
 SensorValueWidget::ToolTipInputs SensorValueWidget::ToolTipInputs::of(const SensorReading &reading) {
-    return {reading.chip, reading.feature, reading.unit, reading.hasValue(), reading.firmwareMin, reading.firmwareMax};
+    return {reading.chip, reading.feature, reading.unit, SensorFormat::scaleOf(reading), reading.hasValue(), reading.firmwareMin, reading.firmwareMax};
 }
 
 QString SensorValueWidget::detailsToolTip(const SensorReading &reading) {
-    const auto format = [&reading](const double v) { return SensorFormat::valueWithUnit(reading.unit, v); };
+    const auto format = [&reading](const double v) { return SensorFormat::valueWithUnit(reading, v); };
 
     QStringList lines;
     lines << QStringLiteral("<b>%1</b>").arg(reading.feature.toHtmlEscaped());

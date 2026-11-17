@@ -78,6 +78,10 @@ namespace {
     constexpr double kNvmeLowC = -273.15;
     constexpr double kNvmeHighC = 65261.85;
 
+    SiPrefix prefixOf(const SensorReading &reading) {
+        return reading.scale ? reading.scale->prefix : SiPrefix::None;
+    }
+
     SensorReading processOne(const SensorReading &input, const TemperatureUnit unit = TemperatureUnit::Celsius) {
         RuntimeConfig config;
         config.temperatureUnit = unit;
@@ -130,16 +134,16 @@ void ReadingPipelineTest::milli_scale_is_latched_per_sensor() {
     const RuntimeConfig config;
 
     // First sample below 1 W switches to mW; 1.5 W stays in mW (hysteresis up to 10 W).
-    QCOMPARE(pipeline.process({power(0.5)}, config)[0].unit, SensorUnit::Milliwatt);
+    QCOMPARE(prefixOf(pipeline.process({power(0.5)}, config)[0]), SiPrefix::Milli);
     const SensorReading latched = pipeline.process({power(1.5)}, config)[0];
-    QCOMPARE(latched.unit, SensorUnit::Milliwatt);
-    QCOMPARE(latched.value.value(), 1500.0);
+    QCOMPARE(prefixOf(latched), SiPrefix::Milli);
+    QCOMPARE(latched.value.value(), 1.5);
 
     // Another sensor at 1.5 W has no history and starts in W.
-    QCOMPARE(pipeline.process({power(1.5, 4)}, config)[0].unit, SensorUnit::Watt);
+    QCOMPARE(prefixOf(pipeline.process({power(1.5, 4)}, config)[0]), SiPrefix::None);
 
     // 10 W or more goes back to W.
-    QCOMPARE(pipeline.process({power(10.0)}, config)[0].unit, SensorUnit::Watt);
+    QCOMPARE(prefixOf(pipeline.process({power(10.0)}, config)[0]), SiPrefix::None);
 }
 
 void ReadingPipelineTest::firmware_limits_follow_milli_scale() {
@@ -147,11 +151,12 @@ void ReadingPipelineTest::firmware_limits_follow_milli_scale() {
     SensorReading raw = power(0.3);
     raw.firmwareMax = 0.5;
     const SensorReading shown = pipeline.process({raw}, RuntimeConfig{})[0];
-    QCOMPARE(shown.unit, SensorUnit::Milliwatt);
-    QCOMPARE(shown.firmwareMax, std::optional(500.0));
-    QCOMPARE(shown.maxValue, std::optional(500.0));
+    QCOMPARE(prefixOf(shown), SiPrefix::Milli);
+    // Values and limits stay in W; only the display scale changes.
+    QCOMPARE(shown.firmwareMax, std::optional(0.5));
+    QCOMPARE(shown.maxValue, std::optional(0.5));
     // Only a maximum: the bar graph gets a default minimum, the firmware limits do not.
-    QCOMPARE(shown.minValue, std::optional(100.0));
+    QCOMPARE(shown.minValue, std::optional(0.1));
     QCOMPARE(shown.firmwareMin, std::nullopt);
 }
 
@@ -165,6 +170,7 @@ void ReadingPipelineTest::reprocessing_same_raw_readings_is_stable() {
     QCOMPARE(second.size(), first.size());
     for (int i = 0; i < first.size(); ++i) {
         QCOMPARE(second[i].unit, first[i].unit);
+        QCOMPARE(second[i].scale, first[i].scale);
         QCOMPARE(second[i].value, first[i].value);
         QCOMPARE(second[i].minValue, first[i].minValue);
         QCOMPARE(second[i].maxValue, first[i].maxValue);
@@ -265,8 +271,8 @@ void ReadingPipelineTest::zero_limit_does_not_decide_milli_scale() {
     QCOMPARE(zeroMin.firmwareMin, std::optional(0.0));
     QVERIFY(!SensorsPolicy::isAlertState(zeroMin));
     const SensorReading smallZeroMin = processOne(current(0.25, 0.0, std::nullopt));
-    QCOMPARE(smallZeroMin.unit, SensorUnit::Milliampere);
-    QCOMPARE(smallZeroMin.value.value(), 250.0);
+    QCOMPARE(prefixOf(smallZeroMin), SiPrefix::Milli);
+    QCOMPARE(smallZeroMin.value.value(), 0.25);
 }
 
 void ReadingPipelineTest::freezer_temperature_limits_are_kept() {
@@ -356,6 +362,7 @@ void ReadingPipelineTest::reprocessing_with_dropped_limits_is_stable() {
     const QVector<SensorReading> second = pipeline.process(input, config);
     for (int i = 0; i < first.size(); ++i) {
         QCOMPARE(second[i].unit, first[i].unit);
+        QCOMPARE(second[i].scale, first[i].scale);
         QCOMPARE(second[i].value, first[i].value);
         QCOMPARE(second[i].minValue, first[i].minValue);
         QCOMPARE(second[i].maxValue, first[i].maxValue);
@@ -372,16 +379,16 @@ void ReadingPipelineTest::missing_value_keeps_unit_and_limits() {
     SensorReading unreadable = power(0.3);
     unreadable.value.reset();
 
-    QCOMPARE(pipeline.process({power(0.3)}, config)[0].unit, SensorUnit::Milliwatt);
+    QCOMPARE(prefixOf(pipeline.process({power(0.3)}, config)[0]), SiPrefix::Milli);
     const SensorReading missing = pipeline.process({unreadable}, config)[0];
-    QCOMPARE(missing.unit, SensorUnit::Milliwatt);
+    QCOMPARE(prefixOf(missing), SiPrefix::Milli);
     QCOMPARE(missing.value, std::nullopt);
     QVERIFY(!SensorsPolicy::isAlertState(missing));
     QCOMPARE(SensorsPolicy::rangeFraction(missing), std::nullopt);
     // 1.5 W would switch a fresh sensor to W; the latch from before the gap still holds.
     const SensorReading back = pipeline.process({power(1.5)}, config)[0];
-    QCOMPARE(back.unit, SensorUnit::Milliwatt);
-    QCOMPARE(back.value.value(), 1500.0);
+    QCOMPARE(prefixOf(back), SiPrefix::Milli);
+    QCOMPARE(back.value.value(), 1.5);
 
     // Firmware limits are reported, cleaned and converted without a value.
     SensorReading hot = temperature(0.0, 80.0);
@@ -403,10 +410,10 @@ void ReadingPipelineTest::missing_first_value_uses_base_unit() {
     SensorReading unreadable = power(0.3);
     unreadable.value.reset();
 
-    QCOMPARE(pipeline.process({unreadable}, config)[0].unit, SensorUnit::Watt);
-    QCOMPARE(pipeline.process({unreadable}, config)[0].unit, SensorUnit::Watt);
+    QCOMPARE(prefixOf(pipeline.process({unreadable}, config)[0]), SiPrefix::None);
+    QCOMPARE(prefixOf(pipeline.process({unreadable}, config)[0]), SiPrefix::None);
     // Nothing was latched while the value was missing; the first value decides.
-    QCOMPARE(pipeline.process({power(0.3)}, config)[0].unit, SensorUnit::Milliwatt);
+    QCOMPARE(prefixOf(pipeline.process({power(0.3)}, config)[0]), SiPrefix::Milli);
 }
 
 void ReadingPipelineTest::non_finite_value_is_missing() {
@@ -432,6 +439,7 @@ void ReadingPipelineTest::reprocessing_with_missing_values_is_stable() {
     const QVector<SensorReading> second = pipeline.process(input, config);
     for (int i = 0; i < first.size(); ++i) {
         QCOMPARE(second[i].unit, first[i].unit);
+        QCOMPARE(second[i].scale, first[i].scale);
         QCOMPARE(second[i].value, first[i].value);
         QCOMPARE(second[i].minValue, first[i].minValue);
         QCOMPARE(second[i].maxValue, first[i].maxValue);

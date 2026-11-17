@@ -3,13 +3,14 @@
 
 #pragma once
 
+#include "sensors/sensor_format.h"
 #include "sensors/sensor_reading.h"
 
 #include <algorithm>
 #include <cmath>
 #include <optional>
 
-/** Rules applied to raw readings: unit scaling, default ranges and alert state. */
+/** Rules applied to raw readings: display prefix, default ranges and alert state. */
 namespace SensorsPolicy {
     /** Milli-unit readings at or above this no longer fit the six-cell LCD value ("9999.9"). */
     inline constexpr double kMilliUnitOverflow = 10000.0;
@@ -74,53 +75,48 @@ namespace SensorsPolicy {
     }
 
     /**
-     * Rescales Ampere/Watt to mA/mW for sub-1 sensors. A nonzero native limit decides when
-     * present (a zero limit carries no scale); otherwise @p latchedMilli carries the scale
-     * between polls with hysteresis (milli below kBaseUnitUnderflow, base from
-     * kMilliUnitOverflow) to avoid flicker. Without a finite value the latched scale is kept,
-     * or the base unit is used when nothing is latched yet; the latch is left unchanged.
+     * Display prefix of a quantity whose unit table allows milli (current, power): milli for
+     * sub-1 sensors. A nonzero firmware limit decides when present (a zero limit carries no
+     * scale); otherwise @p latched carries the prefix between polls with hysteresis (milli
+     * below kBaseUnitUnderflow, base from kMilliUnitOverflow) to avoid flicker. Without a
+     * finite value the latched prefix is kept, or the base unit is used when nothing is
+     * latched yet; the latch is left unchanged. Values and limits stay in the base unit.
      */
-    inline void applyCurrentPowerUnitScaling(
-        SensorUnit &unit,
-        std::optional<double> &value,
-        std::optional<double> &min,
-        std::optional<double> &max,
-        std::optional<bool> *latchedMilli = nullptr
+    [[nodiscard]] inline SiPrefix chooseMilliPrefix(
+        const SensorUnit unit,
+        const std::optional<double> value,
+        const std::optional<double> min,
+        const std::optional<double> max,
+        std::optional<SiPrefix> *latched = nullptr
     ) {
-        if (unit != SensorUnit::Ampere && unit != SensorUnit::Watt) {
-            return;
+        if (SensorFormat::quantityFormat(unit).smallestPrefix != SiPrefix::Milli) {
+            return SiPrefix::None;
         }
 
         constexpr double kMilliScale = 1000.0;
-        bool useMilli = false;
         const auto isScaleReference = [](const std::optional<double> &limit) {
             return limit.has_value() && *limit != 0.0;
         };
+        const bool latchedMilli = latched && latched->has_value() && **latched == SiPrefix::Milli;
+        bool useMilli = false;
         if (isScaleReference(max) || isScaleReference(min)) {
             const double reference = isScaleReference(max) ? *max : *min;
             useMilli = std::isfinite(reference) && std::abs(reference) < 1.0;
         } else if (!value || !std::isfinite(*value)) {
-            useMilli = latchedMilli && latchedMilli->value_or(false);
+            useMilli = latchedMilli;
         } else {
             const double magnitude = std::abs(*value);
-            if (latchedMilli && latchedMilli->has_value()) {
-                useMilli = **latchedMilli ? magnitude * kMilliScale < kMilliUnitOverflow
-                                          : magnitude < kBaseUnitUnderflow;
+            if (latched && latched->has_value()) {
+                useMilli = latchedMilli ? magnitude * kMilliScale < kMilliUnitOverflow
+                                        : magnitude < kBaseUnitUnderflow;
             } else {
                 useMilli = magnitude < 1.0;
             }
-            if (latchedMilli) {
-                *latchedMilli = useMilli;
+            if (latched) {
+                *latched = useMilli ? SiPrefix::Milli : SiPrefix::None;
             }
         }
-
-        if (!useMilli) {
-            return;
-        }
-        if (value.has_value()) *value *= kMilliScale;
-        if (min.has_value()) *min *= kMilliScale;
-        if (max.has_value()) *max *= kMilliScale;
-        unit = (unit == SensorUnit::Ampere) ? SensorUnit::Milliampere : SensorUnit::Milliwatt;
+        return useMilli ? SiPrefix::Milli : SiPrefix::None;
     }
 
     /**
@@ -217,9 +213,7 @@ namespace SensorsPolicy {
                 return value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0);
             case SensorUnit::Volt:
             case SensorUnit::Ampere:
-            case SensorUnit::Milliampere:
             case SensorUnit::Watt:
-            case SensorUnit::Milliwatt:
                 return belowMin || aboveMax;
             case SensorUnit::Unknown:
                 break;
