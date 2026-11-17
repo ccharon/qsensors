@@ -4,11 +4,16 @@
 #pragma once
 
 #include "sensors/hwmon_watch.h"
+#include "sensors/refreshing_cache.h"
 #include "sensors/sensor_source.h"
 
+#include <QPair>
 #include <QSet>
 #include <QString>
 #include <QVector>
+
+#include <chrono>
+#include <optional>
 
 /**
  * libsensors wrapper: initializes the library and reads all chips into raw SensorReadings.
@@ -18,6 +23,18 @@
  */
 class LibsensorsSource final : public SensorSource {
 public:
+    /** Labels and limits are re-read after this time even without a hardware change (limits can be set at runtime). */
+    static constexpr std::chrono::milliseconds kFeatureCacheLifetime{std::chrono::minutes(1)};
+
+    /** Label and firmware limits of one feature; read once, values are read every poll. */
+    struct FeatureInfo {
+        QString label;
+        std::optional<double> firmwareMin;
+        std::optional<double> firmwareMax;
+    };
+    /** Chip (valid until the next sensors_cleanup) and feature number. */
+    using FeatureKey = QPair<quintptr, int>;
+
     /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
     LibsensorsSource();
 
@@ -43,4 +60,6 @@ private:
     QString m_lastError;
     // Problems already logged, so a failing sensor does not flood the log every poll.
     QSet<QString> m_reportedProblems;
+    // Cleared on re-init (the chip pointers die with sensors_cleanup) and after kFeatureCacheLifetime.
+    RefreshingCache<FeatureKey, FeatureInfo> m_featureCache{kFeatureCacheLifetime};
 };

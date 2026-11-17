@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Sensor labels and firmware limits are read once and then cached instead of
+  on every poll, which cuts device I/O per poll (limits of NVMe drives and
+  `drivetemp` disks are device commands). They are read again after a
+  hardware change and once a minute, so a limit changed at runtime shows up
+  within a minute; a limit that could not be read is retried on the next poll.
+
 ### Fixed
 - Sensor hardware that appears or disappears while qsensors runs (USB
   devices, NVMe drives, GPUs after a driver reload) is now picked up: when the
