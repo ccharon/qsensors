@@ -12,24 +12,24 @@ SRC_URI="https://github.com/ccharon/qsensors/archive/refs/tags/v${PV}.tar.gz -> 
 LICENSE="GPL-2+"
 SLOT="0"
 KEYWORDS="~amd64 ~arm64"
-IUSE=""
-RESTRICT="mirror"
+IUSE="test"
+RESTRICT="mirror !test? ( test )"
 
 DEPEND="
-	dev-qt/qtbase:6[gui,widgets]
+	>=dev-qt/qtbase-6.8:6[gui,widgets]
 	sys-apps/lm-sensors
 "
 RDEPEND="${DEPEND}"
 BDEPEND="
-	dev-build/cmake
 	dev-qt/qttools:6[linguist]
 	virtual/pkgconfig
 "
 
-pkg_postinst() {
-	xdg_pkg_postinst
-}
-
-pkg_postrm() {
-	xdg_pkg_postrm
+src_configure() {
+	local mycmakeargs=(
+		-DBUILD_TESTING=$(usex test)
+		# The toolchain sets the hardening flags (PIE, SSP, _FORTIFY_SOURCE, RELRO).
+		-DQSENSORS_HARDENING=OFF
+	)
+	cmake_src_configure
 }
