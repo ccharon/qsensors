@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21...4.2)
-project(qsensors VERSION 0.80.11)
+project(qsensors VERSION 0.81.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

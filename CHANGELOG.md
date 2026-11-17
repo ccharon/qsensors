@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.81.0] - 2026-11-18
 
 ### Added
 - New sensor types: fan control outputs (`pwm*`, duty cycle in percent) in the
@@ -324,7 +324,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Completed translation entries for new temperature unit UI strings in `en/de/fr/es`.
 - Gentoo packaging README now explicitly requires copying `files/qsensors.desktop`.
 
-[Unreleased]: https://github.com/ccharon/qsensors/compare/v0.80.11...develop
+[0.81.0]: https://github.com/ccharon/qsensors/compare/v0.80.11...v0.81.0
 [0.80.11]: https://github.com/ccharon/qsensors/compare/v0.80.10...v0.80.11
 [0.80.10]: https://github.com/ccharon/qsensors/compare/0.80.9...v0.80.10
 [0.80.9]: https://github.com/ccharon/qsensors/compare/0.80.8...0.80.9
