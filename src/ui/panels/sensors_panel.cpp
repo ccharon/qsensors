@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <utility>
 
 namespace {
     constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
@@ -137,7 +138,20 @@ int SensorsPanel::readingCount() const {
 }
 
 void SensorsPanel::setReadings(const QVector<SensorReading> &readings) {
-    m_groups = groupReadingsByChip(readings);
+    ChipGroups groups = groupReadingsByChip(readings);
+    if (m_dragActive) {
+        // The dragged card's header is on the stack below QDrag::exec(), so no section
+        // may be deleted or rebuilt now; values of the same sensors may still change.
+        std::swap(m_groups, groups);
+        if (hasStructuralChange()) {
+            std::swap(m_groups, groups);
+            m_deferredReadings = readings;
+            return;
+        }
+    } else {
+        m_groups = std::move(groups);
+    }
+    m_deferredReadings.reset();
     checkRestoredState();
     if (render()) {
         emit structureChanged();
@@ -339,6 +353,10 @@ int SensorsPanel::chipChromeWidth() const {
     return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins;
 }
 
+void SensorsPanel::setDragExecutor(std::function<void(QDrag &)> executor) {
+    m_dragExecutor = std::move(executor);
+}
+
 void SensorsPanel::startChipDrag(const QString &chip, const QPoint &grabPos) {
     const auto it = m_chipSections.constFind(chip);
     if (it == m_chipSections.cend())
@@ -361,8 +379,25 @@ void SensorsPanel::startChipDrag(const QString &chip, const QPoint &grabPos) {
     drag->setMimeData(mime);
     drag->setPixmap(pixmap);
     drag->setHotSpot(grabPos);
-    drag->exec(Qt::MoveAction);
+    m_dragActive = true;
+    if (m_dragExecutor) {
+        m_dragExecutor(*drag);
+        drag->deleteLater();
+    } else {
+        drag->exec(Qt::MoveAction);
+    }
+    m_dragActive = false;
     m_dropIndicator->hide();
+
+    // Still inside the header's mouse event: apply deferred readings once it returned.
+    if (m_deferredReadings) {
+        QMetaObject::invokeMethod(this, [this] {
+            if (m_deferredReadings) {
+                const QVector<SensorReading> readings = *std::exchange(m_deferredReadings, std::nullopt);
+                setReadings(readings);
+            }
+        }, Qt::QueuedConnection);
+    }
 }
 
 int SensorsPanel::dropIndexAt(const int y) const {

@@ -39,6 +39,7 @@ private slots:
     void header_click_still_toggles_when_draggable();
     void user_toggle_and_drop_are_announced_but_applying_state_is_not();
     void drag_request_carries_the_pointer_position_in_the_section();
+    void structural_update_waits_for_the_end_of_a_drag();
     void columns_go_to_category_with_most_rows();
     void columns_only_added_when_they_save_a_row();
     void card_width_spreads_spare_width_up_to_maximum();
@@ -424,6 +425,50 @@ void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section(
     QTest::mouseMove(header, moved);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.first().first().toPoint(), header->mapTo(&section, moved));
+}
+
+void SensorsPanelTest::structural_update_waits_for_the_end_of_a_drag() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0));
+    layOut(panel, 900);
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    QToolButton *header = headerFor(panel, QStringLiteral("chip-b"));
+    QPointer<CollapsibleSection> section = qobject_cast<CollapsibleSection *>(header->parentWidget());
+    QVERIFY(section);
+
+    QVector<SensorReading> withoutChipB = sampleReadings(40.0);
+    withoutChipB.removeLast();
+    bool ranDuringDrag = false;
+    bool keptDuringDrag = false;
+    QString valueDuringDrag;
+    // Stands in for QDrag::exec()'s nested event loop, in which polls keep arriving.
+    panel.setDragExecutor([&](QDrag &) {
+        ranDuringDrag = true;
+        panel.setReadings(withoutChipB);
+        keptDuringDrag = !section.isNull() && headerFor(panel, QStringLiteral("chip-b"));
+        // A value-only update of the shown sensors still goes through.
+        QVector<SensorReading> unreadableFan = sampleReadings(40.0);
+        unreadableFan[2].value.reset();
+        panel.setReadings(unreadableFan);
+        for (SensorValueWidget *card: cards(panel))
+            if (card->toolTip().contains(QStringLiteral("fan1")))
+                valueDuringDrag = card->toolTip();
+        panel.setReadings(withoutChipB);
+    });
+
+    const QPoint press(20, header->height() / 2);
+    QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+    QTest::mouseMove(header, press + QPoint(QApplication::startDragDistance() + 10, 0));
+    QVERIFY(ranDuringDrag);
+    QVERIFY(keptDuringDrag);
+    QVERIFY(valueDuringDrag.contains(QStringLiteral("cannot be read")));
+    QCOMPARE(cards(panel).size(), 3);
+
+    // After the drag the last deferred readings apply, once the header's event returned.
+    QVERIFY(!section.isNull());
+    QTRY_VERIFY(section.isNull());
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-b")));
+    QCOMPARE(cards(panel).size(), 2);
 }
 
 void SensorsPanelTest::columns_go_to_category_with_most_rows() {

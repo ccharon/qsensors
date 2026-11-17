@@ -13,8 +13,12 @@
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+#include <optional>
+
 class CategoryRowLayout;
 class CollapsibleSection;
+class QDrag;
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
@@ -68,7 +72,11 @@ public:
     /** Number of readings currently shown. */
     [[nodiscard]] int readingCount() const;
 
-    /** Shows @p readings; rebuilds only sections whose sensors changed. */
+    /**
+     * Shows @p readings; rebuilds only sections whose sensors changed. While a chip is
+     * dragged, a structural change is deferred until the drag has ended (only the last
+     * deferred readings are applied); value updates go on.
+     */
     void setReadings(const QVector<SensorReading> &readings);
 
     /**
@@ -83,6 +91,12 @@ public:
      * (e.g. maximized) still stretches its chip frames.
      */
     [[nodiscard]] int maximumUsefulWidth() const;
+
+    /**
+     * Runs a started chip drag instead of QDrag::exec(), for tests: the offscreen
+     * platform has no drag event loop. An empty executor restores QDrag::exec().
+     */
+    void setDragExecutor(std::function<void(QDrag &)> executor);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -175,4 +189,9 @@ private:
     // Set by restoreChipExpandedState() until the first readings with chips are checked.
     bool m_restorePending = false;
     bool m_applyingExpandedState = false;
+    // True while QDrag::exec() runs its nested event loop for a chip drag.
+    bool m_dragActive = false;
+    std::function<void(QDrag &)> m_dragExecutor;
+    // Last readings with a structural change that arrived during a drag.
+    std::optional<QVector<SensorReading>> m_deferredReadings;
 };
