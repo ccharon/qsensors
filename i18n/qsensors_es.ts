@@ -35,8 +35,8 @@
         <translation>Estado contraído descartado para los chips de sensores ausentes: %1</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>La configuración procede de una versión más reciente de qsensors y se usa en la medida de lo posible</translation>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Los ajustes proceden de una versión más reciente de qsensors; los cambios no se guardan en esta sesión</translation>
     </message>
 </context>
 <context>

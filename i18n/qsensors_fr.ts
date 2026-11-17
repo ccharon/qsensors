@@ -35,8 +35,8 @@
         <translation>État replié supprimé pour les puces de capteurs absentes : %1</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors et sont utilisés dans la mesure du possible</translation>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors ; les modifications ne sont pas enregistrées dans cette session</translation>
     </message>
 </context>
 <context>

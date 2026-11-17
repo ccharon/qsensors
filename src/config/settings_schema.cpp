@@ -7,6 +7,7 @@
 
 #include <QSettings>
 #include <QDebug>
+#include <algorithm>
 
 namespace {
     void migrateV0ToV1(QSettings &) {
@@ -22,19 +23,26 @@ namespace {
 }
 
 int SettingsSchema::storedVersion(const QSettings &settings) {
-    return settings.value(SettingsKeys::kSchemaVersion, 0).toInt();
+    return std::max(0, settings.value(SettingsKeys::kSchemaVersion, 0).toInt());
 }
 
-void SettingsSchema::ensureUpToDate(QSettings &settings) {
+bool SettingsSchema::ensureUpToDate(QSettings &settings) {
     const int version = storedVersion(settings);
+    const QVariant rawVersion = settings.value(SettingsKeys::kSchemaVersion);
+    bool numeric = false;
+    const int rawNumber = rawVersion.toInt(&numeric);
+    if (rawVersion.isValid() && (!numeric || rawNumber < 0)) {
+        qWarning("qsensors: unreadable settings schema version '%s', treating the settings as unversioned",
+                 qPrintable(rawVersion.toString()));
+    }
     if (version > kCurrentVersion) {
         qWarning("qsensors: settings schema v%d is newer than supported v%d; keeping it unchanged",
                  version, kCurrentVersion);
-        return;
+        return true;
     }
 
     if (version == kCurrentVersion) {
-        return;
+        return true;
     }
 
     // Settings without any key are a first start, not a migration.
@@ -47,8 +55,14 @@ void SettingsSchema::ensureUpToDate(QSettings &settings) {
     }
 
     settings.setValue(SettingsKeys::kSchemaVersion, kCurrentVersion);
+    settings.sync();
+    if (settings.status() != QSettings::NoError) {
+        qWarning("qsensors: could not write the settings schema version to %s", qPrintable(settings.fileName()));
+        return false;
+    }
     if (existing) {
         qInfo("qsensors: migrated settings in %s from schema v%d to v%d",
               qPrintable(settings.fileName()), version, kCurrentVersion);
     }
+    return true;
 }

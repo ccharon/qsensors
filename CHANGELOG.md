@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Changing the polling interval or fan fallback with the spin box arrows no
+  longer rewrites the settings file on every step: the display follows each
+  step, the file is written once the changes stop (and on close).
+
 ### Fixed
 - A poll whose readings only change values no longer repaints the whole
   sensors panel: only the LCDs whose display changed are redrawn. The panel
@@ -27,6 +32,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seen.
 - A chip card dragged from another qsensors window is no longer accepted as
   a drop, so it cannot reorder (and save) the chip order of this window.
+- Sensor names and status text are always shown as plain text; a sensor label
+  that looks like HTML is no longer rendered as rich text.
+- The height of a sensor card follows a font change instead of staying at the
+  value computed at creation.
+- Status notices no longer replace each other: when several appear at once
+  (for example at startup) they are shown one after another.
+- Settings written by a newer qsensors version are no longer overwritten: this
+  version reads them (clamping out-of-range values in memory only), does not
+  write any setting, layout or window state back during the session, and says
+  so in a status notice.
+- A setting too large for a 32-bit integer is clamped to its range like any
+  other out-of-range value instead of being replaced by the default.
+- A garbled settings schema version is logged and treated as unversioned, and
+  a failed write of the migrated schema version is logged and shown as a
+  notice instead of passing silently.
 
 ### Security
 - The build enables hardening flags for the project's own targets

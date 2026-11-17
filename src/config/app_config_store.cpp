@@ -14,15 +14,16 @@ namespace {
         if (!raw.isValid())
             return fallback;
         bool ok = false;
-        const int value = raw.toInt(&ok);
+        // 64 bit, so a value too large for an int is clamped like any other out-of-range value.
+        const qlonglong value = raw.toLongLong(&ok);
         if (!ok) {
             qWarning("qsensors: invalid setting %s=%s, using default %d",
                      qPrintable(key), qPrintable(raw.toString()), fallback);
             return fallback;
         }
         if (value < min || value > max)
-            qWarning("qsensors: setting %s=%d out of range [%d, %d], clamping", qPrintable(key), value, min, max);
-        return std::clamp(value, min, max);
+            qWarning("qsensors: setting %s=%lld out of range [%d, %d], clamping", qPrintable(key), value, min, max);
+        return static_cast<int>(std::clamp<qlonglong>(value, min, max));
     }
 }
 

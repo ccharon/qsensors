@@ -15,6 +15,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLabel>
+#include <QLayout>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
@@ -47,6 +49,12 @@ private slots:
     void long_status_text_does_not_change_window_width_limits();
     void expand_state_is_saved_when_the_user_changes_it_not_on_startup();
     void failed_layout_write_is_reported();
+    void spin_box_steps_are_saved_once_after_the_last_step();
+    void pending_setting_change_is_saved_when_the_window_closes();
+    void sensor_title_with_markup_is_shown_literally();
+    void sensor_card_height_follows_font_changes();
+    void sensor_card_tooltip_follows_every_displayed_field();
+    void newer_schema_settings_survive_a_session_and_are_reported();
 
 private:
     QTemporaryDir m_dir;
@@ -365,6 +373,124 @@ void MainWindowTest::failed_layout_write_is_reported() {
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
     QVERIFY(status->isShowingNotice());
     QVERIFY(QDir().rmdir(file.fileName()));
+}
+
+void MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported() {
+    {
+        // Written by a newer version: values this build would clamp, under a newer marker.
+        QSettings s;
+        s.setValue(SettingsKeys::kSchemaVersion, 99);
+        s.setValue(SettingsKeys::kPollingIntervalSec, 30);
+        s.setValue(SettingsKeys::kFanDefaultMaxRpm, 20000);
+        s.setValue(SettingsKeys::kTemperatureUnit, QStringLiteral("K"));
+        s.setValue(SettingsKeys::kChipOrder, QStringList{QStringLiteral("zzz-future-chip")});
+        s.sync();
+    }
+    {
+        const auto window = showWindow();
+        const StatusLine *status = window->findChild<StatusLine *>();
+        QVERIFY(status->isShowingNotice());
+        QVERIFY2(status->text().contains(QStringLiteral("newer")), qPrintable(status->text()));
+
+        // Changes in this session stay in memory only.
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->value() == spin->maximum() ? spin->minimum() : spin->maximum());
+        section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+        window->close();
+    }
+    const QSettings s;
+    QCOMPARE(s.value(SettingsKeys::kSchemaVersion).toInt(), 99);
+    QCOMPARE(s.value(SettingsKeys::kPollingIntervalSec).toInt(), 30);
+    QCOMPARE(s.value(SettingsKeys::kFanDefaultMaxRpm).toInt(), 20000);
+    QCOMPARE(s.value(SettingsKeys::kTemperatureUnit).toString(), QStringLiteral("K"));
+    QCOMPARE(s.value(SettingsKeys::kChipOrder).toStringList(), QStringList{QStringLiteral("zzz-future-chip")});
+    QVERIFY(!s.contains(SettingsKeys::kWindowGeometry));
+    QVERIFY(!s.contains(SettingsKeys::kSensorFingerprint));
+}
+
+void MainWindowTest::spin_box_steps_are_saved_once_after_the_last_step() {
+    const auto window = showWindow();
+    QSpinBox *polling = nullptr;
+    for (QSpinBox *spin: window->findChildren<QSpinBox *>()) {
+        if (spin->maximum() == RuntimeConfigLimits::kMaxPollingIntervalSec)
+            polling = spin;
+    }
+    QVERIFY(polling != nullptr);
+    for (const int value: {4, 5, 6})
+        polling->setValue(value);
+    // The display follows each step, the settings file only the last one, after the debounce.
+    QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    QTRY_VERIFY_WITH_TIMEOUT(QSettings().contains(SettingsKeys::kPollingIntervalSec), 3000);
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, 6);
+}
+
+void MainWindowTest::pending_setting_change_is_saved_when_the_window_closes() {
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->maximum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+        window->close();
+    }
+    const RuntimeConfig saved = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(saved.pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
+    QCOMPARE(saved.fanDefaultMaxRpm, RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
+
+    // Without a close event (window destroyed directly) the pending change is flushed as well.
+    QSettings().clear();
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->minimum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    }
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMinPollingIntervalSec);
+}
+
+void MainWindowTest::sensor_title_with_markup_is_shown_literally() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("<b>x</b>"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.resize(300, card.height());
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const QLabel *title = card.findChild<QLabel *>();
+    QVERIFY(title != nullptr);
+    QCOMPARE(title->textFormat(), Qt::PlainText);
+    QCOMPARE(title->text(), QStringLiteral("<b>x</b>:"));
+}
+
+void MainWindowTest::sensor_card_height_follows_font_changes() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const int before = card.height();
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+
+    QFont bigger = card.font();
+    bigger.setPointSizeF(bigger.pointSizeF() * 2.0);
+    card.setFont(bigger);
+    QTRY_VERIFY(card.height() > before);
+    QCOMPARE(card.height(), card.layout()->sizeHint().height());
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+}
+
+void MainWindowTest::sensor_card_tooltip_follows_every_displayed_field() {
+    SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                          .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius,
+                          .firmwareMax = 80.0};
+    SensorValueWidget card(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.firmwareMax = 90.0;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    reading.value = std::nullopt;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
 }
 
 QTEST_MAIN(MainWindowTest)

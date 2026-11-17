@@ -56,8 +56,8 @@ Data flow: `SensorMonitor` timer → `SensorSource` read in a worker thread (raw
 - `panels/settings_panel`: polling interval, fan RPM fallback, temperature unit controls.
 - `widgets/vertical_scroll_area`: vertical-only scroll area whose minimum width is the content's plus the scrollbar, and whose size hint height is the content height at the current width.
 - `widgets/collapsible_section`: framed card with toggle header (optionally draggable; `dragRequested(pos)` carries the pointer position in the card, used as drag hotspot because Wayland clients cannot query the global cursor), used by both panels.
-- `widgets/status_line`: status bar text with timed notices on top of the permanent status.
-- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip, a line when the sensor cannot be read, and limits; rebuilt only when one of those fields changes).
+- `widgets/status_line`: status bar text with timed notices on top of the permanent status; notices arriving together are queued and shown one after another.
+- `widgets/sensor_value_widget`: per-sensor card (title label above the LCD; tooltip with chip, a line when the sensor cannot be read, and limits; set only when its text changes; the fixed height follows the layout, so a font change updates it).
 - `widgets/lcd_display_widget` + `lcd_segment_font`: vector segment LCD rendering (value, unit, range bar graph); repaints only when the digits, unit, lit bar segments or alert state differ from the last paint.
 - `theme/app_theme.h`: sizing, spacing, LCD colors and style sheets. Change the look here, not in widget code.
 

@@ -18,11 +18,15 @@
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <utility>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
+    // Holding a spin box arrow changes the value many times per second; the display follows
+    // each step, the settings file is written once the changes stop.
+    constexpr int kSaveDebounceMs = 500;
 }
 
 MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
@@ -31,7 +35,11 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
       m_scrollArea(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLine(nullptr) {
+      m_statusLine(nullptr),
+      m_saveTimer(new QTimer(this)) {
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(kSaveDebounceMs);
+    connect(m_saveTimer, &QTimer::timeout, this, &MainWindow::persistRuntimeConfig);
     setupUi();
     m_styledPalette = QApplication::palette();
     loadSettings();
@@ -64,6 +72,14 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
     }
 }
 
+MainWindow::~MainWindow() {
+    // A change still waiting for its debounce interval must not be lost.
+    if (m_saveTimer->isActive()) {
+        m_saveTimer->stop();
+        persistRuntimeConfig();
+    }
+}
+
 void MainWindow::showReadings(const QVector<SensorReading> &readings) {
     m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
@@ -93,12 +109,17 @@ void MainWindow::showNotice(const QString &text) {
 }
 
 void MainWindow::persistRuntimeConfig() {
+    m_saveTimer->stop();
+    if (m_settingsReadOnly)
+        return;
     if (!AppConfigStore::saveRuntimeConfig(m_runtimeConfig)) {
         showNotice(tr("Settings could not be saved"));
     }
 }
 
 void MainWindow::persistChipLayout() {
+    if (m_settingsReadOnly)
+        return;
     const bool saved = MainWindowStateStore::saveLayout({
         .geometry = {},
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
@@ -163,6 +184,7 @@ void MainWindow::setStatusMessage(const QString &text) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+    m_saveTimer->stop(); // saveSettings() writes the current config
     saveSettings();
     QMainWindow::closeEvent(event);
 }
@@ -255,9 +277,14 @@ void MainWindow::applyThemeRefresh() {
 void MainWindow::loadSettings() {
     // The only migration point: the stores below read the current schema.
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
-    if (SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
-        showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
+    if (!SettingsSchema::ensureUpToDate(settings)) {
+        showNotice(tr("Settings could not be saved"));
+    }
+    // Values of a newer schema are only read (clamped, in memory); writing them back would
+    // replace the newer version's values under its own version marker.
+    m_settingsReadOnly = SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion;
+    if (m_settingsReadOnly) {
+        showNotice(tr("Settings were written by a newer qsensors version; changes are not saved in this session"));
     }
 
     // Runtime config and UI layout state are intentionally persisted independently.
@@ -272,6 +299,8 @@ void MainWindow::loadSettings() {
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
+    if (m_settingsReadOnly)
+        return;
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
     (void) MainWindowStateStore::save({
         .geometry = saveGeometry(),
@@ -282,7 +311,7 @@ void MainWindow::saveSettings() const {
 }
 
 void MainWindow::applyRuntimeConfig() {
-    persistRuntimeConfig();
+    m_saveTimer->start();
     m_monitor->setConfig(m_runtimeConfig);
     updateReadingsStatus();
 }

@@ -6,7 +6,6 @@
 #include "sensors/sensor_reading.h"
 
 #include <QWidget>
-#include <optional>
 
 class LcdDisplayWidget;
 class QLabel;
@@ -19,7 +18,7 @@ public:
     /** Creates the card for @p reading with fixed height and theme width limits. */
     explicit SensorValueWidget(const SensorReading &reading, QWidget *parent = nullptr);
 
-    /** Refreshes title, LCD (value and range bar graph) and, if its inputs changed, the details tooltip. */
+    /** Refreshes title, LCD (value and range bar graph) and, if its text changed, the details tooltip. */
     void setReading(const SensorReading &reading);
 
     /**
@@ -31,25 +30,23 @@ public:
 protected:
     void resizeEvent(QResizeEvent *event) override;
 
+    /** Derives the title font again when the card's font changes. */
+    void changeEvent(QEvent *event) override;
+
+    /** Keeps the fixed height at what the layout needs (it changes with the font). */
+    bool event(QEvent *event) override;
+
 private:
+    /** Title font: the card's font scaled by the theme. */
+    void updateTitleFont();
+
+    /** Sets the fixed height to the layout's current height. */
+    void updateFixedHeight();
+
     /** Long sensor names are elided; the full name is shown in the details tooltip. */
     void updateElidedTitle();
-
-    /** The reading fields detailsToolTip() shows; the tooltip is rebuilt only when they change. */
-    struct ToolTipInputs {
-        QString chip;
-        QString feature;
-        SensorUnit unit = SensorUnit::Unknown;
-        bool hasValue = false;
-        std::optional<double> firmwareMin;
-        std::optional<double> firmwareMax;
-        bool operator==(const ToolTipInputs &) const = default;
-        [[nodiscard]] static ToolTipInputs of(const SensorReading &reading);
-    };
 
     QLabel *m_title;
     LcdDisplayWidget *m_lcdValue;
     QString m_fullTitle;
-    ToolTipInputs m_toolTipInputs;
-    bool m_hasToolTip = false;
 };
