@@ -20,18 +20,29 @@ jobs:
       matrix:
         include:
           # The container's glibc is the AppImage's minimum glibc.
+          # Images are pinned by digest (the tag stays for readability; the digest wins).
+          # Dependabot cannot update these: its docker ecosystem reads Dockerfiles and
+          # compose files, not a workflow matrix. To update, resolve the new digest and
+          # replace it here:
+          #   ubuntu (multi-arch index, covers amd64 and arm64):
+          #     TOKEN=$(curl -s 'https://auth.docker.io/token?service=registry.docker.io&scope=repository:library/ubuntu:pull' | jq -r .token)
+          #     curl -sI -H "Authorization: Bearer $TOKEN" -H 'Accept: application/vnd.oci.image.index.v1+json' \
+          #       https://registry-1.docker.io/v2/library/ubuntu/manifests/24.04 | grep -i docker-content-digest
+          #   manylinux (x86_64-only repository, so a single-arch manifest):
+          #     curl -sI -H 'Accept: application/vnd.docker.distribution.manifest.v2+json' \
+          #       https://quay.io/v2/pypa/manylinux_2_28_x86_64/manifests/latest | grep -i docker-content-digest
           - arch: x86_64
             runner: ubuntu-24.04
-            image: quay.io/pypa/manylinux_2_28_x86_64 # AlmaLinux 8, glibc 2.28
+            image: quay.io/pypa/manylinux_2_28_x86_64:latest@sha256:d086f64cddcace250ef0f0073583c51b8298159303290a730c9f59bd91edfd2c # AlmaLinux 8, glibc 2.28
           # Official Qt arm64 binaries need glibc 2.38, so an older base gains nothing.
           - arch: aarch64
             runner: ubuntu-24.04-arm
-            image: ubuntu:24.04 # glibc 2.39
+            image: ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 # glibc 2.39
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.image }}
     steps:
       - name: Install git
-        if: matrix.image == 'ubuntu:24.04'
+        if: matrix.arch == 'aarch64'
         run: apt-get update && apt-get install -y --no-install-recommends git ca-certificates
 
       - name: Checkout
