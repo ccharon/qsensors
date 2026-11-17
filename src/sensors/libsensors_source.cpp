@@ -117,26 +117,27 @@ namespace {
         return value;
     }
 
-    // Limit reads that failed although the limit exists; such a limit is not cached, so it
-    // is retried next poll. A missing subfeature is no failure. Worker thread only.
-    thread_local int t_failedLimitReads = 0;
+    struct RangeInfo {
+        std::optional<double> min;
+        std::optional<double> max;
+        // False when a limit exists but could not be read; such a range is not cached, so
+        // the limit is retried next poll. A missing limit is no failure.
+        bool complete = true;
+    };
 
-    [[nodiscard]] std::optional<double> readSubfeatureValue(const sensors_chip_name *chip, const sensors_feature *feature, const sensors_subfeature_type type) {
+    /** Limit @p type of @p feature; a limit that exists but cannot be read clears @p range.complete. */
+    [[nodiscard]] std::optional<double> readLimit(const sensors_chip_name *chip, const sensors_feature *feature,
+                                                  const sensors_subfeature_type type, RangeInfo &range) {
         const sensors_subfeature *sf = sensors_get_subfeature(chip, feature, type);
         if (sf == nullptr) {
             return std::nullopt;
         }
         const std::optional<double> value = readSubfeatureValue(chip, sf);
         if (!value.has_value()) {
-            ++t_failedLimitReads;
+            range.complete = false;
         }
         return value;
     }
-
-    struct RangeInfo {
-        std::optional<double> min;
-        std::optional<double> max;
-    };
 
     struct InputSelection {
         const sensors_subfeature *subfeature = nullptr;
@@ -149,38 +150,38 @@ namespace {
 
         switch (type) {
             case SENSORS_SUBFEATURE_TEMP_INPUT:
-                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MIN);
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_MAX);
+                range.min = readLimit(chip, feature, SENSORS_SUBFEATURE_TEMP_MIN, range);
+                range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_TEMP_MAX, range);
                 // crit stands in for a missing or placeholder max (NVMe reports 65261.85 °C).
                 if (!range.max || !SensorsPolicy::isPlausibleTemperatureLimitC(*range.max)) {
-                    if (const auto crit = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT))
+                    if (const auto crit = readLimit(chip, feature, SENSORS_SUBFEATURE_TEMP_CRIT, range))
                         range.max = crit;
                 }
                 break;
             case SENSORS_SUBFEATURE_IN_INPUT:
-                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MIN);
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_IN_MAX);
+                range.min = readLimit(chip, feature, SENSORS_SUBFEATURE_IN_MIN, range);
+                range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_IN_MAX, range);
                 break;
             case SENSORS_SUBFEATURE_FAN_INPUT:
-                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MIN);
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_FAN_MAX);
+                range.min = readLimit(chip, feature, SENSORS_SUBFEATURE_FAN_MIN, range);
+                range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_FAN_MAX, range);
                 break;
             case SENSORS_SUBFEATURE_CURR_INPUT:
-                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MIN);
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_CURR_MAX);
+                range.min = readLimit(chip, feature, SENSORS_SUBFEATURE_CURR_MIN, range);
+                range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_CURR_MAX, range);
                 break;
             case SENSORS_SUBFEATURE_POWER_INPUT:
             case SENSORS_SUBFEATURE_POWER_AVERAGE:
 #if SENSORS_API_VERSION >= 0x510
                 // power*_min is missing in older libsensors (API 0x440, lm-sensors 3.4 on EL8).
-                range.min = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MIN);
+                range.min = readLimit(chip, feature, SENSORS_SUBFEATURE_POWER_MIN, range);
 #endif
-                range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_MAX);
+                range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_POWER_MAX, range);
                 if (!range.max) {
-                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_CAP);
+                    range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_POWER_CAP, range);
                 }
                 if (!range.max) {
-                    range.max = readSubfeatureValue(chip, feature, SENSORS_SUBFEATURE_POWER_CRIT);
+                    range.max = readLimit(chip, feature, SENSORS_SUBFEATURE_POWER_CRIT, range);
                 }
                 break;
             default:
@@ -248,7 +249,6 @@ namespace {
                                                            const sensors_subfeature_type type, FeatureCache &cache) {
         const LibsensorsSource::FeatureKey key{reinterpret_cast<quintptr>(chip), feature->number};
         return cache.get(key, [chip, feature, type] {
-            t_failedLimitReads = 0;
             const RangeInfo nativeRange = readRange(chip, feature, type);
             return FeatureCache::Load{
                 .value = {
@@ -256,7 +256,7 @@ namespace {
                     .firmwareMin = nativeRange.min,
                     .firmwareMax = nativeRange.max,
                 },
-                .complete = t_failedLimitReads == 0,
+                .complete = nativeRange.complete,
             };
         });
     }
