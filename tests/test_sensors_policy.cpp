@@ -296,54 +296,54 @@ void SensorsPolicyTest::negative_voltage_keeps_zero_minimum() {
 
 void SensorsPolicyTest::alertState_matches_unit_rules() {
     SensorReading rpm{.value = 900.0, .unit = SensorUnit::Rpm, .firmwareMin = 1000.0};
-    QVERIFY(SensorsPolicy::isAlertState(rpm));
+    QVERIFY(SensorsPolicy::alertState(rpm) != AlertState::None);
 
     SensorReading temp{.value = 92.0, .unit = SensorUnit::Celsius, .firmwareMax = 85.0};
-    QVERIFY(SensorsPolicy::isAlertState(temp));
+    QVERIFY(SensorsPolicy::alertState(temp) != AlertState::None);
     SensorReading tempF{.value = 200.0, .unit = SensorUnit::Fahrenheit, .firmwareMax = 185.0};
-    QVERIFY(SensorsPolicy::isAlertState(tempF));
+    QVERIFY(SensorsPolicy::alertState(tempF) != AlertState::None);
 
     SensorReading volt{.value = 1.35, .unit = SensorUnit::Volt, .firmwareMin = 1.0, .firmwareMax = 1.3};
-    QVERIFY(SensorsPolicy::isAlertState(volt));
+    QVERIFY(SensorsPolicy::alertState(volt) != AlertState::None);
 
     SensorReading normal{.value = 42.0, .unit = SensorUnit::Watt, .firmwareMin = 1.0, .firmwareMax = 100.0};
-    QVERIFY(!SensorsPolicy::isAlertState(normal));
+    QCOMPARE(SensorsPolicy::alertState(normal), AlertState::None);
 
     SensorReading wattOver{.value = 120.0, .unit = SensorUnit::Watt, .firmwareMax = 100.0};
-    QVERIFY(SensorsPolicy::isAlertState(wattOver));
+    QVERIFY(SensorsPolicy::alertState(wattOver) != AlertState::None);
 
     SensorReading ampOver{.value = 15.0, .unit = SensorUnit::Ampere, .firmwareMax = 10.0};
-    QVERIFY(SensorsPolicy::isAlertState(ampOver));
+    QVERIFY(SensorsPolicy::alertState(ampOver) != AlertState::None);
 
     SensorReading ampNormal{.value = 5.0, .unit = SensorUnit::Ampere, .firmwareMin = 0.0, .firmwareMax = 10.0};
-    QVERIFY(!SensorsPolicy::isAlertState(ampNormal));
+    QCOMPARE(SensorsPolicy::alertState(ampNormal), AlertState::None);
 
     SensorReading milliwattOver{.value = 0.55, .unit = SensorUnit::Watt, .firmwareMax = 0.5};
-    QVERIFY(SensorsPolicy::isAlertState(milliwattOver));
+    QVERIFY(SensorsPolicy::alertState(milliwattOver) != AlertState::None);
 
     SensorReading milliampNormal{.value = 0.3, .unit = SensorUnit::Ampere, .firmwareMin = 0.0, .firmwareMax = 0.5};
-    QVERIFY(!SensorsPolicy::isAlertState(milliampNormal));
+    QCOMPARE(SensorsPolicy::alertState(milliampNormal), AlertState::None);
 }
 
 void SensorsPolicyTest::alertState_ignores_default_ranges() {
     // Bar graph ranges from the default policy are guesses, not limits.
     SensorReading idlePower{.value = 25.0, .unit = SensorUnit::Watt, .minValue = 40.0, .maxValue = 200.0,
                             .firmwareMax = 200.0};
-    QVERIFY(!SensorsPolicy::isAlertState(idlePower));
+    QCOMPARE(SensorsPolicy::alertState(idlePower), AlertState::None);
     SensorReading fan{.value = 0.0, .unit = SensorUnit::Rpm, .minValue = 0.0, .maxValue = 5000.0};
-    QVERIFY(!SensorsPolicy::isAlertState(fan));
+    QCOMPARE(SensorsPolicy::alertState(fan), AlertState::None);
 }
 
 void SensorsPolicyTest::alertState_temperature_without_firmware_max_uses_fallback() {
     SensorReading hot{.value = SensorsPolicy::kDefaultTemperatureMaxC + 2.0, .unit = SensorUnit::Celsius};
-    QVERIFY(SensorsPolicy::isAlertState(hot));
+    QVERIFY(SensorsPolicy::alertState(hot) != AlertState::None);
     SensorReading warm{.value = SensorsPolicy::kDefaultTemperatureMaxC - 2.0, .unit = SensorUnit::Celsius};
-    QVERIFY(!SensorsPolicy::isAlertState(warm));
+    QCOMPARE(SensorsPolicy::alertState(warm), AlertState::None);
     SensorReading hotF{.value = 215.0, .unit = SensorUnit::Fahrenheit};
-    QVERIFY(SensorsPolicy::isAlertState(hotF));
+    QVERIFY(SensorsPolicy::alertState(hotF) != AlertState::None);
     // A firmware maximum above the fallback wins.
     SensorReading junction{.value = 105.0, .unit = SensorUnit::Celsius, .firmwareMax = 110.0};
-    QVERIFY(!SensorsPolicy::isAlertState(junction));
+    QCOMPARE(SensorsPolicy::alertState(junction), AlertState::None);
 }
 
 void SensorsPolicyTest::rangeFraction_maps_value_into_limits() {
@@ -454,7 +454,7 @@ void SensorsPolicyTest::missingValue_never_alerts_and_has_no_fraction() {
     };
     for (const SensorReading &reading: readings) {
         QVERIFY(!reading.hasValue());
-        QVERIFY(!SensorsPolicy::isAlertState(reading));
+        QCOMPARE(SensorsPolicy::alertState(reading), AlertState::None);
         QCOMPARE(SensorsPolicy::rangeFraction(reading), std::nullopt);
     }
 }
@@ -544,10 +544,10 @@ void SensorsPolicyTest::new_quantities_scale_and_alert() {
     QCOMPARE(SensorsPolicy::chooseScale(SensorUnit::Hertz, 1.85e9, std::nullopt, std::nullopt), (SensorScale{SiPrefix::Mega, 0}));
 
     // PWM and energy have no limits to violate; humidity and frequency follow firmware limits.
-    QVERIFY(!SensorsPolicy::isAlertState({.value = 100.0, .unit = SensorUnit::Percent, .firmwareMax = 50.0}));
-    QVERIFY(!SensorsPolicy::isAlertState({.value = 1e9, .unit = SensorUnit::Joule, .firmwareMax = 1.0}));
-    QVERIFY(SensorsPolicy::isAlertState({.value = 95.0, .unit = SensorUnit::RelativeHumidity, .firmwareMax = 90.0}));
-    QVERIFY(SensorsPolicy::isAlertState({.value = 10.0, .unit = SensorUnit::Hertz, .firmwareMin = 45.0}));
+    QCOMPARE(SensorsPolicy::alertState({.value = 100.0, .unit = SensorUnit::Percent, .firmwareMax = 50.0}), AlertState::None);
+    QCOMPARE(SensorsPolicy::alertState({.value = 1e9, .unit = SensorUnit::Joule, .firmwareMax = 1.0}), AlertState::None);
+    QVERIFY(SensorsPolicy::alertState({.value = 95.0, .unit = SensorUnit::RelativeHumidity, .firmwareMax = 90.0}) != AlertState::None);
+    QVERIFY(SensorsPolicy::alertState({.value = 10.0, .unit = SensorUnit::Hertz, .firmwareMin = 45.0}) != AlertState::None);
 
     // A zero maximum is an unset limit for the new quantities too.
     for (const SensorUnit unit: {SensorUnit::Percent, SensorUnit::RelativeHumidity, SensorUnit::Joule, SensorUnit::Hertz}) {
@@ -588,8 +588,7 @@ void SensorsPolicyTest::alertState_tells_which_limit_was_crossed() {
     QCOMPARE(state(SensorUnit::Celsius, 101.0, std::nullopt, std::nullopt), AlertState::High);
     QCOMPARE(state(SensorUnit::Fahrenheit, 213.0, std::nullopt, std::nullopt), AlertState::High);
     QCOMPARE(state(SensorUnit::Percent, 100.0, std::nullopt, 50.0), AlertState::None);
-    // isAlertState() is the same rule.
-    QVERIFY(SensorsPolicy::isAlertState({.value = 10.9, .unit = SensorUnit::Volt, .firmwareMin = 11.0}));
+    QCOMPARE(SensorsPolicy::alertState({.value = 10.9, .unit = SensorUnit::Volt, .firmwareMin = 11.0}), AlertState::Low);
     QCOMPARE(SensorsPolicy::alertState({.unit = SensorUnit::Volt, .firmwareMin = 11.0}), AlertState::None);
 }
 

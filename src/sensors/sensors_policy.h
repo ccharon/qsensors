@@ -267,11 +267,6 @@ namespace SensorsPolicy {
         return AlertState::None;
     }
 
-    /** True when alertState() reports a violated firmware limit. */
-    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
-        return alertState(reading) != AlertState::None;
-    }
-
     /** Position of the value within its limits (0..1); nullopt without limits or value. */
     [[nodiscard]] inline std::optional<double> rangeFraction(const SensorReading &reading) {
         if (!reading.hasRange() || !reading.value || !std::isfinite(*reading.value)) {
