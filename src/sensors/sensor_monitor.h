@@ -37,7 +37,9 @@ public:
     static constexpr int kStallIntervalFactor = 3;
     /** Lower bound of the stall timeout; covers slow drivers such as drivetemp waking a drive. */
     static constexpr std::chrono::milliseconds kMinStallTimeout{std::chrono::seconds(10)};
-    /** How long the destructor waits for a read in progress before giving up on the worker. */
+    /** How long start() waits for the first read before it returns without readings (stalled). */
+    static constexpr std::chrono::milliseconds kDefaultStartupTimeout = kMinStallTimeout;
+        /** How long the destructor waits for a read in progress before giving up on the worker. */
     static constexpr std::chrono::milliseconds kDefaultShutdownTimeout{std::chrono::seconds(3)};
 
     /** Time after which a read requested at @p pollingIntervalSec counts as stalled. */
@@ -56,7 +58,10 @@ public:
      * Creates the source and reads it once, blocking, so readingsChanged() is emitted
      * before this returns; then polls with the configured interval. Returns false when
      * the source could not be initialized (see lastError()); nothing is polled then.
-     * Call once.
+     * When the first read takes longer than the startup timeout (a hanging driver),
+     * returns true without readings and in the stalled state (stalledChanged(true));
+     * once it returns, readingsChanged() and polling follow, or sourceFailed() when
+     * the source could not be initialized. Call once.
      */
     bool start(const RuntimeConfig &config);
 
@@ -74,6 +79,9 @@ public:
 
     /** Replaces the stall timeout derived from the polling interval; for tests. */
     void setStallTimeout(std::chrono::milliseconds timeout);
+
+    /** Replaces kDefaultStartupTimeout; for tests. */
+    void setStartupTimeout(std::chrono::milliseconds timeout);
 
     /** Replaces kDefaultShutdownTimeout; for tests. */
     void setShutdownTimeout(std::chrono::milliseconds timeout);
@@ -95,6 +103,12 @@ private:
     /** Requests a read in the worker unless the previous one is still running. */
     void requestPoll();
 
+    /** Result of the first read: starts polling on success, else keeps @p error; false on error. */
+    bool finishStart(const QString &error, const QVector<SensorReading> &first);
+
+    /** Result of a first read that start() stopped waiting for. */
+    void finishLateStart(const QString &error, const QVector<SensorReading> &first);
+
     /** Stores raw readings from the worker and emits them prepared for display. */
     void acceptRawReadings(const QVector<SensorReading> &raw);
 
@@ -109,6 +123,7 @@ private:
     QTimer *m_timer;
     QTimer *m_stallTimer; // runs while a poll is pending
     std::optional<std::chrono::milliseconds> m_stallTimeoutOverride;
+    std::chrono::milliseconds m_startupTimeout = kDefaultStartupTimeout;
     std::chrono::milliseconds m_shutdownTimeout = kDefaultShutdownTimeout;
     ReadingPipeline m_pipeline;
     RuntimeConfig m_config;

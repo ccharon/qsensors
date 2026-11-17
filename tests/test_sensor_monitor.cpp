@@ -27,6 +27,8 @@ private slots:
     void stalled_read_is_reported_and_recovery_too();
     void normal_read_is_not_reported_as_stalled();
     void source_that_stops_working_is_reported_and_no_longer_polled();
+    void slow_first_read_starts_stalled_and_fills_in_later();
+    void slow_init_failure_is_reported_after_start();
     void shutdown_with_blocked_read_returns_within_limit();
 };
 
@@ -68,6 +70,12 @@ namespace {
             QMutexLocker lock(&mutex);
             closed = false;
             opened.wakeAll();
+        }
+
+        void waitWhileClosed() {
+            QMutexLocker lock(&mutex);
+            while (closed)
+                opened.wait(&mutex);
         }
     };
 
@@ -121,8 +129,12 @@ namespace {
         bool m_failed = false;
     };
 
+    /** The factory blocks while the log's gate is closed, like a slow sensors_init. */
     SensorMonitor::SourceFactory factory(const std::shared_ptr<SourceLog> &log, const bool initialized = true) {
-        return [log, initialized] { return std::make_unique<FakeSource>(log, initialized); };
+        return [log, initialized] {
+            log->waitWhileClosed();
+            return std::make_unique<FakeSource>(log, initialized);
+        };
     }
 
     QVector<SensorReading> readingsAt(const QSignalSpy &spy, const qsizetype index) {
@@ -285,6 +297,65 @@ void SensorMonitorTest::source_that_stops_working_is_reported_and_no_longer_poll
     QCOMPARE(log->destroyed(), log->createdIn);
     QVERIFY(!readings.wait(2500));
     QCOMPARE(log->reads(), 2);
+}
+
+void SensorMonitorTest::slow_first_read_starts_stalled_and_fills_in_later() {
+    const auto log = std::make_shared<SourceLog>();
+    SensorMonitor monitor(factory(log));
+    const GateGuard guard{log};
+    monitor.setStartupTimeout(100ms);
+    QSignalSpy readings(&monitor, &SensorMonitor::readingsChanged);
+    QSignalSpy stalled(&monitor, &SensorMonitor::stalledChanged);
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+
+    // A hanging driver: start() must return so the window can be shown, empty and stalled.
+    log->close();
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("first sensor read has not returned within 100 ms")));
+    QElapsedTimer elapsed;
+    elapsed.start();
+    QVERIFY(monitor.start(config));
+    QVERIFY2(elapsed.elapsed() < 5000, qPrintable(QString::number(elapsed.elapsed())));
+    QCOMPARE(readings.count(), 0);
+    QVERIFY(monitor.isStalled());
+    QCOMPARE(stalled.count(), 1);
+    QCOMPARE(stalled.at(0).at(0).toBool(), true);
+    QVERIFY(monitor.lastError().isEmpty());
+
+    // The read returns: the normal path shows it, ends the stall and starts polling.
+    log->open();
+    QVERIFY(readings.wait(10000));
+    QCOMPARE(readingsAt(readings, 0).at(0).value.value(), 41.0);
+    QVERIFY(!monitor.isStalled());
+    QCOMPARE(stalled.count(), 2);
+    QCOMPARE(stalled.at(1).at(0).toBool(), false);
+    QTRY_COMPARE_WITH_TIMEOUT(readings.count(), 2, 10000);
+    QCOMPARE(log->reads(), 2);
+}
+
+void SensorMonitorTest::slow_init_failure_is_reported_after_start() {
+    const auto log = std::make_shared<SourceLog>();
+    SensorMonitor monitor(factory(log, false));
+    const GateGuard guard{log};
+    monitor.setStartupTimeout(100ms);
+    QSignalSpy readings(&monitor, &SensorMonitor::readingsChanged);
+    QSignalSpy stalled(&monitor, &SensorMonitor::stalledChanged);
+    QSignalSpy failed(&monitor, &SensorMonitor::sourceFailed);
+
+    log->close();
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("first sensor read has not returned")));
+    QVERIFY(monitor.start(RuntimeConfig{}));
+    QVERIFY(monitor.isStalled());
+
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("could not be initialized: no chips")));
+    log->open();
+    QVERIFY(failed.wait(10000));
+    QCOMPARE(failed.at(0).at(0).toString(), QStringLiteral("no chips"));
+    QCOMPARE(monitor.lastError(), QStringLiteral("no chips"));
+    QVERIFY(!monitor.isStalled());
+    QCOMPARE(stalled.count(), 2);
+    QCOMPARE(readings.count(), 0);
+    QCOMPARE(log->reads(), 0);
 }
 
 void SensorMonitorTest::shutdown_with_blocked_read_returns_within_limit() {

@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that name are shown as `acpi_fan-acpi-0 #2` and so on, numbered by their
   device path so the numbering stays the same across restarts. Chips with a
   unique name keep their name and their saved order and expand state.
+- A driver that hangs at startup no longer keeps the window from appearing.
+  If the first sensor read takes longer than 10 seconds, the window opens
+  without readings and the status line says the sensors are not responding;
+  the readings appear as soon as the read returns.
 
 ## [0.80.11] - 2026-11-15
 

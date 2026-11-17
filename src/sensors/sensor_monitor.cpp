@@ -5,12 +5,31 @@
 
 #include <QDeadlineTimer>
 #include <QDebug>
+#include <QMutex>
+#include <QMutexLocker>
 #include <QThread>
 #include <QTimer>
+#include <QWaitCondition>
 
 #include <algorithm>
 #include <chrono>
+#include <memory>
 #include <utility>
+
+namespace {
+    /**
+     * Hand-over of the first read between the worker and start(), which waits for it with
+     * a deadline. Once start() has given up (abandoned), the worker emits the result instead.
+     */
+    struct StartupHandover {
+        QMutex mutex;
+        QWaitCondition done;
+        bool finished = false;
+        bool abandoned = false;
+        QString error;
+        QVector<SensorReading> first;
+    };
+}
 
 /** Worker-thread side of SensorMonitor: owns the source and reads it on request. */
 class SensorPoller final : public QObject {
@@ -37,6 +56,24 @@ public:
         return m_source ? m_source->readAll() : QVector<SensorReading>();
     }
 
+    /** Creates the source and reads it once; hands the result to start() or, if it gave up, emits it. */
+    void startup(const std::shared_ptr<StartupHandover> &handover) {
+        QString error = initialize();
+        QVector<SensorReading> first;
+        if (error.isEmpty())
+            first = read();
+        QMutexLocker lock(&handover->mutex);
+        if (handover->abandoned) {
+            lock.unlock();
+            emit lateStartFinished(error, first);
+            return;
+        }
+        handover->error = std::move(error);
+        handover->first = std::move(first);
+        handover->finished = true;
+        handover->done.wakeAll();
+    }
+
     /** Reads the source and emits the result; a source that stopped working is reported first and dropped. */
     void poll() {
         const QVector<SensorReading> raw = read();
@@ -51,6 +88,7 @@ public:
 signals:
     void rawReadingsRead(const QVector<SensorReading> &raw);
     void sourceFailed(const QString &error);
+    void lateStartFinished(const QString &error, const QVector<SensorReading> &first);
 
 private:
     SensorMonitor::SourceFactory m_factory;
@@ -67,6 +105,7 @@ SensorMonitor::SensorMonitor(SourceFactory factory, QObject *parent)
     connect(m_thread, &QThread::finished, m_poller, &QObject::deleteLater);
     connect(m_poller, &SensorPoller::rawReadingsRead, this, &SensorMonitor::acceptRawReadings);
     connect(m_poller, &SensorPoller::sourceFailed, this, &SensorMonitor::handleSourceFailure);
+    connect(m_poller, &SensorPoller::lateStartFinished, this, &SensorMonitor::finishLateStart);
     connect(m_timer, &QTimer::timeout, this, &SensorMonitor::requestPoll);
     connect(m_stallTimer, &QTimer::timeout, this, &SensorMonitor::markStalled);
 }
@@ -98,16 +137,34 @@ bool SensorMonitor::start(const RuntimeConfig &config) {
     m_config = config;
     m_thread->start();
 
-    // Blocking first read: the window is sized to its content before it is shown.
-    QString error;
-    QVector<SensorReading> first;
+    // Blocking first read: the window is sized to its content before it is shown. A
+    // hanging driver must not keep the window from appearing, so the wait is bounded.
+    const auto handover = std::make_shared<StartupHandover>();
     SensorPoller *poller = m_poller;
-    QMetaObject::invokeMethod(m_poller, [poller, &error, &first] {
-        error = poller->initialize();
-        if (error.isEmpty())
-            first = poller->read();
-    }, Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(m_poller, [poller, handover] { poller->startup(handover); }, Qt::QueuedConnection);
 
+    QMutexLocker lock(&handover->mutex);
+    const QDeadlineTimer deadline(m_startupTimeout);
+    while (!handover->finished) {
+        if (!handover->done.wait(&handover->mutex, deadline))
+            break;
+    }
+    if (!handover->finished) {
+        handover->abandoned = true; // the worker emits lateStartFinished() instead
+        lock.unlock();
+        m_stalled = true;
+        qWarning("qsensors: first sensor read has not returned within %lld ms; starting without readings",
+                 static_cast<long long>(m_startupTimeout.count()));
+        emit stalledChanged(true);
+        return true;
+    }
+    const QString error = handover->error;
+    const QVector<SensorReading> first = handover->first;
+    lock.unlock();
+    return finishStart(error, first);
+}
+
+bool SensorMonitor::finishStart(const QString &error, const QVector<SensorReading> &first) {
     if (!error.isEmpty()) {
         m_lastError = error;
         return false;
@@ -115,8 +172,17 @@ bool SensorMonitor::start(const RuntimeConfig &config) {
     m_running = true;
     m_timer->setInterval(std::chrono::seconds(m_config.pollingIntervalSec));
     m_timer->start();
-    acceptRawReadings(first);
+    acceptRawReadings(first); // also ends a stalled state
     return true;
+}
+
+void SensorMonitor::finishLateStart(const QString &error, const QVector<SensorReading> &first) {
+    if (finishStart(error, first))
+        return;
+    qWarning("qsensors: sensor source could not be initialized: %s", qPrintable(error));
+    emit sourceFailed(error);
+    m_stalled = false;
+    emit stalledChanged(false);
 }
 
 QString SensorMonitor::lastError() const {
@@ -142,6 +208,10 @@ bool SensorMonitor::isStalled() const {
 
 void SensorMonitor::setStallTimeout(const std::chrono::milliseconds timeout) {
     m_stallTimeoutOverride = timeout;
+}
+
+void SensorMonitor::setStartupTimeout(const std::chrono::milliseconds timeout) {
+    m_startupTimeout = timeout;
 }
 
 void SensorMonitor::setShutdownTimeout(const std::chrono::milliseconds timeout) {
