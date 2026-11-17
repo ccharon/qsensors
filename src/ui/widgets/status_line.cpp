@@ -6,8 +6,18 @@
 #include <QTimer>
 
 StatusLine::StatusLine(QWidget *parent) : QLabel(parent), m_noticeTimer(new QTimer(this)) {
+    // Shows text from libsensors (e.g. init errors); never interpreted as rich text.
+    setTextFormat(Qt::PlainText);
     m_noticeTimer->setSingleShot(true);
-    connect(m_noticeTimer, &QTimer::timeout, this, [this] { display(m_permanentText, false); });
+    connect(m_noticeTimer, &QTimer::timeout, this, [this] {
+        if (m_queue.isEmpty()) {
+            display(m_permanentText, false);
+        } else {
+            const Notice next = m_queue.dequeue();
+            display(next.text, true);
+            m_noticeTimer->start(next.timeoutMs);
+        }
+    });
 }
 
 void StatusLine::setPermanentText(const QString &text) {
@@ -18,6 +28,10 @@ void StatusLine::setPermanentText(const QString &text) {
 }
 
 void StatusLine::showNotice(const QString &text, const int timeoutMs) {
+    if (isShowingNotice()) {
+        m_queue.enqueue({text, timeoutMs});
+        return;
+    }
     display(text, true);
     m_noticeTimer->start(timeoutMs);
 }

@@ -11,20 +11,20 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <source>libsensors init failed: %1</source>
-        <translation>libsensors init failed: %1</translation>
-    </message>
-    <message>
-        <source>Sensor layout changed: UI config reset</source>
-        <translation>Sensor layout changed: UI config reset</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>No sensors found. Run sensors-detect and check the lm-sensors configuration.</translation>
     </message>
     <message>
         <source>Sensors are not responding; the values shown are outdated</source>
         <translation>Sensors are not responding; the values shown are outdated</translation>
+    </message>
+    <message>
+        <source>Sensors are available again</source>
+        <translation>Sensors are available again</translation>
+    </message>
+    <message>
+        <source>Sensors unavailable, retrying: %1</source>
+        <translation>Sensors unavailable, retrying: %1</translation>
     </message>
     <message>
         <source>Readings: %1 | Refresh: %2s</source>
@@ -35,8 +35,12 @@
         <translation>Settings could not be saved</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>Settings were written by a newer qsensors version and are used as far as possible</translation>
+        <source>Collapsed state dropped for missing sensor chips: %1</source>
+        <translation>Collapsed state dropped for missing sensor chips: %1</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Settings were written by a newer qsensors version; changes are not saved in this session</translation>
     </message>
 </context>
 <context>

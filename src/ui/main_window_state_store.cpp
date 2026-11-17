@@ -34,13 +34,11 @@ MainWindowState MainWindowStateStore::load() {
     settings.endGroup();
 
     state.chipOrder = settings.value(SettingsKeys::kChipOrder).toStringList();
-    state.sensorFingerprint = settings.value(SettingsKeys::kSensorFingerprint).toString();
     return state;
 }
 
 namespace {
     void writeLayout(QSettings &settings, const MainWindowState &state) {
-        settings.setValue(SettingsKeys::kSensorFingerprint, state.sensorFingerprint);
         settings.setValue(SettingsKeys::kChipOrder, state.chipOrder);
         settings.beginGroup(SettingsKeys::kChipExpandedGroup);
         settings.remove(QString());

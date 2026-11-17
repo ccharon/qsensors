@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 4.2)
-project(qsensors VERSION 0.80.11)
+cmake_minimum_required(VERSION 3.21...4.2)
+project(qsensors VERSION 0.81.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)
 
 option(QSENSORS_WARNINGS_AS_ERRORS "Treat compiler warnings in qsensors code as errors" OFF)
 option(QSENSORS_SANITIZE "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(QSENSORS_HARDENING "Build with security hardening flags (PIE, stack protector, FORTIFY_SOURCE, RELRO)" ON)
 
 # Defines BUILD_TESTING, which decides whether Qt Test is required.
 include(CTest)
@@ -17,7 +18,8 @@ set(QSENSORS_QT_COMPONENTS Core Gui Widgets LinguistTools)
 if (BUILD_TESTING)
     list(APPEND QSENSORS_QT_COMPONENTS Test)
 endif ()
-find_package(Qt6 REQUIRED COMPONENTS ${QSENSORS_QT_COMPONENTS})
+# Qt 6.8 is the version the AppImages are built and tested with.
+find_package(Qt6 6.8 REQUIRED COMPONENTS ${QSENSORS_QT_COMPONENTS})
 
 # Warnings and sanitizers apply to qsensors' own targets only (PRIVATE use of this
 # interface library, so nothing leaks to consumers). Generated moc/rcc sources are
@@ -37,6 +39,45 @@ if (QSENSORS_SANITIZE)
             -fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined)
     target_link_options(qsensors_build_options INTERFACE -fsanitize=address,undefined)
 endif ()
+
+# Hardening, for qsensors' own targets only. Every flag is probed, so a compiler or
+# architecture without it (-fcf-protection is x86 only) simply goes without; flags a
+# distribution toolchain already passes are harmless duplicates.
+if (QSENSORS_HARDENING AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    include(CheckCXXCompilerFlag)
+    include(CheckLinkerFlag)
+    include(CheckPIESupported)
+
+    # Position independent code and -pie for executables (global default, set before
+    # any own target exists; imported Qt targets are not affected).
+    check_pie_supported(LANGUAGES CXX)
+    if (CMAKE_CXX_LINK_PIE_SUPPORTED)
+        set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    endif ()
+
+    foreach (flag IN ITEMS -fstack-protector-strong -fstack-clash-protection -fcf-protection)
+        string(MAKE_C_IDENTIFIER "QSENSORS_HAS${flag}" flag_var)
+        check_cxx_compiler_flag("${flag}" ${flag_var})
+        if (${flag_var})
+            target_compile_options(qsensors_build_options INTERFACE "${flag}")
+        endif ()
+    endforeach ()
+
+    # Fortify needs optimization and conflicts with the sanitizers' interceptors.
+    # -U first: toolchains that define it themselves (Ubuntu, Gentoo) must not warn
+    # about a redefinition. Level 3 is treated as 2 by older glibc or compilers.
+    if (NOT QSENSORS_SANITIZE)
+        target_compile_options(qsensors_build_options INTERFACE
+                "$<$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=3>")
+    endif ()
+
+    # Full RELRO and immediate binding.
+    check_linker_flag(CXX "LINKER:-z,relro,-z,now" QSENSORS_HAS_RELRO_NOW)
+    if (QSENSORS_HAS_RELRO_NOW)
+        target_link_options(qsensors_build_options INTERFACE "LINKER:-z,relro,-z,now")
+    endif ()
+endif ()
+
 find_package(PkgConfig QUIET)
 if (PkgConfig_FOUND)
     pkg_check_modules(SENSORS QUIET IMPORTED_TARGET libsensors)
@@ -56,6 +97,7 @@ set(QSENSORS_MODEL_SOURCES
         src/config/app_config_store.cpp
         src/config/runtime_config.cpp
         src/config/settings_schema.cpp
+        src/sensors/hwmon_watch.cpp
         src/sensors/reading_pipeline.cpp
         src/sensors/sensor_format.cpp
         src/sensors/sensor_monitor.cpp
@@ -70,6 +112,7 @@ set(QSENSORS_UI_SOURCES
         src/ui/panels/sensors_panel.cpp
         src/ui/widgets/collapsible_section.cpp
         src/ui/widgets/lcd_segment_font.cpp
+        src/ui/widgets/lcd_symbol_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/ui/widgets/status_line.cpp
@@ -117,6 +160,7 @@ install(FILES resources/icons/qsensors.svg
         DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 
 include(CheckCXXSourceCompiles)
+# The CMAKE_REQUIRED_* settings apply to this check only; they are reset after it.
 set(CMAKE_REQUIRED_QUIET TRUE)
 if (SENSORS_FOUND)
     set(CMAKE_REQUIRED_LIBRARIES PkgConfig::SENSORS)
@@ -134,6 +178,9 @@ check_cxx_source_compiles("
 if (NOT QSENSORS_LIBSENSORS_COMPILE_OK)
     message(FATAL_ERROR "libsensors development files are missing or unusable (headers/library mismatch)")
 endif ()
+unset(CMAKE_REQUIRED_QUIET)
+unset(CMAKE_REQUIRED_LIBRARIES)
+unset(CMAKE_REQUIRED_INCLUDES)
 
 set(TS_FILES
         i18n/qsensors_en.ts
@@ -154,9 +201,33 @@ qt_add_translations(qsensors
 if (BUILD_TESTING)
     # Tests creating widgets run on the offscreen platform, so CI needs no display.
     # Model tests link only the model, so they cannot pull in widgets by accident.
+    #
+    # The QTRY_* macros of some Qt versions (6.8 among them) narrow the timeout from
+    # long to int inside the macro, which -Wconversion reports at every call site.
+    # Probe the installed Qt Test and drop -Wconversion for the tests only when it does.
+    set(CMAKE_REQUIRED_FLAGS "-Wconversion -Werror")
+    set(CMAKE_REQUIRED_LIBRARIES Qt::Test)
+    check_cxx_source_compiles([=[
+        #include <QTest>
+        static void probe() { bool done = true; QTRY_VERIFY_WITH_TIMEOUT(done, 1000); }
+        int main() { probe(); return 0; }
+    ]=] QSENSORS_QTRY_CONVERSION_CLEAN)
+    unset(CMAKE_REQUIRED_FLAGS)
+    unset(CMAKE_REQUIRED_LIBRARIES)
+    if (NOT QSENSORS_QTRY_CONVERSION_CLEAN)
+        message(STATUS "Qt Test QTRY_* macros warn under -Wconversion; tests are built with -Wno-conversion")
+    endif ()
+
+    # Linked after qsensors_build_options, so its flags come after (and override) the warning flags;
+    # a PRIVATE option on the test target would be placed before them and lose.
+    add_library(qsensors_test_options INTERFACE)
+    if (NOT QSENSORS_QTRY_CONVERSION_CLEAN)
+        target_compile_options(qsensors_test_options INTERFACE -Wno-conversion)
+    endif ()
+
     function(add_qsensors_test target source library)
         add_executable(${target} ${source})
-        target_link_libraries(${target} ${library} Qt::Test qsensors_build_options)
+        target_link_libraries(${target} ${library} Qt::Test qsensors_build_options qsensors_test_options)
         add_test(NAME ${target} COMMAND ${target})
         set_tests_properties(${target} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
     endfunction()
@@ -169,6 +240,8 @@ if (BUILD_TESTING)
     add_qsensors_test(test_settings_persistence tests/test_settings_persistence.cpp qsensors_ui)
     add_qsensors_test(test_sensor_contract tests/test_sensor_contract.cpp qsensors_ui)
     add_qsensors_test(test_sensor_identity tests/test_sensor_identity.cpp qsensors_model)
+    add_qsensors_test(test_hwmon_watch tests/test_hwmon_watch.cpp qsensors_model)
+    add_qsensors_test(test_refreshing_cache tests/test_refreshing_cache.cpp qsensors_model)
     add_qsensors_test(test_sensors_panel tests/test_sensors_panel.cpp qsensors_ui)
     add_qsensors_test(test_theme_refresh tests/test_theme_refresh.cpp qsensors_ui)
     add_qsensors_test(test_status_line tests/test_status_line.cpp qsensors_ui)

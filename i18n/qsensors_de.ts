@@ -11,20 +11,20 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <source>libsensors init failed: %1</source>
-        <translation>libsensors-Initialisierung fehlgeschlagen: %1</translation>
-    </message>
-    <message>
-        <source>Sensor layout changed: UI config reset</source>
-        <translation>Sensorlayout geändert: UI-Konfiguration zurückgesetzt</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>Keine Sensoren gefunden. sensors-detect ausführen und die lm-sensors-Konfiguration prüfen.</translation>
     </message>
     <message>
         <source>Sensors are not responding; the values shown are outdated</source>
         <translation>Sensoren antworten nicht; die angezeigten Werte sind veraltet</translation>
+    </message>
+    <message>
+        <source>Sensors are available again</source>
+        <translation>Sensoren sind wieder verfügbar</translation>
+    </message>
+    <message>
+        <source>Sensors unavailable, retrying: %1</source>
+        <translation>Sensoren nicht verfügbar, neuer Versuch läuft: %1</translation>
     </message>
     <message>
         <source>Readings: %1 | Refresh: %2s</source>
@@ -35,8 +35,12 @@
         <translation>Einstellungen konnten nicht gespeichert werden</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>Die Einstellungen stammen von einer neueren qsensors-Version und werden so weit wie möglich übernommen</translation>
+        <source>Collapsed state dropped for missing sensor chips: %1</source>
+        <translation>Eingeklappter Zustand für fehlende Sensor-Chips verworfen: %1</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Die Einstellungen stammen von einer neueren qsensors-Version; Änderungen werden in dieser Sitzung nicht gespeichert</translation>
     </message>
 </context>
 <context>

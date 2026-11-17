@@ -3,15 +3,39 @@
 
 #pragma once
 
+#include "sensors/hwmon_watch.h"
+#include "sensors/refreshing_cache.h"
 #include "sensors/sensor_source.h"
 
+#include <QPair>
 #include <QSet>
 #include <QString>
 #include <QVector>
 
-/** libsensors wrapper: initializes the library and reads all chips into raw SensorReadings. */
+#include <chrono>
+#include <optional>
+
+/**
+ * libsensors wrapper: initializes the library and reads all chips into raw SensorReadings.
+ * libsensors enumerates chips once, in sensors_init(); when the hwmon devices change, the
+ * next readAll() re-initializes it. A failed (re-)init leaves the source uninitialized,
+ * with lastError() explaining why; recover() initializes it again on the next hwmon change
+ * or when the time-based retry is due.
+ */
 class LibsensorsSource final : public SensorSource {
 public:
+    /** Labels and limits are re-read after this time even without a hardware change (limits can be set at runtime). */
+    static constexpr std::chrono::milliseconds kFeatureCacheLifetime{std::chrono::minutes(1)};
+
+    /** Label and firmware limits of one feature; read once, values are read every poll. */
+    struct FeatureInfo {
+        QString label;
+        std::optional<double> firmwareMin;
+        std::optional<double> firmwareMax;
+    };
+    /** Chip (valid until the next sensors_cleanup) and feature number. */
+    using FeatureKey = QPair<quintptr, int>;
+
     /** Initializes libsensors; on failure isInitialized() is false and lastError() explains why. */
     LibsensorsSource();
 
@@ -28,9 +52,29 @@ public:
 
     [[nodiscard]] QVector<SensorReading> readAll() override;
 
+    /** Retries the init when @p retryDue or when the hwmon devices changed since the last attempt. */
+    [[nodiscard]] bool recover(bool retryDue) override;
+
 private:
-    bool m_initialized;
+    /** Claims the process-wide backend, then initialize(); false when another instance holds it. */
+    bool acquireAndInitialize(bool afterStart);
+
+    /**
+     * Takes the hwmon snapshot and runs sensors_init() with the backend claimed; false (and
+     * uninitialized, backend released) when it fails. @p afterStart only words the error.
+     */
+    bool initialize(bool afterStart);
+
+    /** sensors_cleanup() + initialize(); false (and uninitialized) when the init fails. */
+    bool reinitialize();
+
+    HwmonWatch m_hwmonWatch;
+    bool m_initialized = false;
+    // The source had been initialized once; a later failure followed a hardware change.
+    bool m_wasInitialized = false;
     QString m_lastError;
     // Problems already logged, so a failing sensor does not flood the log every poll.
     QSet<QString> m_reportedProblems;
+    // Cleared on re-init (the chip pointers die with sensors_cleanup) and after kFeatureCacheLifetime.
+    RefreshingCache<FeatureKey, FeatureInfo> m_featureCache{kFeatureCacheLifetime};
 };

@@ -2,6 +2,10 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/reading_pipeline.h"
+#include "sensors/sensor_format.h"
+#include "sensors/sensors_policy.h"
+#include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_symbol_font.h"
 #include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 
@@ -19,6 +23,10 @@ private slots:
     void lcd_repaints_only_when_the_drawn_state_changes();
     void lcd_repaints_on_resize_and_palette_change();
     void tooltip_follows_the_fields_it_shows_not_every_poll();
+    void layout_puts_cells_and_unit_field_at_fixed_places();
+    void layout_fits_full_height_digits_into_the_smallest_card();
+    void layout_shrinks_only_below_the_minimum_width();
+    void layout_puts_state_annunciator_under_the_unit();
 };
 
 void LcdLogicTest::barGraph_lights_proportional_segments() {
@@ -46,6 +54,12 @@ void LcdLogicTest::detailsToolTip_lists_chip_and_limits_in_display_units() {
     QVERIFY(tip.contains(QStringLiteral("9.89 V")));
     QVERIFY(tip.contains(QStringLiteral("13.32 V")) || tip.contains(QStringLiteral("13.33 V")));
     QVERIFY(!tip.contains(QStringLiteral("No limits")));
+
+    // Limits use the card's scale, so they read like the card: "500 mA", not "0.500 A".
+    SensorReading milliamps{.chip = QStringLiteral("c"), .feature = QStringLiteral("curr1"), .value = 0.25,
+                            .unit = SensorUnit::Ampere, .firmwareMax = 0.5,
+                            .scale = SensorScale{SiPrefix::Milli, 0}};
+    QVERIFY(SensorValueWidget::detailsToolTip(milliamps).contains(QStringLiteral("Max: 500 mA")));
 
     // Names are escaped: sensors.conf labels are free text.
     SensorReading odd{.chip = QStringLiteral("c"), .feature = QStringLiteral("<CPU & SoC>"),
@@ -145,16 +159,17 @@ namespace {
 
     // Lets pending paints run, then forgets them.
     void settle(PaintCounter &counter) {
-        QTest::qWait(30);
+        QCoreApplication::sendPostedEvents();
+        QCoreApplication::processEvents();
         counter.count = 0;
     }
 
-    // True when a paint follows setReading() within a generous wait.
+    // True when a paint follows setReading(). Returns as soon as one happens; "no paint" needs the
+    // full window, which is a fixed wait by nature.
     bool repaintsAfter(LcdDisplayWidget &lcd, PaintCounter &counter, const SensorReading &reading) {
         counter.count = 0;
         lcd.setReading(reading);
-        QTest::qWait(30);
-        return counter.count > 0;
+        return QTest::qWaitFor([&counter] { return counter.count > 0; }, 100);
     }
 }
 
@@ -168,16 +183,16 @@ void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
 
     // The same reading again, and a change below the displayed digits and bar resolution: nothing to draw.
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
-    QVERIFY(!repaintsAfter(lcd, counter, volts(5.001)));
+    QVERIFY(!repaintsAfter(lcd, counter, volts(5.0004)));
 
     // Changed digits.
     QVERIFY(repaintsAfter(lcd, counter, volts(5.5)));
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.5)));
 
     // Changed unit with the same digits.
-    SensorReading milli = volts(5.5);
-    milli.unit = SensorUnit::Ampere;
-    QVERIFY(repaintsAfter(lcd, counter, milli));
+    SensorReading amps = volts(5.5);
+    amps.unit = SensorUnit::Ampere;
+    QVERIFY(repaintsAfter(lcd, counter, amps));
 
     // Same digits, but the value crosses the firmware maximum: only the alert state differs.
     QVERIFY(repaintsAfter(lcd, counter, volts(12.0)));
@@ -188,6 +203,20 @@ void LcdLogicTest::lcd_repaints_only_when_the_drawn_state_changes() {
     SensorReading wide = volts(12.0);
     wide.maxValue = 24.0;
     QVERIFY(repaintsAfter(lcd, counter, wide));
+
+    // Same digits and colour, but the other limit is crossed: HI turns into LO.
+    SensorReading high = volts(13.0);
+    high.firmwareMin = 13.5;
+    high.firmwareMax = 12.0; // inconsistent on purpose: only the annunciator may differ
+    SensorReading low = high;
+    low.firmwareMax.reset();
+    QCOMPARE(SensorsPolicy::alertState(high), AlertState::High);
+    QCOMPARE(SensorsPolicy::alertState(low), AlertState::Low);
+    QCOMPARE(LcdDisplayWidget::litBarSegments(high, 20), LcdDisplayWidget::litBarSegments(low, 20));
+    QVERIFY(repaintsAfter(lcd, counter, high));
+    QVERIFY(!repaintsAfter(lcd, counter, high));
+    QVERIFY(repaintsAfter(lcd, counter, low));
+    QVERIFY(!repaintsAfter(lcd, counter, low));
 
     // A value that cannot be read differs from one that can.
     SensorReading unreadable = wide;
@@ -205,8 +234,7 @@ void LcdLogicTest::lcd_repaints_on_resize_and_palette_change() {
     settle(counter);
 
     lcd.resize(260, 40);
-    QTest::qWait(30);
-    QVERIFY(counter.count > 0);
+    QTRY_VERIFY(counter.count > 0);
     // After the resize the unchanged reading is still not repainted.
     QVERIFY(!repaintsAfter(lcd, counter, volts(5.0)));
 
@@ -214,8 +242,7 @@ void LcdLogicTest::lcd_repaints_on_resize_and_palette_change() {
     dark.setColor(QPalette::Base, Qt::black);
     counter.count = 0;
     lcd.setPalette(dark);
-    QTest::qWait(30);
-    QVERIFY(counter.count > 0);
+    QTRY_VERIFY(counter.count > 0);
 }
 
 void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
@@ -236,13 +263,76 @@ void LcdLogicTest::tooltip_follows_the_fields_it_shows_not_every_poll() {
     card.setReading(reading);
     QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
 
-    reading.unit = SensorUnit::Milliampere;
+    reading.scale = SensorScale{.prefix = SiPrefix::Milli, .decimals = 1};
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.unit = SensorUnit::Ampere;
     card.setReading(reading);
     QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
 
     reading.feature = QStringLiteral("renamed");
     card.setReading(reading);
     QVERIFY(card.toolTip().contains(QStringLiteral("renamed")));
+}
+
+void LcdLogicTest::layout_puts_cells_and_unit_field_at_fixed_places() {
+    const QSizeF size(AppTheme::kCardMinWidth, 41);
+    const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor(size);
+    // The unit field ends at the right padding and the value ends a fixed gap before it.
+    QCOMPARE(layout.unitBox.right(), size.width() - AppTheme::kLcdPaddingX);
+    QCOMPARE(layout.unitBox.width(), LcdDisplayWidget::unitFieldWidth(layout.digitHeight));
+    QCOMPARE(layout.cells.right(), layout.unitBox.left() - AppTheme::kLcdUnitGap * layout.digitHeight);
+    QVERIFY(layout.cellCount >= SensorFormat::kValueCells);
+    QVERIFY(layout.cells.left() >= AppTheme::kLcdPaddingX);
+    // Every symbol of the unit table fits the field.
+    QVERIFY(layout.unitBox.width() > 0.0);
+
+    // Extra width goes to ghost cells on the left; the value cells keep their size and the unit its field.
+    const LcdDisplayWidget::Layout wide = LcdDisplayWidget::layoutFor({AppTheme::kCardMaxWidth, 41});
+    QCOMPARE(wide.digitHeight, layout.digitHeight);
+    QVERIFY(wide.cellCount > layout.cellCount);
+    QCOMPARE(wide.unitBox.width(), layout.unitBox.width());
+    QCOMPARE(wide.unitBox.right(), AppTheme::kCardMaxWidth - AppTheme::kLcdPaddingX);
+}
+
+void LcdLogicTest::layout_fits_full_height_digits_into_the_smallest_card() {
+    // All cards share one width, at least kCardMinWidth: that width must show the full digit height.
+    QVERIFY(LcdDisplayWidget::minimumFullHeightWidth() <= AppTheme::kCardMinWidth);
+    const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor({AppTheme::kCardMinWidth, 41});
+    QCOMPARE(layout.digitHeight, 41.0 - AppTheme::kLcdBarGap - AppTheme::kLcdBarHeight - 2 * AppTheme::kLcdPaddingY);
+}
+
+void LcdLogicTest::layout_shrinks_only_below_the_minimum_width() {
+    const LcdDisplayWidget::Layout narrow = LcdDisplayWidget::layoutFor({90, 41});
+    const LcdDisplayWidget::Layout normal = LcdDisplayWidget::layoutFor({AppTheme::kCardMinWidth, 41});
+    QVERIFY(narrow.digitHeight < normal.digitHeight);
+    QCOMPARE(narrow.cellCount, SensorFormat::kValueCells);
+    QVERIFY(narrow.cells.left() >= AppTheme::kLcdPaddingX - 1e-6);
+}
+
+void LcdLogicTest::layout_puts_state_annunciator_under_the_unit() {
+    for (const int width: {AppTheme::kCardMinWidth, AppTheme::kCardMaxWidth}) {
+        const LcdDisplayWidget::Layout layout = LcdDisplayWidget::layoutFor({static_cast<qreal>(width), 41});
+        QCOMPARE(layout.stateBox.left(), layout.unitBox.left());
+        QVERIFY(layout.stateBox.top() > layout.unitBox.bottom());
+        // On the bar graph row, which ends before it.
+        QCOMPARE(layout.stateBox.bottom(), layout.bar.bottom());
+        QVERIFY(layout.bar.right() < layout.stateBox.left());
+        QVERIFY(LcdDisplayWidget::barGraphSegments(layout.bar).size() >= 15);
+        // The unit stays within the digit row.
+        QVERIFY(layout.unitBox.top() >= layout.cells.top());
+        QVERIFY(layout.unitBox.bottom() <= layout.cells.bottom());
+        // HI and LO fit the field.
+        for (const AlertState alert: {AlertState::High, AlertState::Low}) {
+            const QString symbol = LcdDisplayWidget::stateSymbol(alert);
+            QVERIFY(LcdSymbolFont::supports(symbol));
+            QVERIFY(LcdSymbolFont::width(symbol, layout.stateBox.height()) <= layout.stateBox.width());
+        }
+    }
+    QCOMPARE(LcdDisplayWidget::stateSymbol(AlertState::High), QStringLiteral("HI"));
+    QCOMPARE(LcdDisplayWidget::stateSymbol(AlertState::Low), QStringLiteral("LO"));
+    QVERIFY(LcdDisplayWidget::stateSymbol(AlertState::None).isEmpty());
 }
 
 QTEST_MAIN(LcdLogicTest)

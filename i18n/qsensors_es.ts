@@ -11,20 +11,20 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <source>libsensors init failed: %1</source>
-        <translation>Error al inicializar libsensors: %1</translation>
-    </message>
-    <message>
-        <source>Sensor layout changed: UI config reset</source>
-        <translation>La disposición de sensores cambió: configuración de UI restablecida</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>No se encontraron sensores. Ejecute sensors-detect y revise la configuración de lm-sensors.</translation>
     </message>
     <message>
         <source>Sensors are not responding; the values shown are outdated</source>
         <translation>Los sensores no responden; los valores mostrados están desactualizados</translation>
+    </message>
+    <message>
+        <source>Sensors are available again</source>
+        <translation>Los sensores vuelven a estar disponibles</translation>
+    </message>
+    <message>
+        <source>Sensors unavailable, retrying: %1</source>
+        <translation>Sensores no disponibles, reintentando: %1</translation>
     </message>
     <message>
         <source>Readings: %1 | Refresh: %2s</source>
@@ -35,8 +35,12 @@
         <translation>No se pudo guardar la configuración</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>La configuración procede de una versión más reciente de qsensors y se usa en la medida de lo posible</translation>
+        <source>Collapsed state dropped for missing sensor chips: %1</source>
+        <translation>Estado contraído descartado para los chips de sensores ausentes: %1</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Los ajustes proceden de una versión más reciente de qsensors; los cambios no se guardan en esta sesión</translation>
     </message>
 </context>
 <context>

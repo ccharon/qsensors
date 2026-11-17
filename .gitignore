@@ -1,7 +1,8 @@
 # Build output
 /build/
+# Further build trees, e.g. build-asan (see CLAUDE.md) and build-icon (tools/icon)
+/build-*/
 /cmake-build-*/
-/build-icon/
 # AppImage builds (packaging/appimage/build.sh)
 /.appimage-work/
 /dist/

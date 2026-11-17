@@ -26,7 +26,9 @@ namespace AppTheme {
     inline constexpr int kGridSpacing = 4;
     inline constexpr int kCategoryVsGridSpacingDelta = 2;
     inline constexpr int kUnifiedHorizontalSpacing = kGridSpacing + kCategoryVsGridSpacingDelta;
-    inline constexpr int kChipCardFrameWidthTotal = 2; // 1px left + 1px right
+    // Border of a CollapsibleSection card (sectionCardStyle()); the layouts count it on both sides.
+    inline constexpr int kChipCardBorderWidth = 1;
+    inline constexpr int kChipCardFrameWidthTotal = 2 * kChipCardBorderWidth;
     inline constexpr int kSensorsPanelVerticalSpacing = 10;
     inline constexpr int kCategoryBlockSpacing = 3;
     inline constexpr int kMaxColumnsPerCategory = 6;
@@ -54,6 +56,14 @@ namespace AppTheme {
     inline constexpr int kLcdBarGap = 3;
     inline constexpr qreal kLcdBarSegmentWidth = 3.5;
     inline constexpr qreal kLcdBarSegmentSpacing = 1.5;
+    // Unit field at the right edge of the LCD, relative to the digit height: height of
+    // the unit symbols and gap between the value and the field.
+    inline constexpr qreal kLcdUnitScale = 0.5;
+    inline constexpr qreal kLcdUnitGap = 0.2;
+    // HI/LO state annunciator under the unit, at the height of the bar graph row, and
+    // the space between it and the unit symbol; relative to the digit height.
+    inline constexpr qreal kLcdStateScale = 0.36;
+    inline constexpr qreal kLcdStateGap = 0.08;
 
     /** Frame of a CollapsibleSection (object name "sectionCard"). */
     [[nodiscard]] QString sectionCardStyle();

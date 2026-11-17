@@ -13,6 +13,9 @@ private slots:
     void permanent_text_is_shown();
     void notice_hides_permanent_updates_until_expired();
     void notice_before_show_is_not_overlapped();
+    void markup_in_text_is_shown_literally();
+    void notices_are_shown_one_after_another();
+    void permanent_text_waits_for_all_queued_notices();
 };
 
 void StatusLineTest::permanent_text_is_shown() {
@@ -43,6 +46,42 @@ void StatusLineTest::notice_before_show_is_not_overlapped() {
     line.setPermanentText(QStringLiteral("Readings: 3"));
     line.show();
     QCOMPARE(line.text(), QStringLiteral("Sensor layout changed"));
+}
+
+void StatusLineTest::markup_in_text_is_shown_literally() {
+    StatusLine line;
+    QCOMPARE(line.textFormat(), Qt::PlainText);
+    line.setPermanentText(QStringLiteral("<b>x</b>"));
+    QCOMPARE(line.text(), QStringLiteral("<b>x</b>"));
+    QVERIFY(!line.sizeHint().isEmpty());
+}
+
+void StatusLineTest::notices_are_shown_one_after_another() {
+    StatusLine line;
+    line.showNotice(QStringLiteral("first"), 300);
+    line.showNotice(QStringLiteral("second"), 300);
+    line.showNotice(QStringLiteral("third"), 300);
+    QCOMPARE(line.text(), QStringLiteral("first"));
+
+    QTRY_COMPARE_WITH_TIMEOUT(line.text(), QStringLiteral("second"), 1000);
+    QVERIFY(line.font().bold());
+    QVERIFY(line.isShowingNotice());
+    QTRY_COMPARE_WITH_TIMEOUT(line.text(), QStringLiteral("third"), 1000);
+}
+
+void StatusLineTest::permanent_text_waits_for_all_queued_notices() {
+    StatusLine line;
+    line.setPermanentText(QStringLiteral("Readings: 3"));
+    line.showNotice(QStringLiteral("first"), 300);
+    line.showNotice(QStringLiteral("second"), 300);
+    line.setPermanentText(QStringLiteral("Readings: 4"));
+    QCOMPARE(line.text(), QStringLiteral("first"));
+
+    QTRY_COMPARE_WITH_TIMEOUT(line.text(), QStringLiteral("second"), 1000);
+    QCOMPARE(line.text(), QStringLiteral("second"));
+    QTRY_VERIFY_WITH_TIMEOUT(!line.isShowingNotice(), 1000);
+    QCOMPARE(line.text(), QStringLiteral("Readings: 4"));
+    QVERIFY(!line.font().bold());
 }
 
 QTEST_MAIN(StatusLineTest)

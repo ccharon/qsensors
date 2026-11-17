@@ -8,7 +8,7 @@ Qt6/Wayland-oriented sensor monitor with an xsensors-inspired UI and direct
 ## Dependencies
 
 - C++20 compiler
-- CMake 4.2 or newer
+- CMake 3.21 or newer
 - Qt6 (`Core`, `Gui`, `Widgets`, and the Linguist tools for the translations;
   `Test` only when building the tests)
 - `libsensors` (lm-sensors)
@@ -25,6 +25,7 @@ cmake --build build -j
 | `BUILD_TESTING` | `ON` | Builds the tests (needs Qt Test); run them with `ctest --test-dir build` |
 | `QSENSORS_WARNINGS_AS_ERRORS` | `OFF` | Treats compiler warnings in qsensors code as errors |
 | `QSENSORS_SANITIZE` | `OFF` | Builds with AddressSanitizer and UndefinedBehaviorSanitizer |
+| `QSENSORS_HARDENING` | `ON` | Hardening flags for qsensors' own targets: PIE, `-fstack-protector-strong`, `-fstack-clash-protection`, `-fcf-protection` (x86), `-D_FORTIFY_SOURCE=3` (optimized builds, not with `QSENSORS_SANITIZE`), full RELRO; each is probed and skipped if unsupported |
 
 ## Run
 
@@ -46,7 +47,7 @@ Qt 6.8 with the Wayland and X11 platform plugins; Qt picks one at startup.
 | `qsensors-X.Y.Z-aarch64.AppImage` | arm64 | 2.39 | Ubuntu 24.04+, Debian 13+, Fedora 40+ |
 
 Build an AppImage locally inside the matching container, e.g. for arm64:
-`docker run --rm -v "$PWD":/src -w /src -e VERSION=0.80.11 ubuntu:24.04 bash packaging/appimage/build.sh`
+`docker run --rm -v "$PWD":/src -w /src -e VERSION=0.81.0 ubuntu:24.04 bash packaging/appimage/build.sh`
 
 ## Configuration
 
@@ -63,14 +64,35 @@ The settings panel changes these values. The window size, the chip order and
 the collapsed chips are stored under `ui/`. The chip order and the collapsed
 chips are saved as soon as they change, the window size when the window closes.
 
+## Supported sensors
+
+qsensors shows these libsensors inputs, grouped per chip:
+
+| Column | Inputs | Units |
+|---|---|---|
+| Temperatures | `temp*_input` | °C or °F |
+| Voltages | `in*_input` | mV, V |
+| Fans | `fan*_input`, `pwm*` (fan control output, 0-255 shown as duty cycle) | RPM, % |
+| Currents | `curr*_input` | mA, A, kA |
+| Power | `power*_input` (or `power*_average` when there is no input), `energy*_input` | mW, W, kW; J to GJ |
+| Other | `humidity*_input`, `freq*_input` | %RH; Hz, kHz, MHz |
+
+`pwm*` needs libsensors API 0x501 or newer and `freq*_input` lm-sensors 3.6.2 (API
+0x510). Values are shown with four significant digits; the unit prefix and the
+decimals follow the sensor's range (`880 mV`, `1.052 V`, `12.10 V`, `230.1 V`),
+taken from the firmware limit when there is one. libsensors 3.6.2 reports
+`pwm*` divided by 2 instead of 2.55; qsensors corrects for that, so a
+`compute pwmX @/2.55, @*2.55` line in `sensors3.conf` makes qsensors show too
+low a duty cycle.
+
 ## Sensor range policy (normalization)
 
 Readings are normalized before they are rendered:
 - native firmware limits are used when available; placeholder limits (for
   example min = max = 0, or the -273.15 / 65261.85 degrees C of NVMe secondary
   sensors) are ignored
-- the bar graph range is completed by category defaults where the firmware
-  reports no limits; alerts come from firmware limits only (temperatures
+- the bar graph range is completed by defaults per quantity where the firmware
+  reports no limits (energy counters and frequencies get no bar graph); alerts come from firmware limits only (temperatures
   without a firmware maximum turn red above 100 degrees C)
 - for temperature readings, values and limits are in the selected display
   unit (`C` or `F`)

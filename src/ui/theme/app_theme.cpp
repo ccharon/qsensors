@@ -9,11 +9,11 @@ namespace AppTheme {
     QString sectionCardStyle() {
         return QStringLiteral(
             "#sectionCard {"
-            "  border: 1px solid palette(mid);"
+            "  border: %1px solid palette(mid);"
             "  background: palette(window);"
             "  color: palette(window-text);"
             "}"
-        );
+        ).arg(kChipCardBorderWidth);
     }
 
     QString sectionHeaderStyle() {

@@ -4,13 +4,11 @@
 # Builds dist/qsensors-<VERSION>-<arch>.AppImage inside a release container.
 # The container's glibc is the minimum glibc of the AppImage, see release.yml.
 #
-# Usage (from the repository root): VERSION=0.80.11 packaging/appimage/build.sh
+# Usage (from the repository root): VERSION=0.81.0 packaging/appimage/build.sh
 set -euo pipefail
 
-: "${VERSION:?VERSION must be set, e.g. VERSION=0.80.11}"
+: "${VERSION:?VERSION must be set, e.g. VERSION=0.81.0}"
 QT_VERSION="6.8.3"
-AQTINSTALL_VERSION="3.3.0"
-CMAKE_SPEC="cmake>=4.2,<4.3"
 # libsensors is built from source: the build containers ship older releases
 # (manylinux_2_28 has 3.4.0, which does not find NVMe, ACPI and virtual chips).
 LM_SENSORS_VERSION="3.6.2"
@@ -77,7 +75,9 @@ install_system_packages() {
 
 install_build_tools() {
     "$PYTHON" -m venv "$WORK/venv"
-    "$WORK/venv/bin/pip" install --quiet "$CMAKE_SPEC" ninja "aqtinstall==$AQTINSTALL_VERSION"
+    # Exact versions with hashes (cmake, ninja, aqtinstall and its dependencies).
+    "$WORK/venv/bin/pip" install --quiet --require-hashes --only-binary=:all: \
+        -r "$ROOT/packaging/appimage/requirements.txt"
     export PATH="$WORK/venv/bin:$PATH"
 }
 
@@ -126,7 +126,8 @@ install_linuxdeploy() {
 build_and_test() {
     cmake -S "$ROOT" -B "$WORK/build" -G Ninja \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
-        -DCMAKE_PREFIX_PATH="$QT_DIR;$SENSORS_DIR" -DBUILD_TESTING=ON
+        -DCMAKE_PREFIX_PATH="$QT_DIR;$SENSORS_DIR" -DBUILD_TESTING=ON \
+        -DQSENSORS_WARNINGS_AS_ERRORS=ON
     cmake --build "$WORK/build" -j"$(nproc)"
     ctest --test-dir "$WORK/build" --output-on-failure
     rm -rf "$WORK/AppDir"

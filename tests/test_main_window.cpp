@@ -11,10 +11,13 @@
 #include "config/settings_keys.h"
 #include "ui/main_window_state_store.h"
 
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QLabel>
+#include <QLayout>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QPointer>
@@ -28,6 +31,7 @@
 #include <QWaitCondition>
 #include <QtTest/QtTest>
 
+#include <atomic>
 #include <chrono>
 #include <memory>
 
@@ -38,6 +42,8 @@ class MainWindowTest final : public QObject {
 private slots:
     void init();
     void first_start_fits_height_to_content();
+    void late_first_readings_fit_window_to_content();
+    void late_first_readings_keep_a_size_the_user_chose();
     void minimum_width_shows_every_card_completely();
     void cards_share_one_size_and_survive_resizing();
     void height_limited_to_content_but_never_forced_smaller();
@@ -47,6 +53,14 @@ private slots:
     void long_status_text_does_not_change_window_width_limits();
     void expand_state_is_saved_when_the_user_changes_it_not_on_startup();
     void failed_layout_write_is_reported();
+    void spin_box_steps_are_saved_once_after_the_last_step();
+    void pending_setting_change_is_saved_when_the_window_closes();
+    void sensor_title_with_markup_is_shown_literally();
+    void sensor_card_height_follows_font_changes();
+    void sensor_card_tooltip_follows_every_displayed_field();
+    void newer_schema_settings_survive_a_session_and_are_reported();
+    void source_that_stops_working_is_shown_in_status();
+    void source_that_recovers_is_shown_again();
 
 private:
     QTemporaryDir m_dir;
@@ -123,17 +137,58 @@ namespace {
         QString m_error;
     };
 
+    /**
+     * Reads once, then stops working like LibsensorsSource after a failed re-init; a retry
+     * brings it back once @p recoverable is set.
+     */
+    class FailingSource final : public SensorSource {
+    public:
+        explicit FailingSource(std::shared_ptr<std::atomic_bool> recoverable = {}) : m_recoverable(std::move(recoverable)) {}
+
+        [[nodiscard]] bool isInitialized() const override { return !m_failed; }
+        [[nodiscard]] QString lastError() const override { return QStringLiteral("re-init failed (4)"); }
+
+        [[nodiscard]] QVector<SensorReading> readAll() override {
+            if (m_reads++ == 1) {
+                m_failed = true;
+                return {};
+            }
+            return {{.chip = QStringLiteral("chip-a"), .category = SensorCategory::Temperatures,
+                     .feature = QStringLiteral("s0"), .featureNumber = 0, .subfeatureNumber = 0, .value = 40.0,
+                     .unit = SensorUnit::Celsius}};
+        }
+
+        [[nodiscard]] bool recover(bool /*retryDue*/) override {
+            if (m_recoverable && *m_recoverable)
+                m_failed = false;
+            return !m_failed;
+        }
+
+    private:
+        std::shared_ptr<std::atomic_bool> m_recoverable;
+        int m_reads = 0;
+        bool m_failed = false;
+    };
+
+    // Runs what the last change posted (layout requests, resizes) without a timed wait.
+    void settleEvents() {
+        for (int i = 0; i < 3; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    }
+
     std::unique_ptr<MainWindow> showWindow() {
         auto window = std::make_unique<MainWindow>([] { return std::make_unique<FakeSource>(); });
         window->show();
         [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(window.get());
-        QTest::qWait(50);
+        settleEvents();
         return window;
     }
 
     void resizeWindow(MainWindow &window, const int width, const int height) {
         window.resize(width, height);
-        QTest::qWait(50);
+        settleEvents();
     }
 
     QScrollArea *scrollArea(const MainWindow &window) {
@@ -178,6 +233,43 @@ void MainWindowTest::first_start_fits_height_to_content() {
     // The full layout is narrower than the default width, so the width is fitted too.
     QVERIFY(window->width() < AppTheme::kInitialWindowWidth);
     QCOMPARE(window->width(), window->maximumWidth());
+}
+
+void MainWindowTest::late_first_readings_fit_window_to_content() {
+    const auto gate = std::make_shared<ReadGate>();
+    gate->close();
+    // The first read outlasts the startup timeout: the window opens without readings.
+    MainWindow window([gate] { return std::make_unique<FakeSource>(gate); }, nullptr, std::chrono::milliseconds(50));
+    const GateGuard guard{gate};
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    QVERIFY(visibleCards(window).isEmpty());
+    QCOMPARE(window.size(), QSize(AppTheme::kInitialWindowWidth, AppTheme::kInitialWindowHeight));
+
+    // Once the readings arrive, the window is fitted as on a start with readings.
+    gate->open();
+    QTRY_COMPARE_WITH_TIMEOUT(visibleCards(window).size(), 8, 3000);
+    QTRY_VERIFY_WITH_TIMEOUT(contentFits(window) && window.height() == window.maximumHeight(), 3000);
+    QVERIFY(window.width() < AppTheme::kInitialWindowWidth);
+    QCOMPARE(window.width(), window.maximumWidth());
+}
+
+void MainWindowTest::late_first_readings_keep_a_size_the_user_chose() {
+    const auto gate = std::make_shared<ReadGate>();
+    gate->close();
+    MainWindow window([gate] { return std::make_unique<FakeSource>(gate); }, nullptr, std::chrono::milliseconds(50));
+    const GateGuard guard{gate};
+    window.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&window));
+    // Resized while waiting; still wider and lower than a fit to the content would make it.
+    const QSize chosen(AppTheme::kInitialWindowWidth - 10, 150);
+    resizeWindow(window, chosen.width(), chosen.height());
+    QCOMPARE(window.size(), chosen);
+
+    gate->open();
+    QTRY_COMPARE_WITH_TIMEOUT(visibleCards(window).size(), 8, 3000);
+    QTest::qWait(50);
+    QCOMPARE(window.size(), chosen);
 }
 
 void MainWindowTest::minimum_width_shows_every_card_completely() {
@@ -230,7 +322,7 @@ void MainWindowTest::height_limited_to_content_but_never_forced_smaller() {
 
     // Collapsing shortens the content; the window keeps its height but cannot grow.
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
-    QTest::qWait(50);
+    settleEvents();
     QCOMPARE(window->height(), fitted);
     resizeWindow(*window, 600, 5000);
     QCOMPARE(window->height(), fitted);
@@ -258,16 +350,14 @@ void MainWindowTest::width_limited_to_full_layout() {
 
     // Collapsed chips still count, so collapsing does not change the limit.
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
-    QTest::qWait(50);
+    settleEvents();
     QCOMPARE(window->maximumWidth(), limit);
 
     // Maximized windows fill the screen; the limit returns afterwards.
     window->showMaximized();
-    QTest::qWait(50);
-    QCOMPARE(window->maximumWidth(), QWIDGETSIZE_MAX);
+    QTRY_COMPARE(window->maximumWidth(), QWIDGETSIZE_MAX);
     window->showNormal();
-    QTest::qWait(50);
-    QCOMPARE(window->maximumWidth(), limit);
+    QTRY_COMPARE(window->maximumWidth(), limit);
 }
 
 void MainWindowTest::source_error_stays_in_status_after_setting_change() {
@@ -313,7 +403,7 @@ void MainWindowTest::long_status_text_does_not_change_window_width_limits() {
     longWindow.show();
     QVERIFY(QTest::qWaitForWindowExposed(&shortWindow));
     QVERIFY(QTest::qWaitForWindowExposed(&longWindow));
-    QTest::qWait(50);
+    settleEvents();
 
     QCOMPARE(longWindow.minimumSizeHint().width(), shortWindow.minimumSizeHint().width());
     QCOMPARE(longWindow.minimumWidth(), shortWindow.minimumWidth());
@@ -327,7 +417,7 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
     {
         const auto window = showWindow();
         // Starting, restoring and polling write no layout state.
-        QVERIFY(!QSettings().contains(SettingsKeys::kSensorFingerprint));
+        QVERIFY(!QSettings().contains(SettingsKeys::kChipExpandedGroup));
         QVERIFY(!QSettings().contains(SettingsKeys::kChipOrder));
 
         section(*window, QStringLiteral("chip-a"))->setExpanded(false);
@@ -335,7 +425,7 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
         const MainWindowState state = MainWindowStateStore::load();
         QCOMPARE(state.chipExpanded.value(QStringLiteral("chip-a"), true), false);
         QCOMPARE(state.chipOrder, (QStringList{QStringLiteral("chip-a"), QStringLiteral("chip-b")}));
-        QVERIFY(!state.sensorFingerprint.isEmpty());
+        QVERIFY(!QSettings().contains(QStringLiteral("sensors/fingerprint")));
         QVERIFY(state.geometry.isEmpty());
         window->close();
     }
@@ -344,8 +434,13 @@ void MainWindowTest::expand_state_is_saved_when_the_user_changes_it_not_on_start
     // The saved state is restored without being written again.
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, m_dir.path());
     const QString file = QSettings().fileName();
+    // Age the file instead of sleeping past the file system's timestamp resolution.
+    {
+        QFile settingsFile(file);
+        QVERIFY(settingsFile.open(QIODevice::ReadWrite));
+        QVERIFY(settingsFile.setFileTime(QDateTime::currentDateTime().addSecs(-60), QFileDevice::FileModificationTime));
+    }
     const QDateTime before = QFileInfo(file).lastModified();
-    QTest::qWait(1100);
     const auto window = showWindow();
     QVERIFY(!section(*window, QStringLiteral("chip-a"))->isExpanded());
     QCOMPARE(QFileInfo(file).lastModified(), before);
@@ -365,6 +460,158 @@ void MainWindowTest::failed_layout_write_is_reported() {
     section(*window, QStringLiteral("chip-a"))->setExpanded(false);
     QVERIFY(status->isShowingNotice());
     QVERIFY(QDir().rmdir(file.fileName()));
+}
+
+void MainWindowTest::newer_schema_settings_survive_a_session_and_are_reported() {
+    {
+        // Written by a newer version: values this build would clamp, under a newer marker.
+        QSettings s;
+        s.setValue(SettingsKeys::kSchemaVersion, 99);
+        s.setValue(SettingsKeys::kPollingIntervalSec, 30);
+        s.setValue(SettingsKeys::kFanDefaultMaxRpm, 20000);
+        s.setValue(SettingsKeys::kTemperatureUnit, QStringLiteral("K"));
+        s.setValue(SettingsKeys::kChipOrder, QStringList{QStringLiteral("zzz-future-chip")});
+        s.sync();
+    }
+    {
+        const auto window = showWindow();
+        const StatusLine *status = window->findChild<StatusLine *>();
+        QVERIFY(status->isShowingNotice());
+        QVERIFY2(status->text().contains(QStringLiteral("newer")), qPrintable(status->text()));
+
+        // Changes in this session stay in memory only.
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->value() == spin->maximum() ? spin->minimum() : spin->maximum());
+        section(*window, QStringLiteral("chip-a"))->setExpanded(false);
+        window->close();
+    }
+    const QSettings s;
+    QCOMPARE(s.value(SettingsKeys::kSchemaVersion).toInt(), 99);
+    QCOMPARE(s.value(SettingsKeys::kPollingIntervalSec).toInt(), 30);
+    QCOMPARE(s.value(SettingsKeys::kFanDefaultMaxRpm).toInt(), 20000);
+    QCOMPARE(s.value(SettingsKeys::kTemperatureUnit).toString(), QStringLiteral("K"));
+    QCOMPARE(s.value(SettingsKeys::kChipOrder).toStringList(), QStringList{QStringLiteral("zzz-future-chip")});
+    QVERIFY(!s.contains(SettingsKeys::kWindowGeometry));
+    QVERIFY(!s.contains(QStringLiteral("sensors/fingerprint")));
+}
+
+void MainWindowTest::spin_box_steps_are_saved_once_after_the_last_step() {
+    const auto window = showWindow();
+    QSpinBox *polling = nullptr;
+    for (QSpinBox *spin: window->findChildren<QSpinBox *>()) {
+        if (spin->maximum() == RuntimeConfigLimits::kMaxPollingIntervalSec)
+            polling = spin;
+    }
+    QVERIFY(polling != nullptr);
+    for (const int value: {4, 5, 6})
+        polling->setValue(value);
+    // The display follows each step, the settings file only the last one, after the debounce.
+    QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    QTRY_VERIFY_WITH_TIMEOUT(QSettings().contains(SettingsKeys::kPollingIntervalSec), 3000);
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, 6);
+}
+
+void MainWindowTest::pending_setting_change_is_saved_when_the_window_closes() {
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->maximum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+        window->close();
+    }
+    const RuntimeConfig saved = AppConfigStore::loadRuntimeConfig();
+    QCOMPARE(saved.pollingIntervalSec, RuntimeConfigLimits::kMaxPollingIntervalSec);
+    QCOMPARE(saved.fanDefaultMaxRpm, RuntimeConfigLimits::kMaxFanDefaultMaxRpm);
+
+    // Without a close event (window destroyed directly) the pending change is flushed as well.
+    QSettings().clear();
+    {
+        const auto window = showWindow();
+        for (QSpinBox *spin: window->findChildren<QSpinBox *>())
+            spin->setValue(spin->minimum());
+        QVERIFY(!QSettings().contains(SettingsKeys::kPollingIntervalSec));
+    }
+    QCOMPARE(AppConfigStore::loadRuntimeConfig().pollingIntervalSec, RuntimeConfigLimits::kMinPollingIntervalSec);
+}
+
+void MainWindowTest::sensor_title_with_markup_is_shown_literally() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("<b>x</b>"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.resize(300, card.height());
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const QLabel *title = card.findChild<QLabel *>();
+    QVERIFY(title != nullptr);
+    QCOMPARE(title->textFormat(), Qt::PlainText);
+    QCOMPARE(title->text(), QStringLiteral("<b>x</b>:"));
+}
+
+void MainWindowTest::sensor_card_height_follows_font_changes() {
+    const SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                                .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius};
+    SensorValueWidget card(reading);
+    card.show();
+    [[maybe_unused]] const bool exposed = QTest::qWaitForWindowExposed(&card);
+    const int before = card.height();
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+
+    QFont bigger = card.font();
+    bigger.setPointSizeF(bigger.pointSizeF() * 2.0);
+    card.setFont(bigger);
+    QTRY_VERIFY(card.height() > before);
+    QCOMPARE(card.height(), card.layout()->sizeHint().height());
+    QCOMPARE(card.minimumHeight(), card.maximumHeight());
+}
+
+void MainWindowTest::sensor_card_tooltip_follows_every_displayed_field() {
+    SensorReading reading{.chip = QStringLiteral("chip"), .category = SensorCategory::Temperatures,
+                          .feature = QStringLiteral("temp1"), .value = 40.0, .unit = SensorUnit::Celsius,
+                          .firmwareMax = 80.0};
+    SensorValueWidget card(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+
+    reading.firmwareMax = 90.0;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    reading.value = std::nullopt;
+    card.setReading(reading);
+    QCOMPARE(card.toolTip(), SensorValueWidget::detailsToolTip(reading));
+    QVERIFY(card.toolTip().contains(QStringLiteral("cannot be read")));
+}
+
+void MainWindowTest::source_that_stops_working_is_shown_in_status() {
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(AppConfigStore::saveRuntimeConfig(config));
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("stopped working")));
+    MainWindow window([] { return std::make_unique<FailingSource>(); });
+    const StatusLine *status = window.findChild<StatusLine *>();
+    QVERIFY2(status->text().startsWith(QStringLiteral("Readings: 1")), qPrintable(status->text()));
+
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("re-init failed (4)")), 10000);
+    QCOMPARE(window.findChildren<SensorValueWidget *>().size(), 0);
+}
+
+void MainWindowTest::source_that_recovers_is_shown_again() {
+    RuntimeConfig config;
+    config.pollingIntervalSec = RuntimeConfigLimits::kMinPollingIntervalSec;
+    QVERIFY(AppConfigStore::saveRuntimeConfig(config));
+    const auto recoverable = std::make_shared<std::atomic_bool>(false);
+    QTest::ignoreMessage(QtWarningMsg, QRegularExpression(QStringLiteral("stopped working")));
+    MainWindow window([recoverable] { return std::make_unique<FailingSource>(recoverable); });
+    window.findChild<SensorMonitor *>()->setRetryDelays(std::chrono::milliseconds(50), std::chrono::milliseconds(50));
+    const StatusLine *status = window.findChild<StatusLine *>();
+    QVERIFY2(status->text().startsWith(QStringLiteral("Readings: 1")), qPrintable(status->text()));
+
+    // The error stays in the status while the retries fail.
+    QTRY_VERIFY_WITH_TIMEOUT(status->text().contains(QStringLiteral("re-init failed (4)")), 10000);
+    QCOMPARE(window.findChildren<SensorValueWidget *>().size(), 0);
+
+    *recoverable = true;
+    QTRY_VERIFY_WITH_TIMEOUT(status->text() == QStringLiteral("Sensors are available again"), 10000);
+    QCOMPARE(window.findChildren<SensorValueWidget *>().size(), 1);
+    QVERIFY(window.findChild<SensorMonitor *>()->lastError().isEmpty());
 }
 
 QTEST_MAIN(MainWindowTest)

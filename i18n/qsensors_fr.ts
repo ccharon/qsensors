@@ -11,20 +11,20 @@
 <context>
     <name>MainWindow</name>
     <message>
-        <source>libsensors init failed: %1</source>
-        <translation>Échec de l&apos;initialisation de libsensors : %1</translation>
-    </message>
-    <message>
-        <source>Sensor layout changed: UI config reset</source>
-        <translation>Disposition des capteurs modifiée : configuration UI réinitialisée</translation>
-    </message>
-    <message>
         <source>No sensors found. Run sensors-detect and check the lm-sensors configuration.</source>
         <translation>Aucun capteur trouvé. Exécutez sensors-detect et vérifiez la configuration de lm-sensors.</translation>
     </message>
     <message>
         <source>Sensors are not responding; the values shown are outdated</source>
         <translation>Les capteurs ne répondent pas ; les valeurs affichées sont obsolètes</translation>
+    </message>
+    <message>
+        <source>Sensors are available again</source>
+        <translation>Les capteurs sont de nouveau disponibles</translation>
+    </message>
+    <message>
+        <source>Sensors unavailable, retrying: %1</source>
+        <translation>Capteurs indisponibles, nouvel essai en cours : %1</translation>
     </message>
     <message>
         <source>Readings: %1 | Refresh: %2s</source>
@@ -35,8 +35,12 @@
         <translation>Impossible d&apos;enregistrer les paramètres</translation>
     </message>
     <message>
-        <source>Settings were written by a newer qsensors version and are used as far as possible</source>
-        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors et sont utilisés dans la mesure du possible</translation>
+        <source>Collapsed state dropped for missing sensor chips: %1</source>
+        <translation>État replié supprimé pour les puces de capteurs absentes : %1</translation>
+    </message>
+    <message>
+        <source>Settings were written by a newer qsensors version; changes are not saved in this session</source>
+        <translation>Les paramètres proviennent d&apos;une version plus récente de qsensors ; les modifications ne sont pas enregistrées dans cette session</translation>
     </message>
 </context>
 <context>

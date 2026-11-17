@@ -9,13 +9,20 @@
 #include <QToolButton>
 #include <QVBoxLayout>
 
+namespace {
+    // QAbstractButton reads '&' as a mnemonic marker; titles can be hardware-supplied chip names.
+    QString literalButtonText(QString text) {
+        return text.replace(QLatin1Char('&'), QStringLiteral("&&"));
+    }
+}
+
 CollapsibleSection::CollapsibleSection(const QString &title, const bool expanded, QWidget *parent)
     : QFrame(parent), m_header(new QToolButton(this)), m_content(new QWidget(this)),
       m_contentLayout(new QVBoxLayout(m_content)) {
     setObjectName(QStringLiteral("sectionCard"));
     setStyleSheet(AppTheme::sectionCardStyle());
 
-    m_header->setText(title);
+    m_header->setText(literalButtonText(title));
     m_header->setCheckable(true);
     m_header->setChecked(expanded);
     m_header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);

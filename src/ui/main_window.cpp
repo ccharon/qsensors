@@ -18,20 +18,29 @@
 #include <QSettings>
 #include <QScreen>
 #include <QStatusBar>
+#include <QTimer>
 #include <QVBoxLayout>
 #include <utility>
 
 namespace {
     constexpr int kNoticeTimeoutMs = 10000;
+    // Holding a spin box arrow changes the value many times per second; the display follows
+    // each step, the settings file is written once the changes stop.
+    constexpr int kSaveDebounceMs = 500;
 }
 
-MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent)
+MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *parent,
+                       const std::chrono::milliseconds startupTimeout)
     : QMainWindow(parent),
       m_monitor(new SensorMonitor(std::move(sourceFactory), this)),
       m_scrollArea(nullptr),
       m_sensorsPanel(nullptr),
       m_settingsPanel(nullptr),
-      m_statusLine(nullptr) {
+      m_statusLine(nullptr),
+      m_saveTimer(new QTimer(this)) {
+    m_saveTimer->setSingleShot(true);
+    m_saveTimer->setInterval(kSaveDebounceMs);
+    connect(m_saveTimer, &QTimer::timeout, this, &MainWindow::persistRuntimeConfig);
     setupUi();
     m_styledPalette = QApplication::palette();
     loadSettings();
@@ -57,22 +66,42 @@ MainWindow::MainWindow(SensorMonitor::SourceFactory sourceFactory, QWidget *pare
 
     connect(m_monitor, &SensorMonitor::readingsChanged, this, &MainWindow::showReadings);
     connect(m_monitor, &SensorMonitor::stalledChanged, this, &MainWindow::updateReadingsStatus);
+    connect(m_monitor, &SensorMonitor::sourceFailed, this, [this](const QString &error) {
+        m_sourceError = error;
+        updateReadingsStatus();
+    });
+    // The readings follow right away and set the permanent status.
+    connect(m_monitor, &SensorMonitor::sourceRecovered, this, [this] {
+        m_sourceError.clear();
+        showNotice(tr("Sensors are available again"));
+    });
     // Reads once before returning, so the first readings are shown before the window.
+    m_monitor->setStartupTimeout(startupTimeout);
     if (!m_monitor->start(m_runtimeConfig)) {
         m_sourceError = m_monitor->lastError();
         updateReadingsStatus();
     }
 }
 
+MainWindow::~MainWindow() {
+    // A change still waiting for its debounce interval must not be lost.
+    if (m_saveTimer->isActive()) {
+        m_saveTimer->stop();
+        persistRuntimeConfig();
+    }
+}
+
 void MainWindow::showReadings(const QVector<SensorReading> &readings) {
     m_sensorsPanel->setReadings(readings);
     updateReadingsStatus();
+    // First readings after a startup timeout arrive while the window is already shown.
+    applyInitialLayout();
 }
 
 void MainWindow::updateReadingsStatus() {
     // Without a source there are no readings; the reason matters more than the count.
     if (!m_sourceError.isEmpty()) {
-        setStatusMessage(tr("libsensors init failed: %1").arg(m_sourceError));
+        setStatusMessage(tr("Sensors unavailable, retrying: %1").arg(m_sourceError));
         return;
     }
     // The panel still shows the last readings; the count would suggest they are current.
@@ -93,17 +122,21 @@ void MainWindow::showNotice(const QString &text) {
 }
 
 void MainWindow::persistRuntimeConfig() {
+    m_saveTimer->stop();
+    if (m_settingsReadOnly)
+        return;
     if (!AppConfigStore::saveRuntimeConfig(m_runtimeConfig)) {
         showNotice(tr("Settings could not be saved"));
     }
 }
 
 void MainWindow::persistChipLayout() {
+    if (m_settingsReadOnly)
+        return;
     const bool saved = MainWindowStateStore::saveLayout({
         .geometry = {},
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
         .chipOrder = m_sensorsPanel->chipOrder(),
-        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
     });
     if (!saved) {
         showNotice(tr("Settings could not be saved"));
@@ -129,8 +162,8 @@ void MainWindow::setupUi() {
     m_settingsPanel = new SettingsPanel(content);
     connect(m_sensorsPanel, &SensorsPanel::chipOrderChanged, this, &MainWindow::persistChipLayout);
     connect(m_sensorsPanel, &SensorsPanel::chipExpandedChanged, this, &MainWindow::persistChipLayout);
-    connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
-        showNotice(tr("Sensor layout changed: UI config reset"));
+    connect(m_sensorsPanel, &SensorsPanel::expandStateDropped, this, [this](const QStringList &chips) {
+        showNotice(tr("Collapsed state dropped for missing sensor chips: %1").arg(chips.join(QStringLiteral(", "))));
     });
 
     auto *settingsHost = new QWidget(content);
@@ -163,6 +196,7 @@ void MainWindow::setStatusMessage(const QString &text) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *event) {
+    m_saveTimer->stop(); // saveSettings() writes the current config
     saveSettings();
     QMainWindow::closeEvent(event);
 }
@@ -199,6 +233,10 @@ QSize MainWindow::availableScreenSize() const {
 }
 
 void MainWindow::updateSizeLimits() {
+    // On Wayland the maximum size goes to the compositor (xdg_toplevel.set_max_size), which
+    // may use it to allow or refuse maximizing. KWin 6.7 maximizes and quick-tiles to the
+    // full area anyway, both on showMaximized() and on its own maximize action, and the
+    // limit is lifted here once the maximized state arrives (tested in kwin_wayland --virtual).
     if (isMaximized() || isFullScreen()) {
         setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX);
         return;
@@ -222,13 +260,25 @@ void MainWindow::updateSizeLimits() {
 
 void MainWindow::showEvent(QShowEvent *event) {
     QMainWindow::showEvent(event);
-    if (!m_initialLayoutApplied && m_sensorsPanel->readingCount() > 0) {
-        // Without saved geometry the first size fits the content; applied once the
-        // layout has computed its size (see updateSizeLimits()).
-        m_fitToContent = !m_hasSavedGeometry;
-        m_initialLayoutApplied = true;
-        QMetaObject::invokeMethod(this, &MainWindow::updateSizeLimits, Qt::QueuedConnection);
-    }
+    if (!m_shownSize.isValid())
+        m_shownSize = size();
+    applyInitialLayout();
+}
+
+void MainWindow::applyInitialLayout() {
+    if (m_initialLayoutApplied || !isVisible() || m_sensorsPanel->readingCount() == 0)
+        return;
+    m_initialLayoutApplied = true;
+    // Without saved geometry the first size fits the content. Late first readings
+    // (startup timeout) leave a window alone that the user resized or maximized meanwhile.
+    const bool fit = !m_hasSavedGeometry && size() == m_shownSize && !isMaximized() && !isFullScreen();
+    // A zero timer runs once the posted events are processed: the deferred showing of new
+    // chip sections and the layout requests it causes. Only then is the content height
+    // final; a fit taken from an earlier updateSizeLimits() call could use an empty panel.
+    QTimer::singleShot(0, this, [this, fit] {
+        m_fitToContent = fit;
+        updateSizeLimits();
+    });
 }
 
 void MainWindow::changeEvent(QEvent *event) {
@@ -255,9 +305,14 @@ void MainWindow::applyThemeRefresh() {
 void MainWindow::loadSettings() {
     // The only migration point: the stores below read the current schema.
     QSettings settings;
-    SettingsSchema::ensureUpToDate(settings);
-    if (SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion) {
-        showNotice(tr("Settings were written by a newer qsensors version and are used as far as possible"));
+    if (!SettingsSchema::ensureUpToDate(settings)) {
+        showNotice(tr("Settings could not be saved"));
+    }
+    // Values of a newer schema are only read (clamped, in memory); writing them back would
+    // replace the newer version's values under its own version marker.
+    m_settingsReadOnly = SettingsSchema::storedVersion(settings) > SettingsSchema::kCurrentVersion;
+    if (m_settingsReadOnly) {
+        showNotice(tr("Settings were written by a newer qsensors version; changes are not saved in this session"));
     }
 
     // Runtime config and UI layout state are intentionally persisted independently.
@@ -266,23 +321,24 @@ void MainWindow::loadSettings() {
 
     m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);
 
-    m_sensorsPanel->restoreChipExpandedState(state.chipExpanded, state.sensorFingerprint);
+    m_sensorsPanel->restoreChipExpandedState(state.chipExpanded);
     m_sensorsPanel->setChipOrder(state.chipOrder);
 }
 
 void MainWindow::saveSettings() const {
     // Runs on close, when no UI feedback is possible; the stores log failures.
+    if (m_settingsReadOnly)
+        return;
     (void) AppConfigStore::saveRuntimeConfig(m_runtimeConfig);
     (void) MainWindowStateStore::save({
         .geometry = saveGeometry(),
         .chipExpanded = m_sensorsPanel->chipExpandedState(),
         .chipOrder = m_sensorsPanel->chipOrder(),
-        .sensorFingerprint = m_sensorsPanel->chipFingerprint(),
     });
 }
 
 void MainWindow::applyRuntimeConfig() {
-    persistRuntimeConfig();
+    m_saveTimer->start();
     m_monitor->setConfig(m_runtimeConfig);
     updateReadingsStatus();
 }
