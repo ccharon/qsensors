@@ -13,8 +13,12 @@
 #include <QVector>
 #include <QWidget>
 
+#include <functional>
+#include <optional>
+
 class CategoryRowLayout;
 class CollapsibleSection;
+class QDrag;
 class QDragEnterEvent;
 class QDragLeaveEvent;
 class QDragMoveEvent;
@@ -38,11 +42,11 @@ public:
     void setChipExpandedState(const QHash<QString, bool> &state);
 
     /**
-     * Applies a persisted expand state that was saved for @p chipFingerprint. If the
-     * first readings show a different chip set, the state is dropped and
-     * layoutStateReset() is emitted.
+     * Applies a persisted expand state. The first readings with at least one chip drop
+     * the entries of chips that are no longer present; if any of them was collapsed,
+     * expandStateDropped() names those chips. Entries of present chips are kept.
      */
-    void restoreChipExpandedState(const QHash<QString, bool> &state, const QString &chipFingerprint);
+    void restoreChipExpandedState(const QHash<QString, bool> &state);
 
     /** Expand/collapse state per chip name, for persistence. */
     [[nodiscard]] QHash<QString, bool> chipExpandedState() const;
@@ -53,19 +57,34 @@ public:
      */
     void setChipOrder(const QStringList &order);
 
-    /** Current chip order for persistence; includes preferred chips not present right now. */
+    /**
+     * Current chip order for persistence. Preferred chips not present right now keep
+     * their place before the shown chip they preceded; at most kMaxAbsentChipsInOrder of
+     * them are kept (the first ones in the order). Without any shown chip the preferred
+     * order is returned unchanged.
+     */
     [[nodiscard]] QStringList chipOrder() const;
+
+    /** Absent chips kept in the saved order, so it does not grow with every chip ever seen. */
+    static constexpr int kMaxAbsentChipsInOrder = 16;
 
     /** Moves @p chip to position @p targetIndex among the shown chips (insert position before the move). */
     void moveChip(const QString &chip, int targetIndex);
 
-    /** Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). */
+    /**
+     * Fingerprint of the chips currently shown (see SensorIdentity::chipFingerprint). Only
+     * written to the settings; the restored expand state no longer depends on it.
+     */
     [[nodiscard]] QString chipFingerprint() const;
 
     /** Number of readings currently shown. */
     [[nodiscard]] int readingCount() const;
 
-    /** Shows @p readings; rebuilds only sections whose sensors changed. */
+    /**
+     * Shows @p readings; rebuilds only sections whose sensors changed. While a chip is
+     * dragged, a structural change is deferred until the drag has ended (only the last
+     * deferred readings are applied); value updates go on.
+     */
     void setReadings(const QVector<SensorReading> &readings);
 
     /**
@@ -80,6 +99,12 @@ public:
      * (e.g. maximized) still stretches its chip frames.
      */
     [[nodiscard]] int maximumUsefulWidth() const;
+
+    /**
+     * Runs a started chip drag instead of QDrag::exec(), for tests: the offscreen
+     * platform has no drag event loop. An empty executor restores QDrag::exec().
+     */
+    void setDragExecutor(std::function<void(QDrag &)> executor);
 
 protected:
     void dragEnterEvent(QDragEnterEvent *event) override;
@@ -101,8 +126,8 @@ signals:
     /** The user collapsed or expanded a chip; not emitted when a state is applied by code. */
     void chipExpandedChanged();
 
-    /** A restored expand state did not match the current chips and was dropped. */
-    void layoutStateReset();
+    /** The restored collapsed state of @p chips was dropped because they are no longer present. */
+    void expandStateDropped(const QStringList &chips);
 
 private:
     using CategoryGroups = QMap<SensorCategory, QVector<SensorReading>>;
@@ -121,7 +146,10 @@ private:
     /** Reconciles all sections with m_groups; returns true if the structure changed. */
     bool render();
 
-    /** Drops the pending restored state when it belongs to another chip set. */
+    /** True if render() would create, remove, rebuild or reorder a chip section. */
+    [[nodiscard]] bool hasStructuralChange() const;
+
+    /** Drops restored expand entries of chips that the first non-empty readings lack. */
     void checkRestoredState();
 
     /** Deletes sections of chips that are no longer present; returns true if any was removed. */
@@ -145,11 +173,20 @@ private:
     /** Starts dragging the card of @p chip, grabbed at @p grabPos in the card; the drop reorders via moveChip(). */
     void startChipDrag(const QString &chip, const QPoint &grabPos);
 
+    /** True if @p event carries a chip dragged from this panel. */
+    [[nodiscard]] bool isOwnChipDrag(const QDropEvent *event) const;
+
     /** Insert position among the shown chips for a drop at @p y. */
     [[nodiscard]] int dropIndexAt(int y) const;
 
     /** Shows the insert line before position @p index. */
     void showDropIndicator(int index);
+
+    /**
+     * @p shown (present chips, in their new order) with the absent chips of @p preferred
+     * re-inserted, each before the shown chip it preceded; see chipOrder().
+     */
+    [[nodiscard]] static QStringList mergeChipOrder(const QStringList &preferred, const QStringList &shown);
 
     [[nodiscard]] static ChipGroups groupReadingsByChip(const QVector<SensorReading> &readings);
     [[nodiscard]] static QString chipStructureFingerprint(const CategoryGroups &categories);
@@ -166,7 +203,12 @@ private:
     QStringList m_preferredOrder;
     QWidget *m_dropIndicator;
     QHash<QString, bool> m_chipExpanded;
-    // Set by restoreChipExpandedState() until the first readings confirm or reject it.
-    QString m_restoredFingerprint;
+    // Set by restoreChipExpandedState() until the first readings with chips are checked.
+    bool m_restorePending = false;
     bool m_applyingExpandedState = false;
+    // True while QDrag::exec() runs its nested event loop for a chip drag.
+    bool m_dragActive = false;
+    std::function<void(QDrag &)> m_dragExecutor;
+    // Last readings with a structural change that arrived during a drag.
+    std::optional<QVector<SensorReading>> m_deferredReadings;
 };

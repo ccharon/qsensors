@@ -5,11 +5,13 @@
 #include "ui/panels/sensors_panel.h"
 #include "ui/widgets/collapsible_section.h"
 #include "sensors/sensor_identity.h"
+#include "ui/widgets/lcd_display_widget.h"
 #include "ui/widgets/sensor_value_widget.h"
 #include "ui/theme/app_theme.h"
 
 #include <QApplication>
 #include <algorithm>
+#include <QDrag>
 #include <QDropEvent>
 #include <QLayout>
 #include <QMimeData>
@@ -24,18 +26,25 @@ class SensorsPanelTest final : public QObject {
 
 private slots:
     void value_and_unit_updates_keep_widgets();
+    void value_update_repaints_only_changed_lcds();
     void resize_moves_cards_without_rebuild();
     void expand_state_roundtrip_and_apply();
     void structure_signal_on_new_category_not_on_values();
-    void restored_state_dropped_for_other_chip_set();
-    void restored_state_kept_for_same_chip_set();
+    void restored_state_dropped_only_for_missing_chips();
+    void restored_state_kept_when_all_chips_present();
+    void empty_first_read_keeps_restored_state();
     void fingerprint_and_count_follow_readings();
     void default_order_is_alphabetical();
     void move_chip_reorders_cards();
     void preferred_order_puts_new_chips_last_and_keeps_absent_ones();
+    void absent_chips_keep_their_place_across_moves_and_returns();
+    void saved_order_keeps_a_bounded_number_of_absent_chips();
     void header_click_still_toggles_when_draggable();
     void user_toggle_and_drop_are_announced_but_applying_state_is_not();
+    void drop_from_another_drag_is_rejected();
+    void section_frame_matches_the_theme_frame_width();
     void drag_request_carries_the_pointer_position_in_the_section();
+    void structural_update_waits_for_the_end_of_a_drag();
     void columns_go_to_category_with_most_rows();
     void columns_only_added_when_they_save_a_row();
     void card_width_spreads_spare_width_up_to_maximum();
@@ -84,11 +93,74 @@ namespace {
         QCoreApplication::sendPostedEvents();
     }
 
+    // Counts paint events per watched widget.
+    class PaintCounter final : public QObject {
+    public:
+        void watch(QWidget *widget) {
+            widget->installEventFilter(this);
+            m_counts.insert(widget, 0);
+        }
+        [[nodiscard]] int count(QWidget *widget) const { return m_counts.value(widget); }
+        [[nodiscard]] int total() const {
+            int sum = 0;
+            for (const int c: m_counts)
+                sum += c;
+            return sum;
+        }
+        void reset() {
+            for (int &c: m_counts)
+                c = 0;
+        }
+
+    protected:
+        bool eventFilter(QObject *watched, QEvent *event) override {
+            if (event->type() == QEvent::Paint)
+                ++m_counts[static_cast<QWidget *>(watched)];
+            return QObject::eventFilter(watched, event);
+        }
+
+    private:
+        QHash<QWidget *, int> m_counts;
+    };
+
+    // Delivers pending update requests, so scheduled paints happen now.
+    void flushPaints() {
+        for (int i = 0; i < 3; ++i) {
+            QCoreApplication::sendPostedEvents();
+            QCoreApplication::processEvents();
+        }
+    }
+
     QToolButton *headerFor(const SensorsPanel &panel, const QString &chip) {
         for (QToolButton *button: panel.findChildren<QToolButton *>())
             if (button->text() == chip)
                 return button;
         return nullptr;
+    }
+
+    // Drags @p mime over the panel's window and drops it at height @p y; returns whether the drop was accepted.
+    bool dropOnWindow(SensorsPanel &panel, const QMimeData &mime, const int y) {
+        // The window routes the events to the widget under the pointer, as for a real drag.
+        QWindow *window = panel.windowHandle();
+        const QPointF pos(10, y);
+        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &enter);
+        QDropEvent drop(pos, Qt::MoveAction, &mime, Qt::LeftButton, Qt::NoModifier);
+        QCoreApplication::sendEvent(window, &drop);
+        return drop.isAccepted();
+    }
+
+    // Drags @p chip by its header and drops it at height @p y, as the user would; returns whether the drop was accepted.
+    bool dragChipTo(SensorsPanel &panel, const QString &chip, const int y) {
+        bool accepted = false;
+        panel.setDragExecutor([&](QDrag &drag) { accepted = dropOnWindow(panel, *drag.mimeData(), y); });
+        QToolButton *header = headerFor(panel, chip);
+        const QPoint press(20, header->height() / 2);
+        QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+        QTest::mouseMove(header, press + QPoint(QApplication::startDragDistance() + 10, 0));
+        QTest::mouseRelease(header, Qt::LeftButton, Qt::NoModifier, press);
+        panel.setDragExecutor({});
+        return accepted;
     }
 }
 
@@ -100,6 +172,36 @@ void SensorsPanelTest::value_and_unit_updates_keep_widgets() {
 
     panel.setReadings(sampleReadings(55.0, SensorUnit::Milliampere));
     QCOMPARE(cards(panel), before);
+}
+
+void SensorsPanelTest::value_update_repaints_only_changed_lcds() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0));
+    layOut(panel, 900);
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    flushPaints();
+
+    PaintCounter counter;
+    LcdDisplayWidget *tempLcd = nullptr;
+    for (SensorValueWidget *card: cards(panel)) {
+        auto *lcd = card->findChild<LcdDisplayWidget *>();
+        QVERIFY(lcd);
+        counter.watch(lcd);
+        if (card->toolTip().contains(QStringLiteral("temp1")))
+            tempLcd = lcd;
+    }
+    QVERIFY(tempLcd);
+
+    // The same readings again paint nothing.
+    panel.setReadings(sampleReadings(40.0));
+    flushPaints();
+    QCOMPARE(counter.total(), 0);
+
+    // One changed value repaints only its own LCD.
+    panel.setReadings(sampleReadings(55.0));
+    flushPaints();
+    QCOMPARE(counter.count(tempLcd), 1);
+    QCOMPARE(counter.total(), 1);
 }
 
 void SensorsPanelTest::resize_moves_cards_without_rebuild() {
@@ -178,29 +280,56 @@ void SensorsPanelTest::structure_signal_on_new_category_not_on_values() {
     QVERIFY(panel.minimumSizeHint().width() > widthBefore);
 }
 
-void SensorsPanelTest::restored_state_dropped_for_other_chip_set() {
+void SensorsPanelTest::restored_state_dropped_only_for_missing_chips() {
     SensorsPanel panel;
-    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QStringLiteral("old-chip"));
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false},
+                                    {QStringLiteral("gone-collapsed"), false},
+                                    {QStringLiteral("gone-expanded"), true}});
     panel.setReadings(sampleReadings(40.0));
 
+    // Present chips keep their state; only the missing ones are dropped.
+    const QHash<QString, bool> state = panel.chipExpandedState();
+    QCOMPARE(state.value(QStringLiteral("chip-a"), true), false);
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-a"))->isChecked());
+    QVERIFY(!state.contains(QStringLiteral("gone-collapsed")));
+    QVERIFY(!state.contains(QStringLiteral("gone-expanded")));
+    // Only a dropped collapsed state is worth a notice; an expanded one is the default anyway.
     QCOMPARE(spy.count(), 1);
-    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), true);
+    QCOMPARE(spy.first().first().toStringList(), QStringList{QStringLiteral("gone-collapsed")});
 
-    // The check runs once; later polls do not reset again.
+    // The check runs once; later polls do not drop again.
+    panel.setChipExpandedState({{QStringLiteral("gone-collapsed"), false}});
     panel.setReadings(sampleReadings(41.0));
     QCOMPARE(spy.count(), 1);
+    QVERIFY(panel.chipExpandedState().contains(QStringLiteral("gone-collapsed")));
 }
 
-void SensorsPanelTest::restored_state_kept_for_same_chip_set() {
-    const QVector<SensorReading> readings = sampleReadings(40.0);
+void SensorsPanelTest::restored_state_kept_when_all_chips_present() {
     SensorsPanel panel;
-    QSignalSpy spy(&panel, &SensorsPanel::layoutStateReset);
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, SensorIdentity::chipFingerprint(readings));
-    panel.setReadings(readings);
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}});
+    // A new chip (chip-b) alone does not drop anything.
+    panel.setReadings(sampleReadings(40.0));
 
     QCOMPARE(spy.count(), 0);
     QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-a")), false);
+    QCOMPARE(panel.chipExpandedState().value(QStringLiteral("chip-b")), true);
+}
+
+void SensorsPanelTest::empty_first_read_keeps_restored_state() {
+    SensorsPanel panel;
+    QSignalSpy spy(&panel, &SensorsPanel::expandStateDropped);
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}, {QStringLiteral("chip-b"), false}});
+    panel.setReadings({});
+    QCOMPARE(spy.count(), 0);
+    QCOMPARE(panel.chipExpandedState().size(), 2);
+
+    // The first read with chips decides.
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(spy.count(), 0);
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-a"))->isChecked());
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-b"))->isChecked());
 }
 
 void SensorsPanelTest::fingerprint_and_count_follow_readings() {
@@ -252,9 +381,66 @@ void SensorsPanelTest::preferred_order_puts_new_chips_last_and_keeps_absent_ones
 
     QCOMPARE(cardOrder(panel),
              (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
-    // A chip that is currently missing keeps its saved preference.
-    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"),
-                                             QStringLiteral("chip-c"), QStringLiteral("gone")}));
+    // A chip that is currently missing keeps its place: before the chip it preceded.
+    QCOMPARE(panel.chipOrder(), (QStringList{QStringLiteral("gone"), QStringLiteral("chip-b"),
+                                             QStringLiteral("chip-a"), QStringLiteral("chip-c")}));
+}
+
+void SensorsPanelTest::absent_chips_keep_their_place_across_moves_and_returns() {
+    // Saved order [chip-a, usb, chip-b]; usb is unplugged.
+    SensorsPanel panel;
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")});
+    panel.setReadings(sampleReadings(40.0));
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")}));
+
+    // A drag moves the chip together with the absent chip saved right before it.
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("usb"), QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+    // An absent chip at the end stays at the end.
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("chip-b"), QStringLiteral("usb")});
+    panel.moveChip(QStringLiteral("chip-b"), 0);
+    QCOMPARE(panel.chipOrder(),
+             (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a"), QStringLiteral("usb")}));
+
+    // When it returns, it is shown at its saved place.
+    panel.setChipOrder({QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")});
+    QVector<SensorReading> withUsb = sampleReadings(40.0);
+    withUsb.append({.chip = QStringLiteral("usb"), .category = SensorCategory::Power, .feature = QStringLiteral("power1"),
+                    .featureNumber = 0, .subfeatureNumber = 1, .value = 5.0, .unit = SensorUnit::Watt});
+    panel.setReadings(withUsb);
+    QCOMPARE(cardOrder(panel),
+             (QStringList{QStringLiteral("chip-a"), QStringLiteral("usb"), QStringLiteral("chip-b")}));
+}
+
+void SensorsPanelTest::saved_order_keeps_a_bounded_number_of_absent_chips() {
+    QStringList saved;
+    for (int i = 0; i < SensorsPanel::kMaxAbsentChipsInOrder + 5; ++i)
+        saved.append(QStringLiteral("gone-%1").arg(i));
+    saved.append(QStringLiteral("chip-b"));
+
+    SensorsPanel panel;
+    panel.setChipOrder(saved);
+    // Without readings nothing is known about absence: the order is kept as it is.
+    QCOMPARE(panel.chipOrder(), saved);
+    panel.setReadings({});
+    QCOMPARE(panel.chipOrder(), saved);
+
+    // The first absent chips in the order are kept, up to the limit.
+    panel.setReadings(sampleReadings(40.0));
+    const QStringList order = panel.chipOrder();
+    QCOMPARE(order.size(), SensorsPanel::kMaxAbsentChipsInOrder + 2);
+    QCOMPARE(order.first(), QStringLiteral("gone-0"));
+    QCOMPARE(order.at(SensorsPanel::kMaxAbsentChipsInOrder - 1),
+             QStringLiteral("gone-%1").arg(SensorsPanel::kMaxAbsentChipsInOrder - 1));
+    QCOMPARE(order.mid(SensorsPanel::kMaxAbsentChipsInOrder),
+             (QStringList{QStringLiteral("chip-b"), QStringLiteral("chip-a")}));
+
+    // A move stores the pruned order.
+    panel.moveChip(QStringLiteral("chip-a"), 0);
+    QCOMPARE(panel.chipOrder().size(), SensorsPanel::kMaxAbsentChipsInOrder + 2);
 }
 
 void SensorsPanelTest::header_click_still_toggles_when_draggable() {
@@ -275,7 +461,7 @@ void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_
     QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
 
     // Restoring before and after the cards exist, and reordering by code, are not user changes.
-    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}}, QString());
+    panel.restoreChipExpandedState({{QStringLiteral("chip-a"), false}});
     panel.setChipOrder({QStringLiteral("chip-b"), QStringLiteral("chip-a")});
     panel.setReadings(sampleReadings(40.0));
     panel.setChipExpandedState({{QStringLiteral("chip-a"), true}});
@@ -290,25 +476,37 @@ void SensorsPanelTest::user_toggle_and_drop_are_announced_but_applying_state_is_
 
     // A drop that moves a chip announces the new order; one that keeps it does not.
     const QStringList before = cardOrder(panel);
-    const auto drop = [&panel](const QString &chip, const int y) {
-        auto *mime = new QMimeData;
-        mime->setData(QStringLiteral("application/x-qsensors-chip"), chip.toUtf8());
-        // The window routes the events to the widget under the pointer, as for a real drag.
-        QWindow *window = panel.windowHandle();
-        const QPointF pos(10, y);
-        QDragEnterEvent enter(pos.toPoint(), Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
-        QCoreApplication::sendEvent(window, &enter);
-        QDropEvent event(pos, Qt::MoveAction, mime, Qt::LeftButton, Qt::NoModifier);
-        QCoreApplication::sendEvent(window, &event);
-        delete mime;
-    };
     panel.show();
     QVERIFY(QTest::qWaitForWindowExposed(&panel));
-    drop(before.first(), 0);
+    QCOMPARE(dragChipTo(panel, before.first(), 0), true);
     QCOMPARE(orderSpy.count(), 0);
-    drop(before.first(), panel.height());
+    QCOMPARE(dragChipTo(panel, before.first(), panel.height()), true);
     QCOMPARE(orderSpy.count(), 1);
     QCOMPARE(cardOrder(panel), (QStringList{before.last(), before.first()}));
+}
+
+void SensorsPanelTest::drop_from_another_drag_is_rejected() {
+    SensorsPanel panel;
+    QSignalSpy orderSpy(&panel, &SensorsPanel::chipOrderChanged);
+    panel.setReadings(sampleReadings(40.0));
+    const QStringList before = cardOrder(panel);
+    panel.show();
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+
+    // Same MIME type and chip name, but not dragged from this panel (e.g. another qsensors).
+    QMimeData mime;
+    mime.setData(QStringLiteral("application/x-qsensors-chip"), before.first().toUtf8());
+    QCOMPARE(dropOnWindow(panel, mime, panel.height()), false);
+    QCOMPARE(orderSpy.count(), 0);
+    QCOMPARE(cardOrder(panel), before);
+}
+
+void SensorsPanelTest::section_frame_matches_the_theme_frame_width() {
+    // The width calculations count AppTheme::kChipCardFrameWidthTotal for the styled border.
+    CollapsibleSection section(QStringLiteral("chip"), true);
+    section.resize(300, 100);
+    section.ensurePolished();
+    QCOMPARE(section.width() - section.contentsRect().width(), AppTheme::kChipCardFrameWidthTotal);
 }
 
 void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section() {
@@ -326,6 +524,50 @@ void SensorsPanelTest::drag_request_carries_the_pointer_position_in_the_section(
     QTest::mouseMove(header, moved);
     QCOMPARE(spy.count(), 1);
     QCOMPARE(spy.first().first().toPoint(), header->mapTo(&section, moved));
+}
+
+void SensorsPanelTest::structural_update_waits_for_the_end_of_a_drag() {
+    SensorsPanel panel;
+    panel.setReadings(sampleReadings(40.0));
+    layOut(panel, 900);
+    QVERIFY(QTest::qWaitForWindowExposed(&panel));
+    QToolButton *header = headerFor(panel, QStringLiteral("chip-b"));
+    QPointer<CollapsibleSection> section = qobject_cast<CollapsibleSection *>(header->parentWidget());
+    QVERIFY(section);
+
+    QVector<SensorReading> withoutChipB = sampleReadings(40.0);
+    withoutChipB.removeLast();
+    bool ranDuringDrag = false;
+    bool keptDuringDrag = false;
+    QString valueDuringDrag;
+    // Stands in for QDrag::exec()'s nested event loop, in which polls keep arriving.
+    panel.setDragExecutor([&](QDrag &) {
+        ranDuringDrag = true;
+        panel.setReadings(withoutChipB);
+        keptDuringDrag = !section.isNull() && headerFor(panel, QStringLiteral("chip-b"));
+        // A value-only update of the shown sensors still goes through.
+        QVector<SensorReading> unreadableFan = sampleReadings(40.0);
+        unreadableFan[2].value.reset();
+        panel.setReadings(unreadableFan);
+        for (SensorValueWidget *card: cards(panel))
+            if (card->toolTip().contains(QStringLiteral("fan1")))
+                valueDuringDrag = card->toolTip();
+        panel.setReadings(withoutChipB);
+    });
+
+    const QPoint press(20, header->height() / 2);
+    QTest::mousePress(header, Qt::LeftButton, Qt::NoModifier, press);
+    QTest::mouseMove(header, press + QPoint(QApplication::startDragDistance() + 10, 0));
+    QVERIFY(ranDuringDrag);
+    QVERIFY(keptDuringDrag);
+    QVERIFY(valueDuringDrag.contains(QStringLiteral("cannot be read")));
+    QCOMPARE(cards(panel).size(), 3);
+
+    // After the drag the last deferred readings apply, once the header's event returned.
+    QVERIFY(!section.isNull());
+    QTRY_VERIFY(section.isNull());
+    QVERIFY(!headerFor(panel, QStringLiteral("chip-b")));
+    QCOMPARE(cards(panel).size(), 2);
 }
 
 void SensorsPanelTest::columns_go_to_category_with_most_rows() {

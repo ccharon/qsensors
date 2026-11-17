@@ -129,8 +129,8 @@ void MainWindow::setupUi() {
     m_settingsPanel = new SettingsPanel(content);
     connect(m_sensorsPanel, &SensorsPanel::chipOrderChanged, this, &MainWindow::persistChipLayout);
     connect(m_sensorsPanel, &SensorsPanel::chipExpandedChanged, this, &MainWindow::persistChipLayout);
-    connect(m_sensorsPanel, &SensorsPanel::layoutStateReset, this, [this] {
-        showNotice(tr("Sensor layout changed: UI config reset"));
+    connect(m_sensorsPanel, &SensorsPanel::expandStateDropped, this, [this](const QStringList &chips) {
+        showNotice(tr("Collapsed state dropped for missing sensor chips: %1").arg(chips.join(QStringLiteral(", "))));
     });
 
     auto *settingsHost = new QWidget(content);
@@ -266,7 +266,7 @@ void MainWindow::loadSettings() {
 
     m_hasSavedGeometry = !state.geometry.isEmpty() && restoreGeometry(state.geometry);
 
-    m_sensorsPanel->restoreChipExpandedState(state.chipExpanded, state.sensorFingerprint);
+    m_sensorsPanel->restoreChipExpandedState(state.chipExpanded);
     m_sensorsPanel->setChipOrder(state.chipOrder);
 }
 

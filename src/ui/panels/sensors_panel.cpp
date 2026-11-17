@@ -18,6 +18,7 @@
 #include <QLabel>
 #include <QVBoxLayout>
 #include <algorithm>
+#include <utility>
 
 namespace {
     constexpr int kChipContentHorizontalMargins = AppTheme::kSectionInset * 2;
@@ -63,12 +64,34 @@ void SensorsPanel::setChipOrder(const QStringList &order) {
 }
 
 QStringList SensorsPanel::chipOrder() const {
-    QStringList order = displayOrder();
-    for (const QString &chip: m_preferredOrder) {
-        if (!order.contains(chip))
-            order.append(chip);
+    // Without any chip shown (no readings yet, or an empty read) nothing is known about absence.
+    if (m_groups.isEmpty())
+        return m_preferredOrder;
+    return mergeChipOrder(m_preferredOrder, displayOrder());
+}
+
+QStringList SensorsPanel::mergeChipOrder(const QStringList &preferred, const QStringList &shown) {
+    // Each absent chip is kept right before the shown chip that followed it in @p preferred.
+    QHash<QString, QStringList> absentBefore;
+    QStringList pending;
+    int absentKept = 0;
+    for (const QString &chip: preferred) {
+        if (shown.contains(chip)) {
+            if (!pending.isEmpty())
+                absentBefore.insert(chip, std::exchange(pending, {}));
+        } else if (absentKept < kMaxAbsentChipsInOrder && !pending.contains(chip)) {
+            pending.append(chip);
+            ++absentKept;
+        }
     }
-    return order;
+
+    QStringList merged;
+    for (const QString &chip: shown) {
+        merged += absentBefore.value(chip);
+        merged.append(chip);
+    }
+    merged += pending;
+    return merged;
 }
 
 void SensorsPanel::moveChip(const QString &chip, int targetIndex) {
@@ -83,11 +106,7 @@ void SensorsPanel::moveChip(const QString &chip, int targetIndex) {
     order.insert(targetIndex, chip);
 
     // Absent chips keep their preference so they return to their place.
-    for (const QString &known: std::as_const(m_preferredOrder)) {
-        if (!order.contains(known))
-            order.append(known);
-    }
-    m_preferredOrder = order;
+    m_preferredOrder = mergeChipOrder(m_preferredOrder, order);
     applyChipOrder();
 }
 
@@ -115,9 +134,9 @@ void SensorsPanel::setChipExpandedState(const QHash<QString, bool> &state) {
     m_applyingExpandedState = false;
 }
 
-void SensorsPanel::restoreChipExpandedState(const QHash<QString, bool> &state, const QString &chipFingerprint) {
+void SensorsPanel::restoreChipExpandedState(const QHash<QString, bool> &state) {
     setChipExpandedState(state);
-    m_restoredFingerprint = chipFingerprint;
+    m_restorePending = true;
 }
 
 QHash<QString, bool> SensorsPanel::chipExpandedState() const {
@@ -137,7 +156,20 @@ int SensorsPanel::readingCount() const {
 }
 
 void SensorsPanel::setReadings(const QVector<SensorReading> &readings) {
-    m_groups = groupReadingsByChip(readings);
+    ChipGroups groups = groupReadingsByChip(readings);
+    if (m_dragActive) {
+        // The dragged card's header is on the stack below QDrag::exec(), so no section
+        // may be deleted or rebuilt now; values of the same sensors may still change.
+        std::swap(m_groups, groups);
+        if (hasStructuralChange()) {
+            std::swap(m_groups, groups);
+            m_deferredReadings = readings;
+            return;
+        }
+    } else {
+        m_groups = std::move(groups);
+    }
+    m_deferredReadings.reset();
     checkRestoredState();
     if (render()) {
         emit structureChanged();
@@ -153,20 +185,48 @@ int SensorsPanel::maximumUsefulWidth() const {
 }
 
 void SensorsPanel::checkRestoredState() {
-    if (m_restoredFingerprint.isEmpty()) {
+    // A read without any chip (e.g. libsensors failed once) says nothing about the chips.
+    if (!m_restorePending || m_groups.isEmpty())
         return;
+    m_restorePending = false;
+
+    QStringList collapsedGone;
+    for (auto it = m_chipExpanded.begin(); it != m_chipExpanded.end();) {
+        if (m_groups.contains(it.key())) {
+            ++it;
+            continue;
+        }
+        if (!it.value())
+            collapsedGone.append(it.key());
+        it = m_chipExpanded.erase(it);
     }
-    const bool matches = m_restoredFingerprint == chipFingerprint();
-    m_restoredFingerprint.clear();
-    if (!matches) {
-        setChipExpandedState({});
-        emit layoutStateReset();
+    // Dropping an expanded entry changes nothing a returning chip would show.
+    if (!collapsedGone.isEmpty()) {
+        collapsedGone.sort();
+        emit expandStateDropped(collapsedGone);
     }
 }
 
+bool SensorsPanel::hasStructuralChange() const {
+    for (auto it = m_chipSections.cbegin(); it != m_chipSections.cend(); ++it) {
+        if (!m_groups.contains(it.key()))
+            return true;
+    }
+    for (auto it = m_groups.cbegin(); it != m_groups.cend(); ++it) {
+        const auto section = m_chipSections.constFind(it.key());
+        if (section == m_chipSections.cend() || section->structureFingerprint != chipStructureFingerprint(it.value()))
+            return true;
+    }
+    return displayOrder() != m_chipOrder;
+}
+
 bool SensorsPanel::render() {
-    // Batch updates avoid flicker while chip sections are reconciled/reordered.
-    setUpdatesEnabled(false);
+    // Batch updates avoid flicker while chip sections are created, rebuilt or reordered.
+    // Only then: re-enabling updates repaints every child, which would defeat the LCD's
+    // repaint caching on the plain value path.
+    const bool batchUpdates = hasStructuralChange();
+    if (batchUpdates)
+        setUpdatesEnabled(false);
     bool structureChanged = removeStaleChipSections();
 
     // The plan is shared by all chips (one card width), so every chip follows a change.
@@ -183,7 +243,8 @@ bool SensorsPanel::render() {
         structureChanged |= reconcileChipSection(it.key(), it.value());
     }
     applyChipOrder();
-    setUpdatesEnabled(true);
+    if (batchUpdates)
+        setUpdatesEnabled(true);
     return structureChanged;
 }
 
@@ -310,6 +371,10 @@ int SensorsPanel::chipChromeWidth() const {
     return panelHorizontalMargins + AppTheme::kChipCardFrameWidthTotal + kChipContentHorizontalMargins;
 }
 
+void SensorsPanel::setDragExecutor(std::function<void(QDrag &)> executor) {
+    m_dragExecutor = std::move(executor);
+}
+
 void SensorsPanel::startChipDrag(const QString &chip, const QPoint &grabPos) {
     const auto it = m_chipSections.constFind(chip);
     if (it == m_chipSections.cend())
@@ -332,8 +397,25 @@ void SensorsPanel::startChipDrag(const QString &chip, const QPoint &grabPos) {
     drag->setMimeData(mime);
     drag->setPixmap(pixmap);
     drag->setHotSpot(grabPos);
-    drag->exec(Qt::MoveAction);
+    m_dragActive = true;
+    if (m_dragExecutor) {
+        m_dragExecutor(*drag);
+        drag->deleteLater();
+    } else {
+        drag->exec(Qt::MoveAction);
+    }
+    m_dragActive = false;
     m_dropIndicator->hide();
+
+    // Still inside the header's mouse event: apply deferred readings once it returned.
+    if (m_deferredReadings) {
+        QMetaObject::invokeMethod(this, [this] {
+            if (m_deferredReadings) {
+                const QVector<SensorReading> readings = *std::exchange(m_deferredReadings, std::nullopt);
+                setReadings(readings);
+            }
+        }, Qt::QueuedConnection);
+    }
 }
 
 int SensorsPanel::dropIndexAt(const int y) const {
@@ -359,13 +441,21 @@ void SensorsPanel::showDropIndicator(const int index) {
     m_dropIndicator->show();
 }
 
+bool SensorsPanel::isOwnChipDrag(const QDropEvent *event) const {
+    // Only a chip dragged from this panel: the same MIME data from another qsensors
+    // instance must not reorder (and persist) this one. A drag of this panel is exactly
+    // one that arrives while its QDrag::exec() runs, which is what event->source() == this
+    // tells as well; the flag also works when tests stand in for exec().
+    return m_dragActive && event->mimeData()->hasFormat(kChipMimeType);
+}
+
 void SensorsPanel::dragEnterEvent(QDragEnterEvent *event) {
-    if (event->mimeData()->hasFormat(kChipMimeType))
+    if (isOwnChipDrag(event))
         event->acceptProposedAction();
 }
 
 void SensorsPanel::dragMoveEvent(QDragMoveEvent *event) {
-    if (!event->mimeData()->hasFormat(kChipMimeType))
+    if (!isOwnChipDrag(event))
         return;
     showDropIndicator(dropIndexAt(event->position().toPoint().y()));
     event->acceptProposedAction();
@@ -378,7 +468,7 @@ void SensorsPanel::dragLeaveEvent(QDragLeaveEvent *event) {
 
 void SensorsPanel::dropEvent(QDropEvent *event) {
     m_dropIndicator->hide();
-    if (!event->mimeData()->hasFormat(kChipMimeType))
+    if (!isOwnChipDrag(event))
         return;
     const QString chip = QString::fromUtf8(event->mimeData()->data(kChipMimeType));
     const QStringList before = displayOrder();

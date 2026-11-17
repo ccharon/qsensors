@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- A poll whose readings only change values no longer repaints the whole
+  sensors panel: only the LCDs whose display changed are redrawn. The panel
+  still batches its repaint when chips or sensors appear, disappear or move.
+- A start with a different set of sensor chips no longer resets the expand
+  state of all chips: only the entries of chips that are gone are dropped,
+  and a read without any chip decides nothing. The status bar names the
+  missing chips whose collapsed state was dropped, instead of reporting a
+  reset of the UI configuration.
+- A chip that appears or disappears while a chip card is being dragged no
+  longer changes the cards during the drag: the change is applied when the
+  drag ends, so the dragged card cannot be deleted under the pointer. Values
+  keep updating during the drag.
+- A sensor chip that is missing for a while (e.g. an unplugged USB device)
+  keeps its place in the chip order instead of moving to the end, also when
+  other chips are dragged; it returns where it was. The saved chip order
+  keeps at most 16 missing chips, so it no longer grows with every chip ever
+  seen.
+- A chip card dragged from another qsensors window is no longer accepted as
+  a drop, so it cannot reorder (and save) the chip order of this window.
+
 ### Security
 - The build enables hardening flags for the project's own targets
   (position independent executable, stack protector, stack clash protection,
