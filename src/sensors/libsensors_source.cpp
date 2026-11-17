@@ -2,12 +2,14 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "sensors/libsensors_source.h"
+#include "sensors/sensor_identity.h"
 #include "sensors/sensors_policy.h"
 
 #include <sensors/error.h>
 #include <sensors/sensors.h>
 
 #include <QDebug>
+#include <QFileInfo>
 #include <QSet>
 
 #include <atomic>
@@ -244,21 +246,64 @@ namespace {
         return QString::fromUtf8(chipNameBuffer, length);
     }
 
-    void appendChipReadings(const sensors_chip_name *chip, QVector<SensorReading> &readings, QSet<QString> &reportedProblems,
-                            FeatureCache &cache) {
-        const std::optional<QString> chipName = chipNameFrom(chip);
-        if (!chipName.has_value() || chipName->isEmpty()) {
-            reportOnce(reportedProblems, QStringLiteral("chip:%1").arg(chip->addr),
-                       QStringLiteral("skipping chip with unusable name (prefix %1)")
-                           .arg(QString::fromUtf8(chip->prefix != nullptr ? chip->prefix : "?")));
-            return;
-        }
-
+    void appendChipReadings(const sensors_chip_name *chip, const QString &chipName, QVector<SensorReading> &readings,
+                            QSet<QString> &reportedProblems, FeatureCache &cache) {
         const sensors_feature *feature = nullptr;
         int featureNr = 0;
         while ((feature = sensors_get_features(chip, &featureNr)) != nullptr) {
-            appendFeatureReading(chip, *chipName, feature, readings, reportedProblems, cache);
+            appendFeatureReading(chip, chipName, feature, readings, reportedProblems, cache);
         }
+    }
+
+    /** Device path behind @p chip, which survives a reboot better than its hwmonN path. */
+    [[nodiscard]] QString stableChipKey(const sensors_chip_name *chip) {
+        if (chip->path == nullptr)
+            return {};
+        const QString path = QString::fromUtf8(chip->path);
+        for (const QString &candidate: {path + QStringLiteral("/device"), path}) {
+            if (QString canonical = QFileInfo(candidate).canonicalFilePath(); !canonical.isEmpty())
+                return canonical;
+        }
+        return path;
+    }
+
+    struct DetectedChip {
+        const sensors_chip_name *chip = nullptr;
+        QString name;
+    };
+
+    /** All chips with a usable name; repeated names are made unique (see SensorIdentity::uniqueChipNames). */
+    [[nodiscard]] QVector<DetectedChip> detectedChips(QSet<QString> &reportedProblems) {
+        QVector<DetectedChip> chips;
+        const sensors_chip_name *chip = nullptr;
+        int chipNr = 0;
+        while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
+            const std::optional<QString> chipName = chipNameFrom(chip);
+            if (!chipName.has_value() || chipName->isEmpty()) {
+                reportOnce(reportedProblems, QStringLiteral("chip:%1").arg(chip->addr),
+                           QStringLiteral("skipping chip with unusable name (prefix %1)")
+                               .arg(QString::fromUtf8(chip->prefix != nullptr ? chip->prefix : "?")));
+                continue;
+            }
+            chips.push_back({.chip = chip, .name = *chipName});
+        }
+
+        QStringList names;
+        names.reserve(chips.size());
+        for (const DetectedChip &detected: chips)
+            names.push_back(detected.name);
+        const QStringList unique = SensorIdentity::uniqueChipNames(names, [&chips](const qsizetype i) {
+            return stableChipKey(chips.at(i).chip);
+        });
+        for (qsizetype i = 0; i < chips.size(); ++i) {
+            if (chips.at(i).name != unique.at(i)) {
+                reportOnce(reportedProblems, QStringLiteral("dup:%1").arg(unique.at(i)),
+                           QStringLiteral("chip name %1 is not unique; showing %2 as %3")
+                               .arg(chips.at(i).name, stableChipKey(chips.at(i).chip), unique.at(i)));
+                chips[i].name = unique.at(i);
+            }
+        }
+        return chips;
     }
 
     // sensors_init()/sensors_cleanup() manage process-wide state; one source at a time.
@@ -330,10 +375,8 @@ QVector<SensorReading> LibsensorsSource::readAll() {
 
     m_featureCache.expire(FeatureCache::Clock::now());
 
-    const sensors_chip_name *chip = nullptr;
-    int chipNr = 0;
-    while ((chip = sensors_get_detected_chips(nullptr, &chipNr)) != nullptr) {
-        appendChipReadings(chip, readings, m_reportedProblems, m_featureCache);
+    for (const DetectedChip &detected: detectedChips(m_reportedProblems)) {
+        appendChipReadings(detected.chip, detected.name, readings, m_reportedProblems, m_featureCache);
     }
 
     return readings;

@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and removed ones lose theirs. Before, a removed device kept a card of dashes,
   and a device that reused its hwmon index could show its values under the old
   chip's name. A failed re-initialization is shown in the status line.
+- Two chips with the same name (for example two ACPI fans, both
+  `acpi_fan-acpi-0`) no longer share one set of cards, where one card froze
+  and the other jumped between both sensors. The second and further chips of
+  that name are shown as `acpi_fan-acpi-0 #2` and so on, numbered by their
+  device path so the numbering stays the same across restarts. Chips with a
+  unique name keep their name and their saved order and expand state.
 
 ## [0.80.11] - 2026-11-15
 
