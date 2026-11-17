@@ -134,7 +134,7 @@ void SensorIdentityTest::sensorKey_ignores_unit_and_label() {
         .unit = SensorUnit::Ampere,
     };
     const QString key = SensorIdentity::sensorKey(r);
-    r.unit = SensorUnit::Milliampere;
+    r.scale = SensorScale{.prefix = SiPrefix::Milli, .decimals = 0};
     r.feature = QStringLiteral("Battery Current");
     QCOMPARE(SensorIdentity::sensorKey(r), key);
 }

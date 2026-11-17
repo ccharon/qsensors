@@ -2,13 +2,14 @@
 // Copyright (C) 2026 Christian Charon <ccharon@mailbox.org>
 
 #include "ui/widgets/lcd_display_widget.h"
-#include "ui/widgets/lcd_segment_font.h"
 #include "sensors/sensor_format.h"
 #include "sensors/sensors_policy.h"
 #include "ui/theme/app_theme.h"
+#include "ui/widgets/lcd_symbol_font.h"
 
 #include <QLinearGradient>
 #include <QPainter>
+#include <QPainterPath>
 #include <QPalette>
 #include <algorithm>
 #include <cmath>
@@ -17,6 +18,29 @@ namespace {
     constexpr int kDigitHeight = 28;
     constexpr int kDisplayHeight = kDigitHeight + AppTheme::kLcdBarGap + AppTheme::kLcdBarHeight
                                    + 2 * AppTheme::kLcdPaddingY;
+
+    /** One drawable part of the display in widget coordinates, lit or ghost. */
+    struct Shape {
+        QPainterPath path;
+        bool lit = false;
+    };
+
+    /** Shear around the bottom of a box of @p height at @p origin, like the classic LCD digits. */
+    QTransform slanted(const QPointF origin, const qreal height) {
+        return QTransform(1, 0, -LcdSegmentFont::kSlant, 1, origin.x() + LcdSegmentFont::kSlant * height, origin.y());
+    }
+
+    /** Width of @p symbol at cap height @p height, slant overhang included. */
+    qreal symbolWidth(const QString &symbol, const qreal height) {
+        return LcdSymbolFont::width(symbol, height) + LcdSegmentFont::kSlant * height;
+    }
+
+    /** Annunciator @p symbol left-aligned in @p box, slanted like the digits. */
+    void appendSymbol(QVector<Shape> &shapes, const QString &symbol, const QRectF &box) {
+        if (symbol.isEmpty())
+            return;
+        shapes.append({slanted(box.topLeft(), box.height()).map(LcdSymbolFont::path(symbol, box.height())), true});
+    }
 }
 
 LcdDisplayWidget::LcdDisplayWidget(const SensorReading &reading, QWidget *parent)
@@ -33,16 +57,75 @@ void LcdDisplayWidget::setReading(const SensorReading &reading) {
     }
 }
 
-QRectF LcdDisplayWidget::barArea() const {
-    const qreal barTop = height() - AppTheme::kLcdPaddingY - AppTheme::kLcdBarHeight;
-    return {AppTheme::kLcdPaddingX, barTop, std::max<qreal>(width() - 2 * AppTheme::kLcdPaddingX, 1.0),
-            static_cast<qreal>(AppTheme::kLcdBarHeight)};
+qreal LcdDisplayWidget::unitFieldWidth(const qreal digitHeight) {
+    static const QStringList symbols = SensorFormat::allUnitSymbols();
+    const qreal height = AppTheme::kLcdUnitScale * digitHeight;
+    qreal width = 0.0;
+    for (const QString &symbol: symbols)
+        width = std::max(width, symbolWidth(symbol, height));
+    return width;
+}
+
+LcdDisplayWidget::Layout LcdDisplayWidget::layoutFor(const QSizeF &size) {
+    Layout layout;
+    const qreal innerWidth = std::max<qreal>(size.width() - 2 * AppTheme::kLcdPaddingX, 1.0);
+    const qreal barTop = size.height() - AppTheme::kLcdPaddingY - AppTheme::kLcdBarHeight;
+    const qreal digitArea = std::max<qreal>(barTop - AppTheme::kLcdBarGap - AppTheme::kLcdPaddingY, 1.0);
+
+    // Value cells, gap and unit field all scale with the digit height; shrink only when too narrow.
+    const auto requiredWidth = [](const qreal height) {
+        return LcdSegmentFont::cellsWidth(SensorFormat::kValueCells, height) + AppTheme::kLcdUnitGap * height
+               + unitFieldWidth(height);
+    };
+    const qreal fullWidth = requiredWidth(digitArea);
+    layout.digitHeight = fullWidth <= innerWidth ? digitArea : digitArea * innerWidth / fullWidth;
+    const qreal h = layout.digitHeight;
+
+    const qreal right = AppTheme::kLcdPaddingX + innerWidth;
+    const qreal unitWidth = unitFieldWidth(h);
+    const qreal valueRight = right - unitWidth - AppTheme::kLcdUnitGap * h;
+    layout.cellCount = std::max(SensorFormat::kValueCells,
+                                LcdSegmentFont::cellsThatFit(valueRight - AppTheme::kLcdPaddingX, h));
+    const qreal cellsWidth = LcdSegmentFont::cellsWidth(layout.cellCount, h);
+    const qreal baseline = barTop - AppTheme::kLcdBarGap;
+    layout.cells = QRectF(valueRight - cellsWidth, baseline - h, cellsWidth, h);
+
+    // The state annunciator sits on the bar graph row; the unit sits above it, no lower
+    // than the digit baseline.
+    const qreal barBottom = barTop + AppTheme::kLcdBarHeight;
+    const qreal stateHeight = AppTheme::kLcdStateScale * h;
+    layout.stateBox = QRectF(right - unitWidth, barBottom - stateHeight, unitWidth, stateHeight);
+    const qreal unitHeight = AppTheme::kLcdUnitScale * h;
+    const qreal unitBottom = std::min(baseline, layout.stateBox.top() - AppTheme::kLcdStateGap * h);
+    layout.unitBox = QRectF(right - unitWidth, unitBottom - unitHeight, unitWidth, unitHeight);
+    const qreal barRight = layout.stateBox.left() - AppTheme::kLcdUnitGap * h;
+    layout.bar = QRectF(AppTheme::kLcdPaddingX, barTop, std::max<qreal>(barRight - AppTheme::kLcdPaddingX, 1.0),
+                        AppTheme::kLcdBarHeight);
+    return layout;
+}
+
+int LcdDisplayWidget::minimumFullHeightWidth() {
+    const qreal h = kDigitHeight;
+    const qreal width = LcdSegmentFont::cellsWidth(SensorFormat::kValueCells, h) + AppTheme::kLcdUnitGap * h
+                        + unitFieldWidth(h) + 2 * AppTheme::kLcdPaddingX;
+    return static_cast<int>(std::ceil(width));
 }
 
 LcdDisplayWidget::DisplayState LcdDisplayWidget::displayStateFor(const SensorReading &reading) const {
-    return {SensorFormat::valueDigits(reading.unit, reading.value), sensorUnitSymbol(reading.unit),
-            litBarSegments(reading, static_cast<int>(barGraphSegments(barArea()).size())),
-            SensorsPolicy::isAlertState(reading)};
+    const SensorFormat::DisplayValue shown = SensorFormat::display(reading);
+    const Layout layout = layoutFor(size());
+    return {shown.digits, shown.symbol,
+            litBarSegments(reading, static_cast<int>(barGraphSegments(layout.bar).size())),
+            SensorsPolicy::alertState(reading)};
+}
+
+QString LcdDisplayWidget::stateSymbol(const AlertState alert) {
+    switch (alert) {
+        case AlertState::High: return QStringLiteral("HI");
+        case AlertState::Low: return QStringLiteral("LO");
+        case AlertState::None: break;
+    }
+    return {};
 }
 
 QSize LcdDisplayWidget::sizeHint() const {
@@ -63,32 +146,48 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
     const DisplayState state = displayStateFor(m_reading);
     m_painted = state;
     m_hasPainted = true;
-    const bool alert = state.alert;
+    const bool alert = state.alert != AlertState::None;
     const QColor lit(dark ? (alert ? AppTheme::kLcdAlertDarkRgb : AppTheme::kLcdNormalDarkRgb)
                           : (alert ? AppTheme::kLcdAlertRgb : AppTheme::kLcdNormalRgb));
     QColor ghost(dark ? AppTheme::kLcdNormalDarkRgb : AppTheme::kLcdNormalRgb);
     ghost.setAlpha(dark ? AppTheme::kLcdGhostAlphaDark : AppTheme::kLcdGhostAlpha);
     const QColor shadow(0, 0, 0, AppTheme::kLcdSegmentShadowAlpha);
 
-    // Everything scales with the widget; long readings shrink to fit the width.
-    const QString &value = state.digits;
-    const QString &unit = state.unit;
-    // Digits fill the area above the range bar graph that runs along the bottom.
-    const QRectF bar = barArea();
-    const qreal barTop = bar.top();
-    const qreal digitArea = barTop - AppTheme::kLcdBarGap - AppTheme::kLcdPaddingY;
-    const qreal maxHeight = std::max<qreal>(digitArea, 1.0);
-    const qreal maxWidth = bar.width();
-    const qreal digitHeight = LcdSegmentFont::fitHeight(value, unit, maxHeight, maxWidth);
-    const auto layout = LcdSegmentFont::layoutText(value, unit, digitHeight);
-    const qreal baselineOffset = AppTheme::kLcdPaddingY + maxHeight - digitHeight;
-    const QVector<QPolygonF> barSegments = barGraphSegments(bar);
-    const int barLit = state.litSegments;
-    // Lit segments float above the backplane and cast a faint offset shadow.
-    const qreal shadowOffset = std::max<qreal>(0.7, digitHeight * 0.035);
+    // Collect everything to draw: digit segments, unit symbol and bar graph.
+    const Layout layout = layoutFor(size());
+    const qreal h = layout.digitHeight;
+    QVector<Shape> shapes;
+    const auto cells = LcdSegmentFont::layoutCells(state.digits, layout.cellCount, SensorFormat::kValueCells, h);
+    // Digits that need more cells than the layout has grow to the left.
+    const qreal cellsLeft = layout.cells.right() - LcdSegmentFont::cellsWidth(static_cast<int>(cells.size()), h);
+    for (const LcdSegmentFont::PlacedGlyph &placed: cells) {
+        const QTransform transform = slanted({cellsLeft + placed.cell.left(), layout.cells.top()}, h);
+        const LcdSegmentFont::SegmentMask drawn = placed.glyph.lit | placed.glyph.ghost;
+        for (LcdSegmentFont::SegmentMask bit = 1; bit <= LcdSegmentFont::kLastSegment; bit <<= 1) {
+            if (!(drawn & bit))
+                continue;
+            QPainterPath path;
+            path.addPolygon(LcdSegmentFont::segmentPolygon(static_cast<LcdSegmentFont::Segment>(bit),
+                                                           placed.cell.size()));
+            path.closeSubpath();
+            shapes.append({transform.map(path), (placed.glyph.lit & bit) != 0});
+        }
+    }
+    appendSymbol(shapes, state.unit, layout.unitBox);
+    // The alert does not depend on colour alone.
+    appendSymbol(shapes, stateSymbol(state.alert), layout.stateBox);
+    const QVector<QPolygonF> barSegments = barGraphSegments(layout.bar);
+    for (int i = 0; i < barSegments.size(); ++i) {
+        QPainterPath path;
+        path.addPolygon(barSegments.at(i));
+        path.closeSubpath();
+        shapes.append({path, i < state.litSegments});
+    }
 
+    // Lit segments float above the backplane and cast a faint offset shadow.
+    const qreal shadowOffset = std::max<qreal>(0.7, h * 0.035);
     enum class Pass { Shadow, Glow, Face };
-    const auto drawSegments = [&](const Pass pass, const QPointF offset = {}, const qreal glowWidth = 0.0) {
+    const auto drawShapes = [&](const Pass pass, const QPointF offset = {}, const qreal glowWidth = 0.0) {
         if (pass == Pass::Glow) {
             QColor halo = lit;
             halo.setAlpha(AppTheme::kLcdGlowAlpha);
@@ -96,49 +195,27 @@ void LcdDisplayWidget::paintEvent(QPaintEvent *event) {
             painter.setBrush(halo);
         } else {
             painter.setPen(Qt::NoPen);
-        }
-        for (const LcdSegmentFont::PlacedGlyph &placed: layout) {
-            const QRectF &cell = placed.cell;
-            // Shear around the baseline so all cells lean like the classic LCD digits.
-            painter.setTransform(QTransform(1, 0, -LcdSegmentFont::kSlant, 1,
-                                            AppTheme::kLcdPaddingX + cell.left()
-                                            + LcdSegmentFont::kSlant * cell.height() + offset.x(),
-                                            baselineOffset + cell.top() + offset.y()));
-            const LcdSegmentFont::SegmentMask drawn =
-                    pass == Pass::Face ? (placed.glyph.lit | placed.glyph.ghost) : placed.glyph.lit;
-            for (LcdSegmentFont::SegmentMask bit = 1; bit <= LcdSegmentFont::kLastSegment; bit <<= 1) {
-                if (!(drawn & bit))
-                    continue;
-                if (pass == Pass::Shadow)
-                    painter.setBrush(shadow);
-                else if (pass == Pass::Face)
-                    painter.setBrush((placed.glyph.lit & bit) ? lit : ghost);
-                painter.drawPolygon(LcdSegmentFont::segmentPolygon(static_cast<LcdSegmentFont::Segment>(bit),
-                                                                   cell.size()));
-            }
-        }
-        painter.resetTransform();
-        painter.translate(offset);
-        for (int i = 0; i < barSegments.size(); ++i) {
-            const bool on = i < barLit;
-            if (!on && pass != Pass::Face)
-                continue;
             if (pass == Pass::Shadow)
                 painter.setBrush(shadow);
-            else if (pass == Pass::Face)
-                painter.setBrush(on ? lit : ghost);
-            painter.drawPolygon(barSegments.at(i));
+        }
+        painter.translate(offset);
+        for (const Shape &shape: shapes) {
+            if (!shape.lit && pass != Pass::Face)
+                continue;
+            if (pass == Pass::Face)
+                painter.setBrush(shape.lit ? lit : ghost);
+            painter.drawPath(shape.path);
         }
         painter.resetTransform();
     };
     if (dark) {
         // Two soft halo layers approximate a blur without offscreen rendering.
-        drawSegments(Pass::Glow, {}, shadowOffset * 3.0);
-        drawSegments(Pass::Glow, {}, shadowOffset * 1.5);
+        drawShapes(Pass::Glow, {}, shadowOffset * 3.0);
+        drawShapes(Pass::Glow, {}, shadowOffset * 1.5);
     } else {
-        drawSegments(Pass::Shadow, {shadowOffset, shadowOffset});
+        drawShapes(Pass::Shadow, {shadowOffset, shadowOffset});
     }
-    drawSegments(Pass::Face);
+    drawShapes(Pass::Face);
 }
 
 QVector<QPolygonF> LcdDisplayWidget::barGraphSegments(const QRectF &area) {
@@ -204,4 +281,3 @@ void LcdDisplayWidget::paintPanel(QPainter &painter) const {
     painter.setPen(QPen(QColor(255, 255, 255, darkBase ? 18 : 90), 1.0));
     painter.drawLine(QPointF(panel.left() + r, panel.bottom() - 1.0), QPointF(panel.right() - r, panel.bottom() - 1.0));
 }
-

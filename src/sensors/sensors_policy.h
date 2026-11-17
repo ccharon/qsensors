@@ -3,18 +3,20 @@
 
 #pragma once
 
+#include "sensors/sensor_format.h"
 #include "sensors/sensor_reading.h"
 
 #include <algorithm>
 #include <cmath>
 #include <optional>
 
-/** Rules applied to raw readings: unit scaling, default ranges and alert state. */
+/** Rules applied to raw readings: display prefix, default ranges and alert state. */
 namespace SensorsPolicy {
-    /** Milli-unit readings at or above this no longer fit the six-cell LCD value ("9999.9"). */
-    inline constexpr double kMilliUnitOverflow = 10000.0;
-    /** Base-unit readings below this lose too much precision at two decimals ("0.04"). */
-    inline constexpr double kBaseUnitUnderflow = 0.1;
+    /**
+     * Factor by which a value may leave its latched scale range before the scale changes:
+     * a latched "mA" holds up to 9999 mA, a latched "1.052 V" down to 0.100 V.
+     */
+    inline constexpr double kScaleHysteresis = 10.0;
     /**
      * Upper bar graph limit, and alert threshold, for temperatures whose firmware
      * reports no maximum (°C).
@@ -44,7 +46,7 @@ namespace SensorsPolicy {
      * - temperature limits outside (kTemperatureLimitAbsoluteZeroC, kTemperatureLimitMaxPlausibleC];
      * - max not above min: both, except a zero max with a positive min drops only the max
      *   (unset limit registers read 0, e.g. a fan with a minimum but no maximum);
-     * - a zero max without a min for voltages, fans, currents and power: these read 0
+     * - a zero max without a min for every known quantity but temperature: these read 0
      *   when the limit is unset (e.g. an unconfigured voltage input). Temperatures keep
      *   it, since 0 °C is a real limit for a freezer.
      * The measured value is not consulted, so the limits shown do not change from poll to poll.
@@ -67,164 +69,207 @@ namespace SensorsPolicy {
             max.reset();
         }
 
-        const bool zeroMeansUnset = unit == SensorUnit::Volt || unit == SensorUnit::Rpm
-                                    || unit == SensorUnit::Ampere || unit == SensorUnit::Watt;
+        const bool zeroMeansUnset = unit != SensorUnit::Celsius && unit != SensorUnit::Fahrenheit
+                                    && unit != SensorUnit::Unknown;
         if (zeroMeansUnset && !min && max && *max == 0.0)
             max.reset();
     }
 
-    /**
-     * Rescales Ampere/Watt to mA/mW for sub-1 sensors. A nonzero native limit decides when
-     * present (a zero limit carries no scale); otherwise @p latchedMilli carries the scale
-     * between polls with hysteresis (milli below kBaseUnitUnderflow, base from
-     * kMilliUnitOverflow) to avoid flicker. Without a finite value the latched scale is kept,
-     * or the base unit is used when nothing is latched yet; the latch is left unchanged.
-     */
-    inline void applyCurrentPowerUnitScaling(
-        SensorUnit &unit,
-        std::optional<double> &value,
-        std::optional<double> &min,
-        std::optional<double> &max,
-        std::optional<bool> *latchedMilli = nullptr
-    ) {
-        if (unit != SensorUnit::Ampere && unit != SensorUnit::Watt) {
-            return;
-        }
+    /** Scale range a sensor keeps between polls, see chooseScale(). */
+    struct ScaleLatch {
+        int rangeIndex = 0; // into SensorFormat::scaleRanges()
+        bool fromLimit = false; // taken from a firmware limit
 
-        constexpr double kMilliScale = 1000.0;
-        bool useMilli = false;
+        bool operator==(const ScaleLatch &) const = default;
+    };
+
+    /**
+     * Display scale (SI prefix and decimals) of a reading: one of SensorFormat::scaleRanges().
+     * The sensor's range decides, not the momentary value alone, so the display does not
+     * flicker between scales:
+     * - a nonzero firmware limit (the maximum, else the minimum; a zero limit carries no
+     *   scale) gives the range it belongs to, and @p latch takes it over: while the limit is
+     *   missing (a failed limit read) that range is kept;
+     * - otherwise the latched range moves only when the value leaves it by a factor of
+     *   kScaleHysteresis (up from ten times its upper bound, down below a tenth of its lower
+     *   bound), to the range the value belongs to;
+     * - the first value without a latch picks its own range.
+     * Without a finite value the latched range is kept, or the base range is used when nothing
+     * is latched yet; the latch is left unchanged. Expects values and limits in display units;
+     * the formatter still falls back when a value does not fit the chosen scale.
+     */
+    [[nodiscard]] inline SensorScale chooseScale(
+        const SensorUnit unit,
+        const std::optional<double> value,
+        const std::optional<double> min,
+        const std::optional<double> max,
+        std::optional<ScaleLatch> *latch = nullptr
+    ) {
+        const QVector<SensorFormat::ScaleRange> &ranges = SensorFormat::scaleRanges(unit);
+        const int last = static_cast<int>(ranges.size()) - 1;
         const auto isScaleReference = [](const std::optional<double> &limit) {
-            return limit.has_value() && *limit != 0.0;
+            return limit.has_value() && std::isfinite(*limit) && *limit != 0.0;
         };
+        std::optional<ScaleLatch> latched;
+        if (latch && latch->has_value() && (*latch)->rangeIndex >= 0 && (*latch)->rangeIndex <= last)
+            latched = *latch;
+
+        ScaleLatch next;
         if (isScaleReference(max) || isScaleReference(min)) {
             const double reference = isScaleReference(max) ? *max : *min;
-            useMilli = std::isfinite(reference) && std::abs(reference) < 1.0;
+            next = {SensorFormat::naturalRangeIndex(unit, std::abs(reference)), true};
         } else if (!value || !std::isfinite(*value)) {
-            useMilli = latchedMilli && latchedMilli->value_or(false);
+            return ranges.at(latched ? latched->rangeIndex : SensorFormat::baseRangeIndex(unit)).scale;
+        } else if (latched && latched->fromLimit) {
+            next = *latched;
         } else {
             const double magnitude = std::abs(*value);
-            if (latchedMilli && latchedMilli->has_value()) {
-                useMilli = **latchedMilli ? magnitude * kMilliScale < kMilliUnitOverflow
-                                          : magnitude < kBaseUnitUnderflow;
-            } else {
-                useMilli = magnitude < 1.0;
-            }
-            if (latchedMilli) {
-                *latchedMilli = useMilli;
-            }
+            const int index = latched ? latched->rangeIndex : -1;
+            const bool aboveRange = index >= 0 && index < last
+                                    && magnitude >= ranges.at(index).upperBound * kScaleHysteresis;
+            const bool belowRange = index > 0 && magnitude < ranges.at(index - 1).upperBound / kScaleHysteresis;
+            next = {index < 0 || aboveRange || belowRange ? SensorFormat::naturalRangeIndex(unit, magnitude) : index,
+                    false};
         }
+        if (latch)
+            *latch = next;
+        return ranges.at(next.rangeIndex).scale;
+    }
 
-        if (!useMilli) {
-            return;
-        }
-        if (value.has_value()) *value *= kMilliScale;
-        if (min.has_value()) *min *= kMilliScale;
-        if (max.has_value()) *max *= kMilliScale;
-        unit = (unit == SensorUnit::Ampere) ? SensorUnit::Milliampere : SensorUnit::Milliwatt;
+    /** Full scale of a PWM output as the kernel reports it (pwm*: 0..255). */
+    inline constexpr double kPwmFullScale = 255.0;
+
+    /** Duty cycle in percent of a PWM output reading @p duty out of kPwmFullScale; clamped to 0..100. */
+    [[nodiscard]] inline double pwmDutyPercent(const double duty) {
+        return std::clamp(duty * 100.0 / kPwmFullScale, 0.0, 100.0);
     }
 
     /**
-     * Applies qsensors default range policy when firmware does not expose limits. Without
-     * a finite value no bar graph is drawn, so the range is only filled to stay valid.
+     * Fills the bar graph range where the firmware reports no limits, per quantity:
+     * temperatures 0..kDefaultTemperatureMaxC, fans 0..@p fanDefaultMaxRpm, PWM and humidity
+     * 0..100 %, voltages, currents and power from the value (current and power mirrored
+     * below zero when negative). Energy counters and frequencies have no natural scale and
+     * get no default range, so their bar graph stays dark. Without a finite value no bar
+     * graph is drawn; the range is only filled to stay valid. Expects raw source units.
      */
     inline void applyDefaultRangePolicy(
-        const SensorCategory category,
+        const SensorUnit unit,
         const std::optional<double> value,
         std::optional<double> &min,
         std::optional<double> &max,
         const int fanDefaultMaxRpm
     ) {
-        if (!value || !std::isfinite(*value)) {
-            if (!min.has_value()) min = 0.0;
-            if (!max.has_value()) max = 1.0;
-            return;
+        const auto fill = [&min, &max](const double low, const double high) {
+            if (!min.has_value()) min = low;
+            if (!max.has_value()) max = high;
+        };
+        const bool hasValue = value && std::isfinite(*value);
+        switch (unit) {
+            case SensorUnit::Celsius:
+                fill(0.0, kDefaultTemperatureMaxC);
+                break;
+            case SensorUnit::Fahrenheit:
+                fill(32.0, kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0);
+                break;
+            case SensorUnit::Rpm:
+                fill(0.0, static_cast<double>(fanDefaultMaxRpm));
+                break;
+            case SensorUnit::Percent:
+            case SensorUnit::RelativeHumidity:
+                fill(0.0, 100.0);
+                break;
+            case SensorUnit::Joule:
+            case SensorUnit::Hertz:
+                return;
+            case SensorUnit::Volt:
+            case SensorUnit::Ampere:
+            case SensorUnit::Watt: {
+                if (!hasValue) {
+                    fill(0.0, 1.0);
+                    break;
+                }
+                const double measuredValue = *value;
+                // Current and power are signed (battery charge/discharge); mirror the range below zero.
+                const bool signedWithoutNativeMin = unit != SensorUnit::Volt && measuredValue < 0.0 && !min.has_value();
+                if (!min.has_value() && !max.has_value()) {
+                    min = 0.0;
+                    max = std::max(1.0, std::abs(measuredValue) * 1.5);
+                } else if (!min.has_value() && max.has_value()) {
+                    min = std::max(0.0, *max * 0.2);
+                } else if (min.has_value() && !max.has_value()) {
+                    max = std::max(measuredValue, *min + std::max(1.0, std::abs(*min) * 0.5));
+                }
+                if (signedWithoutNativeMin) {
+                    min = -std::max({1.0, std::abs(measuredValue) * 1.5, std::abs(*max)});
+                }
+                break;
+            }
+            case SensorUnit::Unknown: {
+                if (!hasValue) {
+                    fill(0.0, 1.0);
+                    break;
+                }
+                const double measuredValue = *value;
+                if (!min.has_value() && !max.has_value()) {
+                    const double span = std::max(1.0, std::abs(measuredValue) * 0.5);
+                    min = measuredValue - span;
+                    max = measuredValue + span;
+                } else if (!min.has_value() && max.has_value()) {
+                    min = *max - std::max(1.0, std::abs(*max) * 0.8);
+                } else if (min.has_value() && !max.has_value()) {
+                    max = *min + std::max(1.0, std::abs(*min) * 0.8);
+                }
+                break;
+            }
         }
-        const double measuredValue = *value;
 
-        if (category == SensorCategory::Temperatures) {
-            if (!min.has_value()) {
-                min = 0.0;
-            }
-            if (!max.has_value()) {
-                max = kDefaultTemperatureMaxC;
-            }
-        }
-
-        if (category == SensorCategory::Fans) {
-            if (!min.has_value()) {
-                min = 0.0;
-            }
-            if (!max.has_value()) {
-                max = static_cast<double>(fanDefaultMaxRpm);
-            }
-        }
-
-        if (category == SensorCategory::Voltages ||
-            category == SensorCategory::Currents ||
-            category == SensorCategory::Power) {
-            // Current and power are signed (battery charge/discharge); mirror the range below zero.
-            const bool signedWithoutNativeMin = category != SensorCategory::Voltages
-                                                && measuredValue < 0.0 && !min.has_value();
-            if (!min.has_value() && !max.has_value()) {
-                min = 0.0;
-                max = std::max(1.0, std::abs(measuredValue) * 1.5);
-            } else if (!min.has_value() && max.has_value()) {
-                min = std::max(0.0, *max * 0.2);
-            } else if (min.has_value() && !max.has_value()) {
-                max = std::max(measuredValue, *min + std::max(1.0, std::abs(*min) * 0.5));
-            }
-            if (signedWithoutNativeMin) {
-                min = -std::max({1.0, std::abs(measuredValue) * 1.5, std::abs(*max)});
-            }
-        }
-
-        if (category == SensorCategory::Other) {
-            if (!min.has_value() && !max.has_value()) {
-                const double span = std::max(1.0, std::abs(measuredValue) * 0.5);
-                min = measuredValue - span;
-                max = measuredValue + span;
-            } else if (!min.has_value() && max.has_value()) {
-                min = *max - std::max(1.0, std::abs(*max) * 0.8);
-            } else if (min.has_value() && !max.has_value()) {
-                max = *min + std::max(1.0, std::abs(*min) * 0.8);
-            }
-        }
-
+        // A lone firmware minimum above the default maximum must not leave the range inverted.
         if (min.has_value() && max.has_value() && *max <= *min) {
             *max = *min + std::max(1.0, std::abs(*min) * 0.5);
         }
     }
 
     /**
-     * True when the reading violates its firmware limits: fans below min, temperatures
-     * above max, electrical values outside [min, max]. Default ranges never alert, except
-     * that temperatures without a firmware maximum alert above kDefaultTemperatureMaxC.
-     * A reading without a value never alerts.
+     * Which firmware limit the reading violates: fans below min (Low), temperatures above
+     * max (High), electrical values, humidity and frequency below min (Low) or above max
+     * (High); PWM outputs and energy counters never alert. Default ranges never alert,
+     * except that temperatures without a firmware maximum are High above
+     * kDefaultTemperatureMaxC. A reading without a value never alerts.
      */
-    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
+    [[nodiscard]] inline AlertState alertState(const SensorReading &reading) {
         if (!reading.value) {
-            return false;
+            return AlertState::None;
         }
         const double value = *reading.value;
         const bool belowMin = reading.firmwareMin && value < *reading.firmwareMin;
         const bool aboveMax = reading.firmwareMax && value > *reading.firmwareMax;
+        const auto state = [](const bool low, const bool high) {
+            return high ? AlertState::High : low ? AlertState::Low : AlertState::None;
+        };
         switch (reading.unit) {
             case SensorUnit::Rpm:
-                return belowMin;
+                return state(belowMin, false);
             case SensorUnit::Celsius:
-                return value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC);
+                return state(false, value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC));
             case SensorUnit::Fahrenheit:
-                return value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0);
+                return state(false, value > reading.firmwareMax.value_or(kDefaultTemperatureMaxC * 9.0 / 5.0 + 32.0));
             case SensorUnit::Volt:
             case SensorUnit::Ampere:
-            case SensorUnit::Milliampere:
             case SensorUnit::Watt:
-            case SensorUnit::Milliwatt:
-                return belowMin || aboveMax;
+            case SensorUnit::RelativeHumidity:
+            case SensorUnit::Hertz:
+                return state(belowMin, aboveMax);
+            case SensorUnit::Percent:
+            case SensorUnit::Joule:
             case SensorUnit::Unknown:
                 break;
         }
-        return false;
+        return AlertState::None;
+    }
+
+    /** True when alertState() reports a violated firmware limit. */
+    [[nodiscard]] inline bool isAlertState(const SensorReading &reading) {
+        return alertState(reading) != AlertState::None;
     }
 
     /** Position of the value within its limits (0..1); nullopt without limits or value. */

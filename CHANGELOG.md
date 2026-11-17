@@ -7,7 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Fan control outputs (`pwm*`) are shown in the Fans column as a duty cycle
+  in percent. libsensors 3.6.2 reports them divided by 2 instead of 2.55;
+  qsensors shows the duty cycle the kernel reports.
+- Power sensors that only report an average (`power*_average`, e.g. the PPT
+  of AMD GPUs) now get a card in the Power column.
+- Energy meters (`energy*_input`, in J, kJ, MJ or GJ) in the Power column,
+  humidity (`humidity*_input`, %RH) and frequency inputs (`freq*_input`, Hz,
+  kHz or MHz) in the Other column. Energy counters and frequencies have no
+  natural range and show no bar graph.
+
 ### Changed
+- Values are shown with four significant digits, and the unit prefix follows the
+  sensor's range: `880 mV`, `1.052 V`, `12.10 V`, `230.1 V`, `396 mA`,
+  `1.234 kW`. Voltages below 1 V now use mV, power and current from 1000 use kW
+  and kA, and the 1 mV resolution of voltage inputs is no longer cut to two
+  decimals. Milliamperes and milliwatts are whole numbers. The range comes from
+  the firmware limit when there is one; otherwise it is kept between polls so
+  the unit does not flicker. Temperatures keep one decimal, fans none.
+- The LCD is laid out like a multimeter: every value is right-aligned in the
+  same five digit cells, with the unit in a fixed field at the right edge, so
+  digits, decimal points and units line up across all cards. A wider card
+  shows more unlit digits on the left instead of moving the value. Decimal
+  points sit between the digit cells.
+- Units are drawn as LCD symbols in a bold, narrow face instead of segment
+  letters, with the same slant, colour and shadow or glow as the digits.
+  "RPM" no longer reads like "APM", and `%`, `%RH`, `kHz` and `MHz` can be
+  shown. The symbols are built into qsensors and need no installed font.
+- An alert no longer depends on colour alone: a small `HI` or `LO` lights up
+  under the unit when the value is above the firmware maximum or below the
+  minimum. The bar graph ends before it.
 - Changing the polling interval or fan fallback with the spin box arrows no
   longer rewrites the settings file on every step: the display follows each
   step, the file is written once the changes stop (and on close).
@@ -71,6 +101,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Closing qsensors while a sensor read hangs can no longer crash at exit: when
   the read has not returned within the shutdown timeout, the process now ends
   without tearing down Qt under the still running sensor thread.
+- A value no longer takes more digit cells than the others: `-2000 mA` and
+  values that round up to the next decade drop a decimal or switch to the next
+  unit instead of shrinking the digits of that one card.
+- A value just below zero is shown as `0.0`, not `-0.0`.
+- A current or power sensor whose firmware limit could not be read for one poll
+  no longer switches between A and mA (or W and mW) for that poll.
 
 ### Security
 - The build enables hardening flags for the project's own targets

@@ -111,6 +111,7 @@ set(QSENSORS_UI_SOURCES
         src/ui/panels/sensors_panel.cpp
         src/ui/widgets/collapsible_section.cpp
         src/ui/widgets/lcd_segment_font.cpp
+        src/ui/widgets/lcd_symbol_font.cpp
         src/ui/widgets/lcd_display_widget.cpp
         src/ui/widgets/sensor_value_widget.cpp
         src/ui/widgets/status_line.cpp

@@ -18,34 +18,48 @@ enum class SensorCategory {
     Other = 12,
 };
 
-/** Unit of SensorReading::value after scaling and temperature conversion. */
+/**
+ * Quantity of SensorReading::value, named by its base unit. Values are always in the base
+ * unit (no prefix); temperatures are in °C or °F after the temperature unit setting.
+ * How a value is shown (SI prefix, decimals) is a separate SensorScale.
+ */
 enum class SensorUnit {
     Celsius,
     Fahrenheit,
     Volt,
     Rpm,
     Ampere,
-    Milliampere,
     Watt,
-    Milliwatt,
-    Unknown
+    Percent, // PWM duty cycle
+    RelativeHumidity, // %RH
+    Joule,
+    Hertz,
+    Unknown // stays last: the unit table iterates up to it
 };
 
-/** Display symbol for @p unit, e.g. "°C" or "mA"; empty for Unknown. */
-[[nodiscard]] inline QString sensorUnitSymbol(const SensorUnit unit) {
-    switch (unit) {
-        case SensorUnit::Celsius: return QStringLiteral("°C");
-        case SensorUnit::Fahrenheit: return QStringLiteral("°F");
-        case SensorUnit::Volt: return QStringLiteral("V");
-        case SensorUnit::Rpm: return QStringLiteral("RPM");
-        case SensorUnit::Ampere: return QStringLiteral("A");
-        case SensorUnit::Milliampere: return QStringLiteral("mA");
-        case SensorUnit::Watt: return QStringLiteral("W");
-        case SensorUnit::Milliwatt: return QStringLiteral("mW");
-        case SensorUnit::Unknown: return QString();
-    }
-    return QString();
-}
+/** SI prefix of a displayed value; the power of ten is three times the enum value. */
+enum class SiPrefix {
+    Milli = -1,
+    None = 0,
+    Kilo = 1,
+    Mega = 2,
+    Giga = 3,
+};
+
+/** Which firmware limit a reading violates, if any; see SensorsPolicy::alertState(). */
+enum class AlertState {
+    None,
+    Low, // below the minimum
+    High, // above the maximum
+};
+
+/** How a value is displayed: SI prefix and number of decimals. */
+struct SensorScale {
+    SiPrefix prefix = SiPrefix::None;
+    int decimals = 0;
+
+    bool operator==(const SensorScale &) const = default;
+};
 
 /** Normalized sensor sample used by the UI layer. */
 struct SensorReading {
@@ -63,6 +77,8 @@ struct SensorReading {
     // Limits reported by the firmware; only these raise an alert (plus the temperature fallback).
     std::optional<double> firmwareMin;
     std::optional<double> firmwareMax;
+    // Display scale chosen by the pipeline; nullopt lets the formatter pick one for the value.
+    std::optional<SensorScale> scale;
 
     /** True when at least one bar graph limit is known. */
     [[nodiscard]] bool hasRange() const { return minValue.has_value() || maxValue.has_value(); }
